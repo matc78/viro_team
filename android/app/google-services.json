@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "396501317680",
+    "project_id": "viroteam-75303",
+    "storage_bucket": "viroteam-75303.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:396501317680:android:022270ffcb6477b66fd5f5",
+        "android_client_info": {
+          "package_name": "com.viroteam.viro_team"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "396501317680-afnku6clj84s00aa5f8ejcjm4oigphom.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAn6hnBTL6x-gmNGzyeTU4e7HOD8W1PX5c"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "396501317680-afnku6clj84s00aa5f8ejcjm4oigphom.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
