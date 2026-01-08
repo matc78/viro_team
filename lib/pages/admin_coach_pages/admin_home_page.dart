@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:viro_team/pages/admin_coach_pages/profil_request_page.dart';
 import '../../theme/viro_theme.dart';
 import '../auth_page.dart'; // Pour la déconnexion
 
@@ -271,96 +272,114 @@ class _AdminHomePageState extends State<AdminHomePage> {
                 final dateText = createdAt != null
                     ? "${createdAt.toDate().day}/${createdAt.toDate().month}"
                     : "";
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: ViroColors.borderColor),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Expanded(
-                            child: Text(
-                              requester,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w700,
-                                fontSize: 16,
+                return InkWell(
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => ProfilRequestPage(
+                          requestId: doc.id,
+                          userId: data['userId'],
+                          clubId: clubId,
+                          clubName: clubName,
+                          roleRequested: data['roleRequested'],
+                          message: message,
+                          firstName: data['firstName'],
+                          lastName: data['lastName'],
+                        ),
+                      ),
+                    );
+                  },
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: ViroColors.borderColor),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                requester,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 16,
+                                ),
+                                overflow: TextOverflow.ellipsis,
                               ),
-                              overflow: TextOverflow.ellipsis,
                             ),
-                          ),
+                            Text(
+                              role == 'coach' ? "Entraîneur" : "Licencié",
+                              style: const TextStyle(color: Colors.grey),
+                            ),
+                          ],
+                        ),
+                        if (message.isNotEmpty) ...[
+                          const SizedBox(height: 8),
                           Text(
-                            role == 'coach' ? "Entraîneur" : "Licencié",
-                            style: const TextStyle(color: Colors.grey),
+                            message,
+                            style: const TextStyle(color: Colors.black87),
                           ),
                         ],
-                      ),
-                      if (message.isNotEmpty) ...[
-                        const SizedBox(height: 8),
-                        Text(
-                          message,
-                          style: const TextStyle(color: Colors.black87),
-                        ),
-                      ],
-                      if (dateText.isNotEmpty) ...[
-                        const SizedBox(height: 6),
-                        Text(
-                          "Reçue le $dateText",
-                          style: const TextStyle(
-                            color: Colors.grey,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                      const SizedBox(height: 10),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton(
-                              onPressed: _processingRequestId == doc.id
-                                  ? null
-                                  : () => _handleRequest(
-                                      doc.id,
-                                      data['userId'],
-                                      accept: false,
-                                    ),
-                              child: const Text("Refuser"),
+                        if (dateText.isNotEmpty) ...[
+                          const SizedBox(height: 6),
+                          Text(
+                            "Reçue le $dateText",
+                            style: const TextStyle(
+                              color: Colors.grey,
+                              fontSize: 12,
                             ),
                           ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: ElevatedButton(
-                              onPressed: _processingRequestId == doc.id
-                                  ? null
-                                  : () => _handleRequest(
-                                      doc.id,
-                                      data['userId'],
-                                      accept: true,
-                                      clubId: clubId,
-                                      clubName: clubName,
-                                      role: data['roleRequested'],
-                                    ),
-                              child: _processingRequestId == doc.id
-                                  ? const SizedBox(
-                                      height: 16,
-                                      width: 16,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: Colors.white,
+                        ],
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: _processingRequestId == doc.id
+                                    ? null
+                                    : () => _handleRequest(
+                                        doc.id,
+                                        data['userId'],
+                                        accept: false,
                                       ),
-                                    )
-                                  : const Text("Accepter"),
+                                child: const Text("Refuser"),
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
-                    ],
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: ElevatedButton(
+                                onPressed: _processingRequestId == doc.id
+                                    ? null
+                                    : () => _handleRequest(
+                                        doc.id,
+                                        data['userId'],
+                                        accept: true,
+                                        clubId: clubId,
+                                        clubName: clubName,
+                                        role: data['roleRequested'],
+                                      ),
+                                child: _processingRequestId == doc.id
+                                    ? const SizedBox(
+                                        height: 16,
+                                        width: 16,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Colors.white,
+                                        ),
+                                      )
+                                    : const Text("Accepter"),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 );
               }),
