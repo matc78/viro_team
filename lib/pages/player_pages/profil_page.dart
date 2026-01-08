@@ -1,5 +1,6 @@
-import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
 import '../../theme/viro_theme.dart';
 import '../../widget/viro_loader.dart';
 import '../auth_page.dart';
@@ -230,7 +231,53 @@ class ProfilPage extends StatelessWidget {
               Navigator.pop(context); // close dialog before action
               try {
                 final user = FirebaseAuth.instance.currentUser;
-                await user?.delete();
+                if (user == null) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text("Utilisateur introuvable."),
+                      ),
+                    );
+                  }
+                  return;
+                }
+
+                final uid = user.uid;
+                final firestore = FirebaseFirestore.instance;
+
+                // Récupérer les infos pour nettoyer club et demandes
+                final userDoc =
+                    await firestore.collection('users').doc(uid).get();
+                final data = userDoc.data();
+                final clubId = data?['clubId'] as String?;
+                final role = data?['role'] as String?;
+
+                // Retirer l'utilisateur des membres / coaches du club
+                if (clubId != null) {
+                  final field = (role == 'admin_fondateur' || role == 'coach')
+                      ? 'coaches'
+                      : 'members';
+                  await firestore.collection('clubs').doc(clubId).update({
+                    field: FieldValue.arrayRemove([uid]),
+                  });
+                }
+
+                // Supprimer les demandes d'adhésion associées
+                final requests = await firestore
+                    .collection('join_requests')
+                    .where('userId', isEqualTo: uid)
+                    .get();
+                for (final doc in requests.docs) {
+                  await doc.reference.delete();
+                }
+
+                // Supprimer le document utilisateur
+                await firestore.collection('users').doc(uid).delete();
+
+                // Supprimer le compte Firebase Auth
+                await user.delete();
+                await FirebaseAuth.instance.signOut();
+
                 if (context.mounted) _goToAuth(context);
               } on FirebaseAuthException catch (e) {
                 if (!context.mounted) return;
@@ -242,6 +289,11 @@ class ProfilPage extends StatelessWidget {
                           : (e.message ?? "Suppression impossible"),
                     ),
                   ),
+                );
+              } catch (e) {
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text("Suppression impossible : $e")),
                 );
               }
             },

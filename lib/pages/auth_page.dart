@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:viro_team/pages/role_selection_page.dart';
 import 'player_pages/home_page.dart';
 import '../theme/viro_theme.dart';
 import '../widget/viro_loader.dart';
@@ -24,7 +25,6 @@ class _AuthPageState extends State<AuthPage> {
   bool _isLoading = false;
 
   Future<void> _submit() async {
-    // 2. Validation de la correspondance des mots de passe
     if (!_isLogin &&
         _passwordController.text != _confirmPasswordController.text) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -35,6 +35,7 @@ class _AuthPageState extends State<AuthPage> {
 
     setState(() => _isLoading = true);
     bool authSuccess = false;
+
     try {
       if (_isLogin) {
         await FirebaseAuth.instance.signInWithEmailAndPassword(
@@ -48,15 +49,13 @@ class _AuthPageState extends State<AuthPage> {
         );
         final user = cred.user;
         if (user != null) {
-          await FirebaseFirestore.instance
-              .collection('users')
-              .doc(user.uid)
-              .set({
-                'firstName': _firstNameController.text.trim(),
-                'lastName': _lastNameController.text.trim(),
-                'email': user.email,
-                'createdAt': FieldValue.serverTimestamp(),
-              }, SetOptions(merge: true));
+          await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+            'firstName': _firstNameController.text.trim(),
+            'lastName': _lastNameController.text.trim(),
+            'email': user.email,
+            'createdAt': FieldValue.serverTimestamp(),
+            // On ne met pas de clubId ici, il sera ajouté lors de l'acceptation
+          }, SetOptions(merge: true));
         }
       }
       authSuccess = true;
@@ -64,14 +63,42 @@ class _AuthPageState extends State<AuthPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.message ?? "Une erreur est survenue")),
       );
-    } finally {
-      if (!mounted) return;
-      setState(() => _isLoading = false);
-      if (authSuccess) {
-        Navigator.of(
-          context,
-        ).pushReplacement(MaterialPageRoute(builder: (_) => const HomePage()));
-      }
+    }
+
+    if (authSuccess) {
+      await _handleNavigation();
+    } else {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  // Nouvelle logique de redirection
+  Future<void> _handleNavigation() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    // Récupération des données utilisateur
+    final userDoc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .get();
+
+    if (!mounted) return;
+
+    final data = userDoc.data();
+    final hasPendingRequest = data?['hasPendingRequest'] == true;
+    final hasClub = data?['clubId'] != null;
+
+    if (hasPendingRequest || hasClub) {
+      // Soit déjà membre, soit en attente : on atterrit sur HomePage
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const HomePage()),
+      );
+    } else {
+      // Pas de club ni de demande en cours : sélection de rôle
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const RoleSelectionPage()),
+      );
     }
   }
 
