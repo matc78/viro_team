@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:viro_team/pages/role_selection_page.dart';
-import 'profil_page.dart';
+import 'player_profil_page.dart';
 import '../../theme/viro_theme.dart';
 import '../../widget/viro_loader.dart';
 
@@ -20,7 +20,7 @@ class _HomePageState extends State<HomePage> {
   void _openProfile() {
     Navigator.of(
       context,
-    ).push(MaterialPageRoute(builder: (_) => const ProfilPage()));
+    ).push(MaterialPageRoute(builder: (_) => const PlayerProfilPage()));
   }
 
   Future<void> _refreshUserStatus() async {

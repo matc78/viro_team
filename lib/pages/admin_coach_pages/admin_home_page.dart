@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:viro_team/pages/admin_coach_pages/admin_teams_page.dart';
 import 'package:viro_team/pages/admin_coach_pages/profil_request_page.dart';
 import 'admin_members_page.dart';
 import '../../theme/viro_theme.dart';
@@ -122,9 +123,9 @@ class _AdminHomePageState extends State<AdminHomePage> {
                       stream: clubId == null
                           ? null
                           : FirebaseFirestore.instance
-                              .collection('users')
-                              .where('clubId', isEqualTo: clubId)
-                              .snapshots(),
+                                .collection('users')
+                                .where('clubId', isEqualTo: clubId)
+                                .snapshots(),
                       builder: (context, snap) {
                         final count = snap.data?.docs.length ?? 0;
                         return _adminCard(
@@ -152,7 +153,15 @@ class _AdminHomePageState extends State<AdminHomePage> {
                       count: "5",
                       icon: Icons.groups_rounded,
                       color: Colors.blue,
-                      onTap: () => print("Gérer les équipes"),
+                      onTap: () {
+                        if (clubId != null) {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => AdminTeamsPage(clubId: clubId),
+                            ),
+                          );
+                        }
+                      },
                     ),
                     _adminCard(
                       title: "Planning",

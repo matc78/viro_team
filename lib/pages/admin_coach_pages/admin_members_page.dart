@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../../theme/viro_theme.dart';
+import '../profil_display_page.dart';
 
 class AdminMembersPage extends StatefulWidget {
   final String clubId;
@@ -77,6 +78,7 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
                   separatorBuilder: (_, __) => const Divider(height: 1),
                   itemBuilder: (context, index) {
                     final data = filtered[index].data();
+                    final userId = filtered[index].id;
                     final firstName = data['firstName'] as String? ?? "";
                     final lastName = data['lastName'] as String? ?? "";
                     final email = data['email'] as String? ?? "";
@@ -95,6 +97,13 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
                             : "Licencié",
                         style: const TextStyle(color: Colors.grey),
                       ),
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => ProfilDisplayPage(userId: userId),
+                          ),
+                        );
+                      },
                     );
                   },
                 );

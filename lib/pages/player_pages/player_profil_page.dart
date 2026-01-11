@@ -5,14 +5,14 @@ import '../../theme/viro_theme.dart';
 import '../../widget/viro_loader.dart';
 import '../auth_page.dart';
 
-class ProfilPage extends StatefulWidget {
-  const ProfilPage({super.key});
+class PlayerProfilPage extends StatefulWidget {
+  const PlayerProfilPage({super.key});
 
   @override
-  State<ProfilPage> createState() => _ProfilPageState();
+  State<PlayerProfilPage> createState() => _PlayerProfilPageState();
 }
 
-class _ProfilPageState extends State<ProfilPage> {
+class _PlayerProfilPageState extends State<PlayerProfilPage> {
   bool _isSaving = false;
 
   @override
@@ -25,7 +25,10 @@ class _ProfilPageState extends State<ProfilPage> {
     }
 
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance.collection('users').doc(user.uid).snapshots(),
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(body: ViroLoader(size: 80));
@@ -121,7 +124,9 @@ class _ProfilPageState extends State<ProfilPage> {
         const SizedBox(height: 15),
         Text(
           fullName.trim().isEmpty ? "Sportif" : fullName,
-          style: Theme.of(context).textTheme.headlineLarge?.copyWith(fontSize: 22),
+          style: Theme.of(
+            context,
+          ).textTheme.headlineLarge?.copyWith(fontSize: 22),
         ),
         Text(
           clubName ?? "Aucun club",
@@ -204,7 +209,10 @@ class _ProfilPageState extends State<ProfilPage> {
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Annuler")),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Annuler"),
+          ),
           ElevatedButton(
             onPressed: () async {
               final user = FirebaseAuth.instance.currentUser;
@@ -213,13 +221,13 @@ class _ProfilPageState extends State<ProfilPage> {
               final last = lastController.text.trim();
               setState(() => _isSaving = true);
               try {
-                await FirebaseFirestore.instance.collection('users').doc(user.uid).set(
-                  {
-                    'firstName': first,
-                    'lastName': last,
-                  },
-                  SetOptions(merge: true),
-                );
+                await FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(user.uid)
+                    .set({
+                      'firstName': first,
+                      'lastName': last,
+                    }, SetOptions(merge: true));
                 if (mounted) Navigator.pop(context);
               } catch (e) {
                 _showSnack("Impossible de mettre à jour le nom : $e");
@@ -245,7 +253,10 @@ class _ProfilPageState extends State<ProfilPage> {
           decoration: const InputDecoration(labelText: "Nouvel email"),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Annuler")),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Annuler"),
+          ),
           ElevatedButton(
             onPressed: () async {
               final user = FirebaseAuth.instance.currentUser;
@@ -255,10 +266,10 @@ class _ProfilPageState extends State<ProfilPage> {
               try {
                 // verifyBeforeUpdateEmail envoie un email de validation puis change l'email
                 await user.verifyBeforeUpdateEmail(newEmail);
-                await FirebaseFirestore.instance.collection('users').doc(user.uid).set(
-                  {'email': newEmail},
-                  SetOptions(merge: true),
-                );
+                await FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(user.uid)
+                    .set({'email': newEmail}, SetOptions(merge: true));
                 if (mounted) Navigator.pop(context);
                 _showSnack(
                   "Email mis à jour (vérifie ta boîte mail pour confirmer si nécessaire)",
@@ -295,23 +306,31 @@ class _ProfilPageState extends State<ProfilPage> {
             TextField(
               controller: currentController,
               obscureText: true,
-              decoration: const InputDecoration(labelText: "Mot de passe actuel"),
+              decoration: const InputDecoration(
+                labelText: "Mot de passe actuel",
+              ),
             ),
             TextField(
               controller: newController,
               obscureText: true,
-              decoration: const InputDecoration(labelText: "Nouveau mot de passe"),
+              decoration: const InputDecoration(
+                labelText: "Nouveau mot de passe",
+              ),
             ),
             TextField(
               controller: confirmController,
               obscureText: true,
-              decoration:
-                  const InputDecoration(labelText: "Confirmer le nouveau mot de passe"),
+              decoration: const InputDecoration(
+                labelText: "Confirmer le nouveau mot de passe",
+              ),
             ),
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Annuler")),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Annuler"),
+          ),
           ElevatedButton(
             onPressed: () async {
               final user = FirebaseAuth.instance.currentUser;
@@ -322,7 +341,9 @@ class _ProfilPageState extends State<ProfilPage> {
               final confirmPass = confirmController.text.trim();
 
               if (newPass.length < 6) {
-                _showSnack("Le mot de passe doit contenir au moins 6 caractères");
+                _showSnack(
+                  "Le mot de passe doit contenir au moins 6 caractères",
+                );
                 return;
               }
               if (newPass != confirmPass) {
@@ -346,8 +367,9 @@ class _ProfilPageState extends State<ProfilPage> {
                   e.code == 'wrong-password'
                       ? "Mot de passe actuel incorrect."
                       : (e.code == 'requires-recent-login'
-                          ? "Reconnecte-toi puis réessaie."
-                          : (e.message ?? "Erreur lors du changement de mot de passe")),
+                            ? "Reconnecte-toi puis réessaie."
+                            : (e.message ??
+                                  "Erreur lors du changement de mot de passe")),
                 );
               } finally {
                 if (mounted) setState(() => _isSaving = false);
@@ -406,9 +428,7 @@ class _ProfilPageState extends State<ProfilPage> {
                 if (user == null) {
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text("Utilisateur introuvable."),
-                      ),
+                      const SnackBar(content: Text("Utilisateur introuvable.")),
                     );
                   }
                   return;
@@ -418,18 +438,19 @@ class _ProfilPageState extends State<ProfilPage> {
                 final firestore = FirebaseFirestore.instance;
 
                 // Récupérer les infos pour nettoyer club et demandes
-                final userDoc =
-                    await firestore.collection('users').doc(uid).get();
+                final userDoc = await firestore
+                    .collection('users')
+                    .doc(uid)
+                    .get();
                 final data = userDoc.data();
                 final clubId = data?['clubId'] as String?;
                 final role = data?['role'] as String?;
 
                 // Retirer l'utilisateur des membres / coaches du club
                 if (clubId != null) {
-                  final field =
-                      (role == 'admin_fondateur' || role == 'coach')
-                          ? 'coaches'
-                          : 'members';
+                  final field = (role == 'admin_fondateur' || role == 'coach')
+                      ? 'coaches'
+                      : 'members';
                   await firestore.collection('clubs').doc(clubId).update({
                     field: FieldValue.arrayRemove([uid]),
                   });
