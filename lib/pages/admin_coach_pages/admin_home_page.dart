@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:viro_team/pages/admin_coach_pages/profil_request_page.dart';
+import 'admin_members_page.dart';
 import '../../theme/viro_theme.dart';
 import '../auth_page.dart'; // Pour la déconnexion
 
@@ -117,12 +118,34 @@ class _AdminHomePageState extends State<AdminHomePage> {
                   crossAxisSpacing: 15,
                   mainAxisSpacing: 15,
                   children: [
-                    _adminCard(
-                      title: "Demandes",
-                      count: "3", // On pourra dynamiser ça plus tard
-                      icon: Icons.person_add_alt_1,
-                      color: Colors.orange,
-                      onTap: () => print("Aller aux demandes"),
+                    StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                      stream: clubId == null
+                          ? null
+                          : FirebaseFirestore.instance
+                              .collection('users')
+                              .where('clubId', isEqualTo: clubId)
+                              .snapshots(),
+                      builder: (context, snap) {
+                        final count = snap.data?.docs.length ?? 0;
+                        return _adminCard(
+                          title: "Membres",
+                          count: count == 0 ? "" : "$count",
+                          icon: Icons.group_outlined,
+                          color: Colors.orange,
+                          onTap: () {
+                            if (clubId != null) {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => AdminMembersPage(
+                                    clubId: clubId,
+                                    clubName: clubName,
+                                  ),
+                                ),
+                              );
+                            }
+                          },
+                        );
+                      },
                     ),
                     _adminCard(
                       title: "Équipes",
