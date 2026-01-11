@@ -1,141 +1,136 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../../theme/viro_theme.dart';
 import '../../widget/viro_loader.dart';
 import '../auth_page.dart';
 
-class ProfilPage extends StatelessWidget {
+class ProfilPage extends StatefulWidget {
   const ProfilPage({super.key});
 
   @override
+  State<ProfilPage> createState() => _ProfilPageState();
+}
+
+class _ProfilPageState extends State<ProfilPage> {
+  bool _isSaving = false;
+
+  @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text("Mon Profil"),
-        centerTitle: false,
-        actions: [
-          // Petit loader discret pour indiquer la synchronisation
-          const ViroLoader(size: 20),
-          const SizedBox(width: 15),
-        ],
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20.0),
-        child: Column(
-          children: [
-            // --- HEADER PROFIL ---
-            Center(
-              child: Stack(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(color: ViroColors.primary, width: 2),
-                    ),
-                    child: const CircleAvatar(
-                      radius: 50,
-                      backgroundColor: ViroColors.secondary,
-                      child: Icon(
-                        Icons.person,
-                        size: 50,
-                        color: ViroColors.primary,
-                      ),
-                      // backgroundImage: AssetImage('assets/images/avatar.png'), // À utiliser plus tard
-                    ),
-                  ),
-                  Positioned(
-                    bottom: 0,
-                    right: 0,
-                    child: Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: const BoxDecoration(
-                        color: ViroColors.primary,
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.camera_alt,
-                        color: Colors.white,
-                        size: 18,
-                      ),
-                    ),
-                  ),
-                ],
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      return const Scaffold(
+        body: Center(child: Text("Utilisateur non connecté")),
+      );
+    }
+
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance.collection('users').doc(user.uid).snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(body: ViroLoader(size: 80));
+        }
+        final data = snapshot.data?.data();
+        final firstName = data?['firstName'] as String? ?? "Sportif";
+        final lastName = data?['lastName'] as String? ?? "";
+        final clubName = data?['clubName'] as String?;
+        final email = data?['email'] as String? ?? user.email ?? "";
+
+        return Scaffold(
+          appBar: AppBar(
+            title: const Text("Mon Profil"),
+            centerTitle: false,
+            actions: const [
+              Padding(
+                padding: EdgeInsets.only(right: 15),
+                child: ViroLoader(size: 20),
               ),
-            ),
-            const SizedBox(height: 15),
-            Text(
-              "Alexandre Viro",
-              style: Theme.of(
-                context,
-              ).textTheme.headlineLarge?.copyWith(fontSize: 22),
-            ),
-            const Text(
-              "Membre de l'équipe Senior A",
-              style: TextStyle(color: Colors.grey),
-            ),
+            ],
+          ),
+          body: SingleChildScrollView(
+            padding: const EdgeInsets.all(20.0),
+            child: Column(
+              children: [
+                _buildHeader("$firstName $lastName", clubName),
+                const SizedBox(height: 30),
+                _buildSectionHeader("MES INFORMATIONS"),
+                _buildActionTile(
+                  Icons.badge_outlined,
+                  "Modifier mon nom & prénom",
+                  () => _editName(firstName, lastName),
+                ),
+                _buildActionTile(
+                  Icons.alternate_email,
+                  "Changer d'adresse email",
+                  () => _changeEmail(email),
+                ),
+                _buildActionTile(
+                  Icons.lock_open_outlined,
+                  "Changer mon mot de passe",
+                  _changePassword,
+                ),
+                const SizedBox(height: 30),
 
-            const SizedBox(height: 30),
-
-            // --- SECTION : INFORMATIONS ---
-            _buildSectionHeader("MES INFORMATIONS"),
-            _buildActionTile(
-              Icons.badge_outlined,
-              "Modifier mon nom & prénom",
-              () {},
+                _buildSectionHeader("COMPTE & SÉCURITÉ"),
+                _buildActionTile(
+                  Icons.logout_rounded,
+                  "Se déconnecter",
+                  () => _showLogoutDialog(context),
+                  isDestructive: true,
+                ),
+                _buildActionTile(
+                  Icons.delete_forever_outlined,
+                  "Supprimer mon compte",
+                  () => _showDeleteDialog(context),
+                  isDestructive: true,
+                ),
+                const SizedBox(height: 40),
+              ],
             ),
-            _buildActionTile(
-              Icons.alternate_email,
-              "Changer d'adresse email",
-              () {},
-            ),
-            _buildActionTile(
-              Icons.lock_open_outlined,
-              "Changer mon mot de passe",
-              () {},
-            ),
-
-            const SizedBox(height: 30),
-
-            // --- SECTION : CLUB & SPORT (Utile pour une app de club) ---
-            _buildSectionHeader("CLUB & SPORT"),
-            _buildActionTile(Icons.history, "Historique des matchs", () {}),
-            _buildActionTile(
-              Icons.workspace_premium_outlined,
-              "Ma licence (PDF)",
-              () {},
-            ),
-            _buildActionTile(
-              Icons.notifications_none,
-              "Préférences de notifications",
-              () {},
-            ),
-
-            const SizedBox(height: 30),
-
-            // --- SECTION : DANGER ZONE ---
-            _buildSectionHeader("COMPTE & SÉCURITÉ"),
-            _buildActionTile(
-              Icons.logout_rounded,
-              "Se déconnecter",
-              () => _showLogoutDialog(context),
-              isDestructive: true,
-            ),
-            _buildActionTile(
-              Icons.delete_forever_outlined,
-              "Supprimer mon compte",
-              () => _showDeleteDialog(context),
-              isDestructive: true,
-            ),
-            const SizedBox(height: 40),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
-  // Header de section identique à la Home
+  Widget _buildHeader(String fullName, String? clubName) {
+    return Column(
+      children: [
+        Center(
+          child: Stack(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: ViroColors.primary, width: 2),
+                ),
+                child: const CircleAvatar(
+                  radius: 50,
+                  backgroundColor: ViroColors.secondary,
+                  child: Icon(
+                    Icons.person,
+                    size: 50,
+                    color: ViroColors.primary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 15),
+        Text(
+          fullName.trim().isEmpty ? "Sportif" : fullName,
+          style: Theme.of(context).textTheme.headlineLarge?.copyWith(fontSize: 22),
+        ),
+        Text(
+          clubName ?? "Aucun club",
+          style: const TextStyle(color: Colors.grey),
+        ),
+      ],
+    );
+  }
+
   Widget _buildSectionHeader(String title) {
     return Align(
       alignment: Alignment.centerLeft,
@@ -154,7 +149,6 @@ class ProfilPage extends StatelessWidget {
     );
   }
 
-  // Tuile d'action respectant les bordures fines du thème
   Widget _buildActionTile(
     IconData icon,
     String title,
@@ -183,7 +177,185 @@ class ProfilPage extends StatelessWidget {
           Icons.chevron_right,
           color: ViroColors.borderColor,
         ),
-        onTap: onTap,
+        onTap: _isSaving ? null : onTap,
+      ),
+    );
+  }
+
+  Future<void> _editName(String currentFirst, String currentLast) async {
+    final firstController = TextEditingController(text: currentFirst);
+    final lastController = TextEditingController(text: currentLast);
+
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Modifier le nom"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: firstController,
+              decoration: const InputDecoration(labelText: "Prénom"),
+            ),
+            TextField(
+              controller: lastController,
+              decoration: const InputDecoration(labelText: "Nom"),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Annuler")),
+          ElevatedButton(
+            onPressed: () async {
+              final user = FirebaseAuth.instance.currentUser;
+              if (user == null) return;
+              final first = firstController.text.trim();
+              final last = lastController.text.trim();
+              setState(() => _isSaving = true);
+              try {
+                await FirebaseFirestore.instance.collection('users').doc(user.uid).set(
+                  {
+                    'firstName': first,
+                    'lastName': last,
+                  },
+                  SetOptions(merge: true),
+                );
+                if (mounted) Navigator.pop(context);
+              } catch (e) {
+                _showSnack("Impossible de mettre à jour le nom : $e");
+              } finally {
+                if (mounted) setState(() => _isSaving = false);
+              }
+            },
+            child: const Text("Enregistrer"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _changeEmail(String currentEmail) async {
+    final controller = TextEditingController(text: currentEmail);
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Changer l'email"),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(labelText: "Nouvel email"),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Annuler")),
+          ElevatedButton(
+            onPressed: () async {
+              final user = FirebaseAuth.instance.currentUser;
+              if (user == null) return;
+              final newEmail = controller.text.trim();
+              setState(() => _isSaving = true);
+              try {
+                // verifyBeforeUpdateEmail envoie un email de validation puis change l'email
+                await user.verifyBeforeUpdateEmail(newEmail);
+                await FirebaseFirestore.instance.collection('users').doc(user.uid).set(
+                  {'email': newEmail},
+                  SetOptions(merge: true),
+                );
+                if (mounted) Navigator.pop(context);
+                _showSnack(
+                  "Email mis à jour (vérifie ta boîte mail pour confirmer si nécessaire)",
+                );
+              } on FirebaseAuthException catch (e) {
+                _showSnack(
+                  e.code == 'requires-recent-login'
+                      ? "Reconnecte-toi puis réessaie."
+                      : (e.message ?? "Erreur lors du changement d'email"),
+                );
+              } finally {
+                if (mounted) setState(() => _isSaving = false);
+              }
+            },
+            child: const Text("Enregistrer"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _changePassword() async {
+    final currentController = TextEditingController();
+    final newController = TextEditingController();
+    final confirmController = TextEditingController();
+
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Changer le mot de passe"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: currentController,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: "Mot de passe actuel"),
+            ),
+            TextField(
+              controller: newController,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: "Nouveau mot de passe"),
+            ),
+            TextField(
+              controller: confirmController,
+              obscureText: true,
+              decoration:
+                  const InputDecoration(labelText: "Confirmer le nouveau mot de passe"),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Annuler")),
+          ElevatedButton(
+            onPressed: () async {
+              final user = FirebaseAuth.instance.currentUser;
+              if (user == null) return;
+
+              final currentPass = currentController.text.trim();
+              final newPass = newController.text.trim();
+              final confirmPass = confirmController.text.trim();
+
+              if (newPass.length < 6) {
+                _showSnack("Le mot de passe doit contenir au moins 6 caractères");
+                return;
+              }
+              if (newPass != confirmPass) {
+                _showSnack("Les nouveaux mots de passe ne correspondent pas");
+                return;
+              }
+
+              setState(() => _isSaving = true);
+              try {
+                // Re-auth pour sécurité
+                final credential = EmailAuthProvider.credential(
+                  email: user.email ?? "",
+                  password: currentPass,
+                );
+                await user.reauthenticateWithCredential(credential);
+                await user.updatePassword(newPass);
+                if (mounted) Navigator.pop(context);
+                _showSnack("Mot de passe mis à jour");
+              } on FirebaseAuthException catch (e) {
+                _showSnack(
+                  e.code == 'wrong-password'
+                      ? "Mot de passe actuel incorrect."
+                      : (e.code == 'requires-recent-login'
+                          ? "Reconnecte-toi puis réessaie."
+                          : (e.message ?? "Erreur lors du changement de mot de passe")),
+                );
+              } finally {
+                if (mounted) setState(() => _isSaving = false);
+              }
+            },
+            child: const Text("Enregistrer"),
+          ),
+        ],
       ),
     );
   }
@@ -254,9 +426,10 @@ class ProfilPage extends StatelessWidget {
 
                 // Retirer l'utilisateur des membres / coaches du club
                 if (clubId != null) {
-                  final field = (role == 'admin_fondateur' || role == 'coach')
-                      ? 'coaches'
-                      : 'members';
+                  final field =
+                      (role == 'admin_fondateur' || role == 'coach')
+                          ? 'coaches'
+                          : 'members';
                   await firestore.collection('clubs').doc(clubId).update({
                     field: FieldValue.arrayRemove([uid]),
                   });
@@ -310,5 +483,9 @@ class ProfilPage extends StatelessWidget {
       MaterialPageRoute(builder: (_) => const AuthPage()),
       (route) => false,
     );
+  }
+
+  void _showSnack(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 }
