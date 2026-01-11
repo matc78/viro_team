@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:viro_team/pages/admin_coach_pages/admin_teams_page.dart';
 import 'package:viro_team/pages/admin_coach_pages/profil_request_page.dart';
 import 'admin_members_page.dart';
+import 'admin_profil_page.dart';
 import '../../theme/viro_theme.dart';
-import '../auth_page.dart'; // Pour la déconnexion
 
 class AdminHomePage extends StatefulWidget {
   const AdminHomePage({super.key});
@@ -67,14 +67,11 @@ class _AdminHomePageState extends State<AdminHomePage> {
         title: const Text("Tableau de bord"),
         actions: [
           IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () async {
-              await FirebaseAuth.instance.signOut();
-              if (mounted) {
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(builder: (_) => const AuthPage()),
-                );
-              }
+            icon: const Icon(Icons.account_circle_outlined),
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const AdminProfilPage()),
+              );
             },
           ),
         ],
@@ -152,10 +149,10 @@ class _AdminHomePageState extends State<AdminHomePage> {
                       stream: clubId == null
                           ? null
                           : FirebaseFirestore.instance
-                              .collection('clubs')
-                              .doc(clubId)
-                              .collection('teams')
-                              .snapshots(),
+                                .collection('clubs')
+                                .doc(clubId)
+                                .collection('teams')
+                                .snapshots(),
                       builder: (context, snap) {
                         final teamCount = snap.data?.docs.length ?? 0;
                         return _adminCard(
@@ -167,7 +164,8 @@ class _AdminHomePageState extends State<AdminHomePage> {
                             if (clubId != null) {
                               Navigator.of(context).push(
                                 MaterialPageRoute(
-                                  builder: (_) => AdminTeamsPage(clubId: clubId),
+                                  builder: (_) =>
+                                      AdminTeamsPage(clubId: clubId),
                                 ),
                               );
                             }
