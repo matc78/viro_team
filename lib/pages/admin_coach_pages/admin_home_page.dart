@@ -148,19 +148,31 @@ class _AdminHomePageState extends State<AdminHomePage> {
                         );
                       },
                     ),
-                    _adminCard(
-                      title: "Équipes",
-                      count: "5",
-                      icon: Icons.groups_rounded,
-                      color: Colors.blue,
-                      onTap: () {
-                        if (clubId != null) {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => AdminTeamsPage(clubId: clubId),
-                            ),
-                          );
-                        }
+                    StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                      stream: clubId == null
+                          ? null
+                          : FirebaseFirestore.instance
+                              .collection('clubs')
+                              .doc(clubId)
+                              .collection('teams')
+                              .snapshots(),
+                      builder: (context, snap) {
+                        final teamCount = snap.data?.docs.length ?? 0;
+                        return _adminCard(
+                          title: "Équipes",
+                          count: teamCount == 0 ? "" : "$teamCount",
+                          icon: Icons.groups_rounded,
+                          color: Colors.blue,
+                          onTap: () {
+                            if (clubId != null) {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => AdminTeamsPage(clubId: clubId),
+                                ),
+                              );
+                            }
+                          },
+                        );
                       },
                     ),
                     _adminCard(
