@@ -34,8 +34,10 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
           return const Scaffold(body: ViroLoader(size: 80));
         }
         final data = snapshot.data?.data();
-        final firstName = data?['firstName'] as String? ?? "Sportif";
-        final lastName = data?['lastName'] as String? ?? "";
+        final rawFirst = data?['firstName'] as String? ?? "Sportif";
+        final rawLast = data?['lastName'] as String? ?? "";
+        final displayFirst = _formatFirst(rawFirst);
+        final displayLast = _formatLast(rawLast);
         final clubName = data?['clubName'] as String?;
         final email = data?['email'] as String? ?? user.email ?? "";
 
@@ -54,13 +56,13 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
             padding: const EdgeInsets.all(20.0),
             child: Column(
               children: [
-                _buildHeader("$firstName $lastName", clubName),
+                _buildHeader("$displayFirst $displayLast", clubName),
                 const SizedBox(height: 30),
                 _buildSectionHeader("MES INFORMATIONS"),
                 _buildActionTile(
                   Icons.badge_outlined,
                   "Modifier mon nom & prénom",
-                  () => _editName(firstName, lastName),
+                  () => _editName(rawFirst, rawLast),
                 ),
                 _buildActionTile(
                   Icons.alternate_email,
@@ -509,4 +511,11 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
   void _showSnack(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
+
+  String _formatFirst(String value) {
+    if (value.isEmpty) return value;
+    return value[0].toUpperCase() + value.substring(1).toLowerCase();
+  }
+
+  String _formatLast(String value) => value.toUpperCase();
 }

@@ -66,6 +66,7 @@ class _CreateClubPageState extends State<CreateClubPage> {
       await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
         'role': 'admin_fondateur',
         'clubId': clubRef.id,
+        'clubName': _nameController.text.trim(),
       }, SetOptions(merge: true));
 
       if (mounted) {

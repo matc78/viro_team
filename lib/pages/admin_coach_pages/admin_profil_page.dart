@@ -1,6 +1,10 @@
+import 'dart:io';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../theme/viro_theme.dart';
 import '../../widget/viro_loader.dart';
 import '../auth_page.dart';
@@ -15,20 +19,23 @@ class AdminProfilPage extends StatefulWidget {
 class _AdminProfilPageState extends State<AdminProfilPage> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  bool _isUploadingAvatar = false;
 
   @override
   Widget build(BuildContext context) {
     final user = _auth.currentUser;
-    if (user == null)
+    if (user == null) {
       return const Scaffold(body: Center(child: Text("Session expirée")));
+    }
 
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
       stream: _firestore.collection('users').doc(user.uid).snapshots(),
       builder: (context, snapshot) {
-        if (snapshot.hasError)
+        if (snapshot.hasError) {
           return const Scaffold(
             body: Center(child: Text("Erreur de chargement")),
           );
+        }
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(body: Center(child: ViroLoader(size: 80)));
         }
@@ -36,26 +43,34 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
         final userData = snapshot.data?.data();
         final String firstName = userData?['firstName'] ?? "Admin";
         final String lastName = userData?['lastName'] ?? "";
+        final String displayFirst = _formatFirst(firstName);
+        final String displayLast = _formatLast(lastName);
         final String clubName = userData?['clubName'] ?? "Club non défini";
         final String clubId = userData?['clubId'] ?? "";
         final String role = userData?['role'] ?? "admin_fondateur";
 
         return Scaffold(
-          backgroundColor: ViroColors.background,
+          backgroundColor: const Color(0xFFF8F9FA),
           appBar: AppBar(title: const Text("Mon Profil")),
           body: SingleChildScrollView(
             padding: const EdgeInsets.all(20.0),
             child: Column(
               children: [
                 // --- SECTION ENTÊTE ---
-                _buildProfileHeader(firstName, lastName, role),
+                _buildProfileHeader(
+                  displayFirst,
+                  displayLast,
+                  role,
+                  userData?['avatarUrl'],
+                  () => _pickAvatar(user.uid),
+                ),
                 const SizedBox(height: 30),
 
                 // --- SECTION : GESTION DU CLUB ---
                 _buildSectionTitle("GESTION DU CLUB"),
                 _buildMenuCard(
                   icon: Icons.edit_location_alt_outlined,
-                  title: "Nom du Club",
+                  title: "Changer Nom du Club",
                   subtitle: clubName,
                   onTap: () => _showEditClubName(clubId, clubName),
                 ),
@@ -117,7 +132,13 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
 
   // --- COMPOSANTS UI ---
 
-  Widget _buildProfileHeader(String fn, String ln, String role) {
+  Widget _buildProfileHeader(
+    String fn,
+    String ln,
+    String role,
+    String? avatarUrl,
+    Future<void> Function() onAvatarTap,
+  ) {
     return Column(
       children: [
         Stack(
@@ -125,22 +146,44 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
             CircleAvatar(
               radius: 55,
               backgroundColor: ViroColors.primary.withOpacity(0.1),
-              child: const Icon(
-                Icons.admin_panel_settings_rounded,
-                size: 55,
-                color: ViroColors.primary,
-              ),
+              backgroundImage: avatarUrl != null
+                  ? NetworkImage(avatarUrl)
+                  : null,
+              child: avatarUrl == null
+                  ? const Icon(
+                      Icons.admin_panel_settings_rounded,
+                      size: 55,
+                      color: ViroColors.primary,
+                    )
+                  : null,
             ),
             Positioned(
               bottom: 0,
               right: 0,
-              child: CircleAvatar(
-                radius: 18,
-                backgroundColor: ViroColors.primary,
-                child: const Icon(
-                  Icons.camera_alt,
-                  size: 18,
-                  color: Colors.white,
+              child: InkWell(
+                onTap: _isUploadingAvatar
+                    ? null
+                    : () {
+                        onAvatarTap();
+                      },
+                borderRadius: BorderRadius.circular(18),
+                child: CircleAvatar(
+                  radius: 18,
+                  backgroundColor: ViroColors.primary,
+                  child: _isUploadingAvatar
+                      ? const SizedBox(
+                          height: 16,
+                          width: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(
+                          Icons.camera_alt,
+                          size: 18,
+                          color: Colors.white,
+                        ),
                 ),
               ),
             ),
@@ -236,35 +279,128 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
   // --- LOGIQUE ACTIONS ---
 
   void _showEditClubName(String clubId, String currentName) {
-    final controller = TextEditingController(text: currentName);
+    // On utilise deux contrôleurs distincts
+    final currentNameVerifyController = TextEditingController();
+    final newNameController = TextEditingController();
+
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text("Nom du Club"),
-        content: TextField(
-          controller: controller,
-          decoration: InputDecoration(
-            hintText: "Entrez le nouveau nom",
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-          ),
+        title: const Text("Changer Nom du Club"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              "Écrire exactement le nom actuel pour confirmer :",
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              "Actuellement : $currentName",
+              style: const TextStyle(
+                fontSize: 11,
+                fontStyle: FontStyle.italic,
+                color: Colors.blueGrey,
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: currentNameVerifyController,
+              enableInteractiveSelection: false, // Désactive copier/coller
+              decoration: InputDecoration(
+                hintText: currentName, // Hint demandé
+                hintStyle: const TextStyle(fontSize: 13, color: Colors.black26),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              "Saisir le nouveau nom du club :",
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: newNameController,
+              decoration: InputDecoration(
+                hintText: "Saisir nouveau nom", // Hint demandé
+                hintStyle: const TextStyle(fontSize: 13),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
+              ),
+            ),
+          ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text("Annuler"),
+            child: const Text("Annuler", style: TextStyle(color: Colors.grey)),
           ),
           ElevatedButton(
             onPressed: () async {
-              if (controller.text.trim().isNotEmpty) {
+              String verifyInput = currentNameVerifyController.text.trim();
+              String newNameInput = newNameController.text.trim();
+
+              // Vérification de sécurité
+              if (verifyInput != currentName) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text("Le nom actuel saisi est incorrect."),
+                  ),
+                );
+                return;
+              }
+
+              if (newNameInput.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text("Le nouveau nom ne peut pas être vide."),
+                  ),
+                );
+                return;
+              }
+
+              // Si tout est bon, on met à jour
+              try {
                 await _firestore.collection('clubs').doc(clubId).update({
-                  'name': controller.text.trim(),
+                  'name': newNameInput,
                 });
                 await _firestore
                     .collection('users')
                     .doc(_auth.currentUser?.uid)
-                    .update({'clubName': controller.text.trim()});
+                    .update({'clubName': newNameInput});
+
                 if (mounted) Navigator.pop(ctx);
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text("Nom du club mis à jour avec succès !"),
+                  ),
+                );
+              } catch (e) {
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(SnackBar(content: Text("Erreur : $e")));
               }
             },
             child: const Text("Enregistrer"),
@@ -375,4 +511,39 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
       ),
     );
   }
+
+  Future<void> _pickAvatar(String uid) async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 800,
+    );
+    if (picked == null) return;
+
+    setState(() => _isUploadingAvatar = true);
+    try {
+      final file = File(picked.path);
+      final ref = FirebaseStorage.instance.ref().child('avatars/$uid.jpg');
+      await ref.putFile(file);
+      final url = await ref.getDownloadURL();
+      await _firestore.collection('users').doc(uid).set({
+        'avatarUrl': url,
+      }, SetOptions(merge: true));
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Impossible de mettre à jour l'avatar : $e")),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isUploadingAvatar = false);
+    }
+  }
+
+  String _formatFirst(String value) {
+    if (value.isEmpty) return value;
+    return value[0].toUpperCase() + value.substring(1).toLowerCase();
+  }
+
+  String _formatLast(String value) => value.toUpperCase();
 }
