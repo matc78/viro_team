@@ -20,8 +20,15 @@ class TeamDetailsPage extends StatefulWidget {
 
 class _TeamDetailsPageState extends State<TeamDetailsPage> {
   bool _isEditing = false;
+  bool _isProcessing = false;
   // Ouvre une liste de membres du club pour les ajouter à l'équipe
-  void _showAddMemberSheet(String role) {
+  void _showAddMemberSheet(
+    String role,
+    String teamName,
+    String teamCategory,
+    List coachIds,
+    List playerIds,
+  ) {
     final roles = role == 'coach' ? ['coach', 'admin_fondateur'] : ['player'];
     showModalBottomSheet(
       context: context,
@@ -37,14 +44,7 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
         builder: (context, snapshot) {
           if (!snapshot.hasData)
             return const Center(child: ViroLoader(size: 40));
-          final existingCoachIds = (widget.teamDoc.data()
-                  as Map<String, dynamic>)['coachIds'] as List<dynamic>? ??
-              [];
-          final existingPlayerIds = (widget.teamDoc.data()
-                  as Map<String, dynamic>)['playerIds'] as List<dynamic>? ??
-              [];
-          final existingIds =
-              role == 'coach' ? existingCoachIds : existingPlayerIds;
+          final existingIds = role == 'coach' ? coachIds : playerIds;
 
           final users = snapshot.data!.docs
               .where((doc) => !existingIds.contains(doc.id))
@@ -64,7 +64,9 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
               Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Text(
-                  role == 'player' ? "Ajouter un Licencié" : "Ajouter un Coach / Admin",
+                  role == 'player'
+                      ? "Ajouter un Licencié"
+                      : "Ajouter un Coach / Admin",
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 18,
@@ -72,9 +74,19 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
                 ),
               ),
               Expanded(
-            child: ListView.builder(
-              itemCount: users.length,
-              itemBuilder: (context, i) {
+                child: ListView.builder(
+                  itemCount: users.length,
+                  itemBuilder: (context, i) {
+                    if (_isProcessing) {
+                      return const ListTile(
+                        title: Text("ça l'ajoute..."),
+                        trailing: SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      );
+                    }
                     final user = users[i].data() as Map<String, dynamic>;
                     final formattedName = _formatName(
                       user['firstName'],
@@ -87,14 +99,55 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
                         Icons.add_circle_outline,
                         color: ViroColors.primary,
                       ),
-                  onTap: () async {
-                    String field = (role == 'player')
-                        ? 'playerIds'
-                        : 'coachIds';
-                        await widget.teamDoc.reference.update({
-                          field: FieldValue.arrayUnion([users[i].id]),
-                        });
-                        if (mounted) Navigator.pop(ctx);
+                      onTap: () async {
+                        if (_isProcessing) return;
+                        setState(() => _isProcessing = true);
+                        try {
+                          String field = (role == 'player')
+                              ? 'playerIds'
+                              : 'coachIds';
+                          final userId = users[i].id;
+                          await widget.teamDoc.reference.update({
+                            field: FieldValue.arrayUnion([userId]),
+                          });
+                          final Map<String, dynamic> userUpdate = {
+                            'teamIds': FieldValue.arrayUnion([
+                              widget.teamDoc.id,
+                            ]),
+                          };
+                          if (teamName.isNotEmpty) {
+                            userUpdate['teamNames'] = FieldValue.arrayUnion([
+                              teamName,
+                            ]);
+                          }
+                          if (teamCategory.isNotEmpty) {
+                            userUpdate['categories'] = FieldValue.arrayUnion([
+                              teamCategory,
+                            ]);
+                          }
+                          await FirebaseFirestore.instance
+                              .collection('users')
+                              .doc(userId)
+                              .set(userUpdate, SetOptions(merge: true));
+                          if (role == 'player') {
+                            await _updateEventsAttendanceForPlayer(
+                              userId,
+                              teamName,
+                              add: true,
+                            );
+                          }
+                          if (mounted) Navigator.pop(ctx);
+                        } catch (e) {
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text("Erreur lors de l'ajout : $e"),
+                              ),
+                            );
+                          }
+                        } finally {
+                          if (mounted) setState(() => _isProcessing = false);
+                        }
                       },
                     );
                   },
@@ -118,6 +171,8 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
         final teamData = snapshot.data!.data() as Map<String, dynamic>;
         final List coachIds = teamData['coachIds'] ?? [];
         final List playerIds = teamData['playerIds'] ?? [];
+        final String teamName = teamData['name'] ?? "";
+        final String teamCategory = teamData['category'] ?? "";
 
         return Scaffold(
           appBar: AppBar(
@@ -137,11 +192,45 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
               ),
             ],
           ),
-          body: Column(
+          body: Stack(
             children: [
-              _buildMemberSection("Coachs", coachIds, 'coach'),
-              const Divider(height: 1, color: ViroColors.borderColor),
-              _buildMemberSection("Effectif (Licenciés)", playerIds, 'player'),
+              AbsorbPointer(
+                absorbing: _isProcessing,
+                child: Column(
+                  children: [
+                    _buildMemberSection(
+                      "Coachs",
+                      coachIds,
+                      'coach',
+                      teamName,
+                      teamCategory,
+                      coachIds,
+                      playerIds,
+                    ),
+                    const Divider(height: 1, color: ViroColors.borderColor),
+                    _buildMemberSection(
+                      "Effectif (Licenciés)",
+                      playerIds,
+                      'player',
+                      teamName,
+                      teamCategory,
+                      coachIds,
+                      playerIds,
+                    ),
+                  ],
+                ),
+              ),
+              if (_isProcessing)
+                Positioned.fill(
+                  child: Container(
+                    color: Colors.black.withOpacity(0.1),
+                    child: const Center(
+                      child: CircularProgressIndicator(
+                        color: ViroColors.primary,
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ),
         );
@@ -149,7 +238,15 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
     );
   }
 
-  Widget _buildMemberSection(String title, List ids, String role) {
+  Widget _buildMemberSection(
+    String title,
+    List ids,
+    String role,
+    String teamName,
+    String teamCategory,
+    List coachIds,
+    List playerIds,
+  ) {
     final isCoach = role == 'coach';
     final header = Padding(
       padding: const EdgeInsets.fromLTRB(20, 16, 10, 8),
@@ -165,13 +262,19 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
               letterSpacing: 1.2,
             ),
           ),
-          if (_isEditing)
+          if (role != 'coach' || _isEditing)
             IconButton(
               icon: const Icon(
                 Icons.add_circle_rounded,
                 color: ViroColors.primary,
               ),
-              onPressed: () => _showAddMemberSheet(role),
+              onPressed: () => _showAddMemberSheet(
+                role,
+                teamName,
+                teamCategory,
+                coachIds,
+                playerIds,
+              ),
             ),
         ],
       ),
@@ -224,11 +327,37 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
                               color: Colors.redAccent,
                             ),
                             onPressed: () async {
-                              String field =
-                                  (role == 'player') ? 'playerIds' : 'coachIds';
+                              String field = (role == 'player')
+                                  ? 'playerIds'
+                                  : 'coachIds';
+                              final userId = ids[i];
                               await widget.teamDoc.reference.update({
-                                field: FieldValue.arrayRemove([ids[i]]),
+                                field: FieldValue.arrayRemove([userId]),
                               });
+                              final Map<String, dynamic> userUpdate = {
+                                'teamIds': FieldValue.arrayRemove([
+                                  widget.teamDoc.id,
+                                ]),
+                              };
+                              if (teamName.isNotEmpty) {
+                                userUpdate['teamNames'] =
+                                    FieldValue.arrayRemove([teamName]);
+                              }
+                              if (teamCategory.isNotEmpty) {
+                                userUpdate['categories'] =
+                                    FieldValue.arrayRemove([teamCategory]);
+                              }
+                              await FirebaseFirestore.instance
+                                  .collection('users')
+                                  .doc(userId)
+                                  .set(userUpdate, SetOptions(merge: true));
+                              if (role == 'player') {
+                                await _updateEventsAttendanceForPlayer(
+                                  userId,
+                                  teamName,
+                                  add: false,
+                                );
+                              }
                             },
                           )
                         : null,
@@ -247,8 +376,9 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
           );
 
     if (isCoach) {
-      final height =
-          (ids.length * 68 + 120).clamp(160, 360).toDouble(); // responsive height
+      final height = (ids.length * 68 + 120)
+          .clamp(160, 360)
+          .toDouble(); // responsive height
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -281,5 +411,42 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
     final last = ln.toUpperCase();
     final full = [first, last].where((e) => e.isNotEmpty).join(" ").trim();
     return full.isEmpty ? "Membre" : full;
+  }
+
+  Future<void> _updateEventsAttendanceForPlayer(
+    String userId,
+    String teamName, {
+    required bool add,
+  }) async {
+    if (teamName.isEmpty) return;
+    final eventsRef = FirebaseFirestore.instance
+        .collection('clubs')
+        .doc(widget.clubId)
+        .collection('events');
+
+    final List<QuerySnapshot> snaps = await Future.wait([
+      eventsRef.where('teamName', isEqualTo: teamName).get(),
+      eventsRef.where('teamNames', arrayContains: teamName).get(),
+      eventsRef.where('allTeams', isEqualTo: true).get(),
+    ]);
+
+    final seen = <String>{};
+    for (final snap in snaps) {
+      for (final doc in snap.docs) {
+        if (!seen.add(doc.id)) continue;
+        final ref = doc.reference;
+        if (add) {
+          await ref.set({
+            'teamMemberIds': FieldValue.arrayUnion([userId]),
+            'attendance.$userId': 'none',
+          }, SetOptions(merge: true));
+        } else {
+          await ref.set({
+            'teamMemberIds': FieldValue.arrayRemove([userId]),
+            'attendance.$userId': FieldValue.delete(),
+          }, SetOptions(merge: true));
+        }
+      }
+    }
   }
 }

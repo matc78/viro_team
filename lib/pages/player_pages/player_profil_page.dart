@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../../theme/viro_theme.dart';
 import '../../widget/viro_loader.dart';
 import '../auth_page.dart';
@@ -70,9 +71,19 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
                   () => _changeEmail(email),
                 ),
                 _buildActionTile(
+                  Icons.phone_outlined,
+                  "Changer mon téléphone",
+                  () => _changePhone(data?['phone'] as String? ?? ""),
+                ),
+                _buildActionTile(
                   Icons.lock_open_outlined,
                   "Changer mon mot de passe",
                   _changePassword,
+                ),
+                _buildActionTile(
+                  Icons.info_outline,
+                  "Afficher mes infos",
+                  () => _showInfoDialog(data ?? {}, user),
                 ),
                 const SizedBox(height: 30),
 
@@ -293,6 +304,48 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
     );
   }
 
+  Future<void> _changePhone(String currentPhone) async {
+    final controller = TextEditingController(text: currentPhone);
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Changer le téléphone"),
+        content: TextField(
+          controller: controller,
+          keyboardType: TextInputType.phone,
+          decoration: const InputDecoration(labelText: "Nouveau numéro"),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Annuler"),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final user = FirebaseAuth.instance.currentUser;
+              if (user == null) return;
+              final newPhone = controller.text.trim();
+              setState(() => _isSaving = true);
+              try {
+                await FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(user.uid)
+                    .set({'phone': newPhone}, SetOptions(merge: true));
+                if (mounted) Navigator.pop(context);
+                _showSnack("Téléphone mis à jour");
+              } catch (e) {
+                _showSnack("Erreur lors de la mise à jour : $e");
+              } finally {
+                if (mounted) setState(() => _isSaving = false);
+              }
+            },
+            child: const Text("Enregistrer"),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _changePassword() async {
     final currentController = TextEditingController();
     final newController = TextEditingController();
@@ -495,6 +548,92 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
             child: const Text("OUI, SUPPRIMER"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showInfoDialog(Map<String, dynamic> data, User user) {
+    final first = data['firstName'] as String? ?? "À préciser";
+    final last = data['lastName'] as String? ?? "À préciser";
+    final email = data['email'] as String? ?? user.email ?? "À préciser";
+    final phone = data['phone'] as String? ?? "À préciser";
+    final createdAt = data['createdAt'];
+    String createdLabel = "À préciser";
+    if (createdAt is Timestamp) {
+      createdLabel = DateFormat('dd/MM/yyyy').format(createdAt.toDate());
+    }
+    final club = data['clubName'] as String? ?? "À préciser";
+    final license =
+        data['licenseNumber'] as String? ?? data['license'] as String? ?? "À préciser";
+
+    List<String> teamNames = [];
+    if (data['teamNames'] is List) {
+      teamNames = (data['teamNames'] as List)
+          .whereType<String>()
+          .where((e) => e.isNotEmpty)
+          .toList();
+    } else if (data['teamName'] is String) {
+      teamNames = [(data['teamName'] as String)];
+    } else if (data['teams'] is List) {
+      teamNames = (data['teams'] as List)
+          .whereType<String>()
+          .where((e) => e.isNotEmpty)
+          .toList();
+    }
+    final teamsLabel =
+        teamNames.isNotEmpty ? teamNames.join(", ") : "À préciser";
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Mes informations"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _infoLine("Nom", "${_formatLast(last)}"),
+            _infoLine("Prénom", _formatFirst(first)),
+            _infoLine("Email", email),
+            _infoLine("Téléphone", phone),
+            _infoLine("Date de création", createdLabel),
+            _infoLine("Club", club),
+            _infoLine("Équipe(s)", teamsLabel),
+            _infoLine("Numéro de licence", license),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Fermer"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _infoLine(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8.0),
+      child: Row(
+        children: [
+          Expanded(
+            flex: 2,
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontWeight: FontWeight.w700,
+                color: Colors.black87,
+              ),
+            ),
+          ),
+          Expanded(
+            flex: 3,
+            child: Text(
+              value,
+              style: const TextStyle(color: Colors.black54),
+            ),
           ),
         ],
       ),
