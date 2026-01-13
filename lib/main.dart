@@ -2,8 +2,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'package:viro_team/pages/role_selection_page.dart';
-import 'firebase_options.dart'; // Généré par flutterfire configure
+import 'firebase_options.dart';
 import 'pages/auth_page.dart';
 import 'pages/player_pages/home_page.dart';
 import 'pages/admin_coach_pages/admin_home_page.dart';
@@ -16,6 +18,7 @@ void main() async {
 
   // 2. Initialiser Firebase avec les options générées
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  await initializeDateFormatting('fr_FR', null);
 
   runApp(const MyApp());
 }
@@ -29,6 +32,13 @@ class MyApp extends StatelessWidget {
       title: 'ViroTeam',
       theme: ViroTheme.lightTheme, // Ton thème bleu et blanc
       debugShowCheckedModeBanner: false,
+      locale: const Locale('fr'),
+      supportedLocales: const [Locale('fr'), Locale('en')],
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
       home: StreamBuilder<User?>(
         stream: FirebaseAuth.instance.authStateChanges(),
         builder: (context, snapshot) {

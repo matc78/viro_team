@@ -1,10 +1,12 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:viro_team/pages/admin_coach_pages/admin_planning_page.dart';
 import 'package:viro_team/pages/admin_coach_pages/admin_teams_page.dart';
 import 'package:viro_team/pages/admin_coach_pages/profil_request_page.dart';
 import 'admin_members_page.dart';
 import 'admin_profil_page.dart';
+import 'package:intl/intl.dart';
 import '../../theme/viro_theme.dart';
 
 class AdminHomePage extends StatefulWidget {
@@ -175,10 +177,27 @@ class _AdminHomePageState extends State<AdminHomePage> {
                     ),
                     _adminCard(
                       title: "Planning",
-                      count: "Aujourd'hui",
+                      count: DateFormat(
+                        'd MMM',
+                        'fr_FR',
+                      ).format(DateTime.now()),
                       icon: Icons.calendar_today_rounded,
                       color: Colors.green,
-                      onTap: () => print("Voir le calendrier"),
+                      onTap: () {
+                        if (clubId != null) {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => AdminPlanningPage(clubId: clubId),
+                            ),
+                          );
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text("Erreur : ID du club introuvable"),
+                            ),
+                          );
+                        }
+                      },
                     ),
                     _adminCard(
                       title: "Paramètres",
