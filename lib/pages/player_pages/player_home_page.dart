@@ -131,29 +131,11 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
               // Navigation Rapide
               Row(
                 children: [
-                  _buildMenuCard("Planning", Icons.calendar_today_rounded, () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => PlayerPlanningPage(clubId: clubId),
-                      ),
-                    );
-                  }),
-                  const SizedBox(width: 15),
                   _buildMenuCard("Mes Équipes", Icons.group_rounded, () {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
                         builder: (_) => PlayerTeamsPage(clubId: clubId),
-                      ),
-                    );
-                  }),
-                  const SizedBox(width: 15),
-                  _buildMenuCard("Infos", Icons.notifications_none_rounded, () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => PlayerInfosPage(clubId: clubId),
                       ),
                     );
                   }),
