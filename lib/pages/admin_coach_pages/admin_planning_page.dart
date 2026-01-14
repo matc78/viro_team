@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:viro_team/pages/admin_coach_pages/admin_add_event_page.dart';
-import 'package:viro_team/pages/admin_coach_pages/event_details_page.dart';
+import 'package:viro_team/pages/admin_coach_pages/admin_event_details_page.dart';
 import '../../theme/viro_theme.dart';
 import '../../widget/viro_loader.dart';
 
@@ -274,7 +274,7 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
                   } else {
                     Navigator.of(context).push(
                       MaterialPageRoute(
-                        builder: (_) => EventDetailsPage(
+                        builder: (_) => AdminEventDetailsPage(
                           clubId: widget.clubId,
                           eventId: docId,
                         ),

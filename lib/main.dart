@@ -7,7 +7,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:viro_team/pages/role_selection_page.dart';
 import 'firebase_options.dart';
 import 'pages/auth_page.dart';
-import 'pages/player_pages/home_page.dart';
+import 'pages/player_pages/player_home_page.dart';
 import 'pages/admin_coach_pages/admin_home_page.dart';
 import 'theme/viro_theme.dart';
 import 'widget/viro_loader.dart';
@@ -80,7 +80,7 @@ class MyApp extends StatelessWidget {
                 if (role == 'admin_fondateur' || role == 'coach') {
                   return const AdminHomePage();
                 }
-                return const HomePage(); // par défaut la home joueur
+                return const PlayerHomePage(); // par défaut la home joueur
               },
             );
           }

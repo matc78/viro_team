@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:viro_team/pages/role_selection_page.dart';
-import 'player_pages/home_page.dart';
+import 'player_pages/player_home_page.dart';
 import '../theme/viro_theme.dart';
 import '../widget/viro_loader.dart';
 
@@ -92,7 +92,7 @@ class _AuthPageState extends State<AuthPage> {
     if (hasPendingRequest || hasClub) {
       // Soit déjà membre, soit en attente : on atterrit sur HomePage
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const HomePage()),
+        MaterialPageRoute(builder: (_) => const PlayerHomePage()),
       );
     } else {
       // Pas de club ni de demande en cours : sélection de rôle

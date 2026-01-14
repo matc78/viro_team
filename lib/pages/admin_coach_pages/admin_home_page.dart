@@ -131,7 +131,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
                           title: "Membres",
                           count: count == 0 ? "" : "$count",
                           icon: Icons.group_outlined,
-                          color: Colors.orange,
+                          color: ViroColors.accent,
                           onTap: () {
                             if (clubId != null) {
                               Navigator.of(context).push(
@@ -161,7 +161,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
                           title: "Équipes",
                           count: teamCount == 0 ? "" : "$teamCount",
                           icon: Icons.groups_rounded,
-                          color: Colors.blue,
+                          color: ViroColors.primary,
                           onTap: () {
                             if (clubId != null) {
                               Navigator.of(context).push(
@@ -182,7 +182,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
                         'fr_FR',
                       ).format(DateTime.now()),
                       icon: Icons.calendar_today_rounded,
-                      color: Colors.green,
+                      color: ViroColors.primary,
                       onTap: () {
                         if (clubId != null) {
                           Navigator.of(context).push(
@@ -203,7 +203,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
                       title: "Paramètres",
                       count: "",
                       icon: Icons.settings_suggest_outlined,
-                      color: Colors.grey,
+                      color: ViroColors.accent,
                       onTap: () => print("Réglages club"),
                     ),
                   ],

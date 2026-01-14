@@ -3,7 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../theme/viro_theme.dart';
 import '../widget/viro_loader.dart';
-import 'player_pages/home_page.dart';
+import 'player_pages/player_home_page.dart';
 import 'admin_coach_pages/create_club_page.dart';
 
 class RoleSelectionPage extends StatefulWidget {
@@ -68,8 +68,10 @@ class _RoleSelectionPageState extends State<RoleSelectionPage> {
       );
 
       // Récupérer les infos utilisateur pour stocker prénom/nom dans la demande
-      final userDoc =
-          await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
       final userData = userDoc.data() ?? {};
       final firstName = userData['firstName'];
       final lastName = userData['lastName'];
@@ -132,9 +134,9 @@ class _RoleSelectionPageState extends State<RoleSelectionPage> {
       );
 
       if (mounted) {
-        Navigator.of(
-          context,
-        ).pushReplacement(MaterialPageRoute(builder: (_) => const HomePage()));
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const PlayerHomePage()),
+        );
       }
     } catch (e) {
       ScaffoldMessenger.of(

@@ -4,11 +4,11 @@ import 'package:intl/intl.dart';
 import '../../theme/viro_theme.dart';
 import '../../widget/viro_loader.dart';
 
-class EventDetailsPage extends StatelessWidget {
+class PlayerEventDetailsPage extends StatelessWidget {
   final String clubId;
   final String eventId;
 
-  const EventDetailsPage({
+  const PlayerEventDetailsPage({
     super.key,
     required this.clubId,
     required this.eventId,
