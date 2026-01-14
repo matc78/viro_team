@@ -121,8 +121,8 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
           padding: const EdgeInsets.all(20.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildHeader(name),
+              children: [
+              _buildHeader(name, userData?['avatarUrl'] as String?),
               const SizedBox(height: 25),
 
               // Navigation Rapide
@@ -175,7 +175,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
 
   // --- COMPOSANTS DE L'INTERFACE ---
 
-  Widget _buildHeader(String name) {
+  Widget _buildHeader(String name, String? avatarUrl) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -197,9 +197,14 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
             context,
             MaterialPageRoute(builder: (_) => const PlayerProfilPage()),
           ),
-          child: const CircleAvatar(
+          child: CircleAvatar(
             backgroundColor: ViroColors.primary,
-            child: Icon(Icons.person, color: Colors.white),
+            radius: 22,
+            backgroundImage:
+                (avatarUrl != null && avatarUrl.isNotEmpty) ? NetworkImage(avatarUrl) : null,
+            child: (avatarUrl == null || avatarUrl.isEmpty)
+                ? const Icon(Icons.person, color: Colors.white)
+                : null,
           ),
         ),
       ],
@@ -577,4 +582,5 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
       ],
     );
   }
+
 }

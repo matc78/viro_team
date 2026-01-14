@@ -311,7 +311,17 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
                   ),
                   child: ListTile(
                     visualDensity: VisualDensity.compact,
-                    leading: const Icon(Icons.person_outline, size: 20),
+                    leading: CircleAvatar(
+                      radius: 18,
+                      backgroundImage: (userData['avatarUrl'] != null &&
+                              (userData['avatarUrl'] as String).isNotEmpty)
+                          ? NetworkImage(userData['avatarUrl'])
+                          : null,
+                      child: (userData['avatarUrl'] == null ||
+                              (userData['avatarUrl'] as String).isEmpty)
+                          ? const Icon(Icons.person_outline, size: 18)
+                          : null,
+                    ),
                     title: Text(
                       _formatName(userData['firstName'], userData['lastName']),
                       style: const TextStyle(

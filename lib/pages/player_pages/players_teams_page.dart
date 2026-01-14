@@ -29,8 +29,9 @@ class PlayerTeamsPage extends StatelessWidget {
           if (clubSnap.connectionState == ConnectionState.waiting) {
             return const Center(child: ViroLoader());
           }
-          final clubName =
-              clubSnap.data?.data()?['name'] as String? ?? "Mon Club";
+          final clubData = clubSnap.data?.data();
+          final clubName = clubData?['name'] as String? ?? "Mon Club";
+          final clubLogo = clubData?['logoUrl'] as String? ?? "";
           return StreamBuilder<QuerySnapshot>(
             // On récupère les équipes du club où l'utilisateur est dans la liste 'playerIds'
             stream: FirebaseFirestore.instance
@@ -61,7 +62,12 @@ class PlayerTeamsPage extends StatelessWidget {
                 itemCount: teams.length,
                 itemBuilder: (context, index) {
                   final teamData = teams[index].data() as Map<String, dynamic>;
-                  return _buildTeamCard(context, teamData, clubName);
+                  return _buildTeamCard(
+                    context,
+                    teamData,
+                    clubName,
+                    clubLogo,
+                  );
                 },
               );
             },
@@ -75,6 +81,7 @@ class PlayerTeamsPage extends StatelessWidget {
     BuildContext context,
     Map<String, dynamic> teamData,
     String clubName,
+    String clubLogo,
   ) {
     final List playerIds = teamData['playerIds'] ?? [];
     final List coachIds = teamData['coachIds'] ?? [];
@@ -85,9 +92,13 @@ class PlayerTeamsPage extends StatelessWidget {
       child: ExpansionTile(
         shape:
             const Border(), // Retire la bordure par défaut de l'ExpansionTile
-        leading: const CircleAvatar(
-          backgroundColor: ViroColors.primary,
-          child: Icon(Icons.shield_rounded, color: Colors.white, size: 20),
+        leading: CircleAvatar(
+          backgroundColor: ViroColors.primary.withOpacity(0.1),
+          backgroundImage:
+              clubLogo.isNotEmpty ? NetworkImage(clubLogo) : null,
+          child: clubLogo.isEmpty
+              ? const Icon(Icons.shield_rounded, color: ViroColors.primary)
+              : null,
         ),
         title: Text(
           teamData['name'] ?? "Équipe sans nom",
@@ -171,9 +182,16 @@ class _MemberTile extends StatelessWidget {
         return ListTile(
           contentPadding: EdgeInsets.zero,
           dense: true,
-          leading: const CircleAvatar(
-            radius: 12,
-            child: Icon(Icons.person, size: 14),
+          leading: CircleAvatar(
+            radius: 14,
+            backgroundImage: (data['avatarUrl'] != null &&
+                    (data['avatarUrl'] as String).isNotEmpty)
+                ? NetworkImage(data['avatarUrl'])
+                : null,
+            child: (data['avatarUrl'] == null ||
+                    (data['avatarUrl'] as String).isEmpty)
+                ? const Icon(Icons.person, size: 14)
+                : null,
           ),
           title: Text(
             "${data['firstName']} ${data['lastName']}",

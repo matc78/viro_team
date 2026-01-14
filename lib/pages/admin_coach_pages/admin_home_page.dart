@@ -68,11 +68,31 @@ class _AdminHomePageState extends State<AdminHomePage> {
       appBar: AppBar(
         title: const Text("Tableau de bord"),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.account_circle_outlined),
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const AdminProfilPage()),
+          StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+            stream: user != null
+                ? FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(user!.uid)
+                    .snapshots()
+                : null,
+            builder: (context, snap) {
+              final avatarUrl = snap.data?.data()?['avatarUrl'] as String?;
+              return IconButton(
+                icon: CircleAvatar(
+                  radius: 16,
+                  backgroundColor: ViroColors.primary.withOpacity(0.1),
+                  backgroundImage: (avatarUrl != null && avatarUrl.isNotEmpty)
+                      ? NetworkImage(avatarUrl)
+                      : null,
+                  child: (avatarUrl == null || avatarUrl.isEmpty)
+                      ? const Icon(Icons.person, color: ViroColors.primary)
+                      : null,
+                ),
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const AdminProfilPage()),
+                  );
+                },
               );
             },
           ),
@@ -218,6 +238,28 @@ class _AdminHomePageState extends State<AdminHomePage> {
                   ),
                   const SizedBox(height: 10),
                   _buildJoinRequestsSection(clubId, clubName),
+                  const SizedBox(height: 24),
+                  if ((club?['logoUrl'] as String?)?.isNotEmpty ?? false)
+                    Center(
+                      child: Column(
+                        children: [
+                          CircleAvatar(
+                            radius: 32,
+                            backgroundImage:
+                                NetworkImage(club!['logoUrl'] as String),
+                            backgroundColor: Colors.transparent,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            clubName,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.grey,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                 ],
               ],
             ),

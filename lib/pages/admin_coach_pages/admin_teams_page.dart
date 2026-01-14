@@ -164,12 +164,23 @@ class _AdminTeamsPageState extends State<AdminTeamsPage> {
                     horizontal: 16,
                     vertical: 8,
                   ),
-                  leading: CircleAvatar(
-                    backgroundColor: ViroColors.primary.withOpacity(0.1),
-                    child: const Icon(
-                      Icons.groups_rounded,
-                      color: ViroColors.primary,
-                    ),
+                  leading: FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                    future: _db.collection('clubs').doc(widget.clubId).get(),
+                    builder: (context, clubSnap) {
+                      final logoUrl =
+                          clubSnap.data?.data()?['logoUrl'] as String? ?? "";
+                      return CircleAvatar(
+                        backgroundColor: ViroColors.primary.withOpacity(0.1),
+                        backgroundImage:
+                            logoUrl.isNotEmpty ? NetworkImage(logoUrl) : null,
+                        child: logoUrl.isEmpty
+                            ? const Icon(
+                                Icons.groups_rounded,
+                                color: ViroColors.primary,
+                              )
+                            : null,
+                      );
+                    },
                   ),
                   title: Text(
                     data['name'] ?? "Sans nom",

@@ -64,49 +64,83 @@ class ProfilDisplayPage extends StatelessWidget {
                 child: Column(
                   children: [
                     // --- HEADER : AVATAR ET NOM ---
-                    Center(
-                      child: Column(
-                        children: [
-                          CircleAvatar(
-                            radius: 60,
-                            backgroundColor: ViroColors.primary.withOpacity(
-                              0.1,
-                            ),
-                            child: const Icon(
-                              Icons.person,
-                              size: 60,
-                              color: ViroColors.primary,
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            formattedName,
-                            style: Theme.of(context).textTheme.headlineMedium
-                                ?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.black,
-                                ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: ViroColors.secondary,
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Text(
-                              role.toUpperCase(),
-                              style: const TextStyle(
-                                color: ViroColors.primary,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12,
+                    FutureBuilder<List<String>>(
+                      future: _fetchClubLogos(data),
+                      builder: (context, logosSnap) {
+                        final logos = logosSnap.data ?? [];
+                        return Center(
+                          child: Column(
+                            children: [
+                              Stack(
+                                clipBehavior: Clip.none,
+                                children: [
+                                  CircleAvatar(
+                                    radius: 60,
+                                    backgroundColor:
+                                        ViroColors.primary.withOpacity(0.1),
+                                    backgroundImage: (data['avatarUrl'] != null &&
+                                            (data['avatarUrl'] as String).isNotEmpty)
+                                        ? NetworkImage(data['avatarUrl'])
+                                        : null,
+                                    child: (data['avatarUrl'] == null ||
+                                            (data['avatarUrl'] as String).isEmpty)
+                                        ? const Icon(
+                                            Icons.person,
+                                            size: 60,
+                                            color: ViroColors.primary,
+                                          )
+                                        : null,
+                                  ),
+                                  for (int i = 0; i < logos.length; i++)
+                                    Positioned(
+                                      top: -6,
+                                      right: -6.0 - (i * 26),
+                                      child: CircleAvatar(
+                                        radius: 18,
+                                        backgroundColor: Colors.white,
+                                        child: CircleAvatar(
+                                          radius: 15,
+                                          backgroundColor: Colors.white,
+                                          backgroundImage:
+                                              NetworkImage(logos[i]),
+                                        ),
+                                      ),
+                                    ),
+                                ],
                               ),
-                            ),
+                              const SizedBox(height: 16),
+                              Text(
+                                formattedName,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .headlineMedium
+                                    ?.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.black,
+                                    ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: ViroColors.secondary,
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Text(
+                                  role.toUpperCase(),
+                                  style: const TextStyle(
+                                    color: ViroColors.primary,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
+                        );
+                      },
                     ),
                     const SizedBox(height: 40),
 
@@ -245,6 +279,23 @@ String _formatName(String first, String last) {
   final f = cap(first);
   final l = last.toUpperCase();
   return [f, l].where((e) => e.isNotEmpty).join(" ").trim();
+}
+
+Future<List<String>> _fetchClubLogos(Map<String, dynamic> data) async {
+  final logos = <String>[];
+  final ids = <String>{};
+  if (data['clubIds'] is List) {
+    ids.addAll((data['clubIds'] as List).whereType<String>());
+  }
+  if (data['clubId'] is String) ids.add(data['clubId']);
+
+  for (final id in ids) {
+    final doc =
+        await FirebaseFirestore.instance.collection('clubs').doc(id).get();
+    final url = doc.data()?['logoUrl'] as String?;
+    if (url != null && url.isNotEmpty) logos.add(url);
+  }
+  return logos;
 }
 
 Future<List<String>> _fetchTeams(String clubId, String uid) async {

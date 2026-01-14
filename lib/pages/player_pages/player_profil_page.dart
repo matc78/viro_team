@@ -1,6 +1,10 @@
+import 'dart:io';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import '../../theme/viro_theme.dart';
 import '../../widget/viro_loader.dart';
@@ -15,6 +19,7 @@ class PlayerProfilPage extends StatefulWidget {
 
 class _PlayerProfilPageState extends State<PlayerProfilPage> {
   bool _isSaving = false;
+  bool _isUploadingAvatar = false;
 
   @override
   Widget build(BuildContext context) {
@@ -40,6 +45,13 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
         final displayFirst = _formatFirst(rawFirst);
         final displayLast = _formatLast(rawLast);
         final clubName = data?['clubName'] as String?;
+        final String? clubId = data?['clubId'] as String?;
+        final List<String> clubIds = {
+          if (data?['clubIds'] is List)
+            ...(data!['clubIds'] as List).whereType<String>(),
+          if (clubId != null) clubId,
+        }.toList();
+        final avatarUrl = data?['avatarUrl'] as String?;
         final email = data?['email'] as String? ?? user.email ?? "";
 
         return Scaffold(
@@ -57,7 +69,20 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
             padding: const EdgeInsets.all(20.0),
             child: Column(
               children: [
-                _buildHeader("$displayFirst $displayLast", clubName),
+                FutureBuilder<List<String>>(
+                  future: clubIds.isNotEmpty
+                      ? _fetchClubLogos(clubIds)
+                      : Future.value([]),
+                  builder: (context, snap) {
+                    final logos = snap.data ?? [];
+                    return _buildHeader(
+                      "$displayFirst $displayLast",
+                      clubName,
+                      logos,
+                      avatarUrl,
+                    );
+                  },
+                ),
                 const SizedBox(height: 30),
                 _buildSectionHeader("MES INFORMATIONS"),
                 _buildActionTile(
@@ -109,28 +134,71 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
     );
   }
 
-  Widget _buildHeader(String fullName, String? clubName) {
+  Widget _buildHeader(
+    String fullName,
+    String? clubName,
+    List<String> clubLogos,
+    String? avatarUrl,
+  ) {
     return Column(
       children: [
         Center(
           child: Stack(
             children: [
-              Container(
-                padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: ViroColors.primary, width: 2),
-                ),
-                child: const CircleAvatar(
-                  radius: 50,
-                  backgroundColor: ViroColors.secondary,
-                  child: Icon(
-                    Icons.person,
-                    size: 50,
-                    color: ViroColors.primary,
+              CircleAvatar(
+                radius: 55,
+                backgroundColor: ViroColors.primary.withOpacity(0.1),
+                backgroundImage: (avatarUrl != null && avatarUrl.isNotEmpty)
+                    ? NetworkImage(avatarUrl)
+                    : null,
+                child: (avatarUrl == null || avatarUrl.isEmpty)
+                    ? const Icon(
+                        Icons.person,
+                        size: 55,
+                        color: ViroColors.primary,
+                      )
+                    : null,
+              ),
+              Positioned(
+                bottom: 0,
+                right: 0,
+                child: InkWell(
+                  onTap: _isUploadingAvatar ? null : _pickAvatar,
+                  borderRadius: BorderRadius.circular(18),
+                  child: CircleAvatar(
+                    radius: 18,
+                    backgroundColor: ViroColors.primary,
+                    child: _isUploadingAvatar
+                        ? const SizedBox(
+                            height: 16,
+                            width: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(
+                            Icons.camera_alt,
+                            size: 18,
+                            color: Colors.white,
+                          ),
                   ),
                 ),
               ),
+              for (int i = 0; i < clubLogos.length; i++)
+                Positioned(
+                  top: -6,
+                  right: -6.0 - (i * 26),
+                  child: CircleAvatar(
+                    radius: 18,
+                    backgroundColor: Colors.white,
+                    child: CircleAvatar(
+                      radius: 15,
+                      backgroundColor: Colors.white,
+                      backgroundImage: NetworkImage(clubLogos[i]),
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
@@ -566,7 +634,9 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
     }
     final club = data['clubName'] as String? ?? "À préciser";
     final license =
-        data['licenseNumber'] as String? ?? data['license'] as String? ?? "À préciser";
+        data['licenseNumber'] as String? ??
+        data['license'] as String? ??
+        "À préciser";
 
     List<String> teamNames = [];
     if (data['teamNames'] is List) {
@@ -582,8 +652,9 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
           .where((e) => e.isNotEmpty)
           .toList();
     }
-    final teamsLabel =
-        teamNames.isNotEmpty ? teamNames.join(", ") : "À préciser";
+    final teamsLabel = teamNames.isNotEmpty
+        ? teamNames.join(", ")
+        : "À préciser";
 
     showDialog(
       context: context,
@@ -593,7 +664,7 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _infoLine("Nom", "${_formatLast(last)}"),
+            _infoLine("Nom", _formatLast(last)),
             _infoLine("Prénom", _formatFirst(first)),
             _infoLine("Email", email),
             _infoLine("Téléphone", phone),
@@ -630,10 +701,7 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
           ),
           Expanded(
             flex: 3,
-            child: Text(
-              value,
-              style: const TextStyle(color: Colors.black54),
-            ),
+            child: Text(value, style: const TextStyle(color: Colors.black54)),
           ),
         ],
       ),
@@ -657,4 +725,58 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
   }
 
   String _formatLast(String value) => value.toUpperCase();
+
+  Future<List<String>> _fetchClubLogos(List<String> clubIds) async {
+    final logos = <String>[];
+    for (final id in clubIds) {
+      final doc = await FirebaseFirestore.instance
+          .collection('clubs')
+          .doc(id)
+          .get();
+      final url = doc.data()?['logoUrl'] as String?;
+      if (url != null && url.isNotEmpty) logos.add(url);
+    }
+    return logos;
+  }
+
+  Future<void> _pickAvatar() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    try {
+      final picker = ImagePicker();
+      final XFile? file = await picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 80,
+      );
+      if (file == null) return;
+      setState(() {
+        _isSaving = true;
+        _isUploadingAvatar = true;
+      });
+
+      final storageRef = FirebaseStorage.instance
+          .ref()
+          .child('users')
+          .child(user.uid)
+          .child('avatar_${DateTime.now().millisecondsSinceEpoch}.png');
+      await storageRef.putFile(File(file.path));
+      final url = await storageRef.getDownloadURL();
+
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+        'avatarUrl': url,
+      }, SetOptions(merge: true));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Impossible de changer l'avatar : $e")),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+          _isUploadingAvatar = false;
+        });
+      }
+    }
+  }
 }

@@ -57,12 +57,25 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
             child: Column(
               children: [
                 // --- SECTION ENTÊTE ---
-                _buildProfileHeader(
-                  displayFirst,
-                  displayLast,
-                  role,
-                  userData?['avatarUrl'],
-                  () => _pickAvatar(user.uid),
+                FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                  future: clubId.isNotEmpty
+                      ? FirebaseFirestore.instance
+                          .collection('clubs')
+                          .doc(clubId)
+                          .get()
+                      : null,
+                  builder: (context, snap) {
+                    final logoUrl =
+                        snap.data?.data()?['logoUrl'] as String? ?? "";
+                    return _buildProfileHeader(
+                      displayFirst,
+                      displayLast,
+                      role,
+                      userData?['avatarUrl'],
+                      () => _pickAvatar(user.uid),
+                      logoUrl,
+                    );
+                  },
                 ),
                 const SizedBox(height: 30),
 
@@ -73,6 +86,12 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
                   title: "Changer Nom du Club",
                   subtitle: clubName,
                   onTap: () => _showEditClubName(clubId, clubName),
+                ),
+                _buildMenuCard(
+                  icon: Icons.image_outlined,
+                  title: "Changer le logo du club",
+                  subtitle: "Ajouter ou mettre à jour",
+                  onTap: () => _pickClubLogo(clubId),
                 ),
                 _buildMenuCard(
                   icon: Icons.admin_panel_settings_outlined,
@@ -138,6 +157,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
     String role,
     String? avatarUrl,
     Future<void> Function() onAvatarTap,
+    String? clubLogoUrl,
   ) {
     return Column(
       children: [
@@ -187,6 +207,20 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
                 ),
               ),
             ),
+            if (clubLogoUrl != null && clubLogoUrl.isNotEmpty)
+              Positioned(
+                top: -4,
+                right: -4,
+                child: CircleAvatar(
+                  radius: 18,
+                  backgroundColor: Colors.white,
+                  child: CircleAvatar(
+                    radius: 15,
+                    backgroundColor: Colors.white,
+                    backgroundImage: NetworkImage(clubLogoUrl),
+                  ),
+                ),
+              ),
           ],
         ),
         const SizedBox(height: 16),
@@ -443,6 +477,40 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
         ],
       ),
     );
+  }
+
+  Future<void> _pickClubLogo(String clubId) async {
+    try {
+      final picker = ImagePicker();
+      final XFile? file =
+          await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
+      if (file == null) return; // annulé par l'utilisateur
+
+      final storageRef = FirebaseStorage.instance
+          .ref()
+          .child('clubs')
+          .child(clubId)
+          .child('logo_${DateTime.now().millisecondsSinceEpoch}.png');
+
+      await storageRef.putFile(File(file.path));
+      final url = await storageRef.getDownloadURL();
+
+      await FirebaseFirestore.instance
+          .collection('clubs')
+          .doc(clubId)
+          .set({'logoUrl': url}, SetOptions(merge: true));
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Logo mis à jour avec succès")),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Erreur lors du changement de logo : $e")),
+      );
+    }
   }
 
   void _showAdvancedSettings(BuildContext context, String clubId) {
