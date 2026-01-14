@@ -20,6 +20,8 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
   final List<Map<String, String>> _teamsMeta = [];
   String _selectedType = 'Entraînement';
   String? _selectedTeamName;
+  bool _summonAllPlayers = true;
+  final List<String> _selectedPlayersMatch = [];
   final List<String> _selectedTeams = [];
   final List<String> _selectedCategoriesAudience = [];
   bool _allTeams = false;
@@ -57,6 +59,12 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
         _showError("Choisis une équipe pour cet évènement");
         return;
       }
+      if (_selectedType == 'Match' &&
+          !_summonAllPlayers &&
+          _selectedPlayersMatch.isEmpty) {
+        _showError("Sélectionne au moins un joueur ou convoque toute l'équipe");
+        return;
+      }
     } else {
       if (_titleController.text.trim().isEmpty) {
         _showError("Titre requis pour cet évènement");
@@ -74,10 +82,14 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
 
     try {
       // 2. Collecte des IDs des membres concernés pour l'attendance
-      final List<String> audienceMembers = await _collectAudienceMembers(
+      List<String> audienceMembers = await _collectAudienceMembers(
         isTraining: _selectedType == 'Entraînement',
         isMatch: _selectedType == 'Match',
       );
+      if (_selectedType == 'Match' && !_summonAllPlayers) {
+        // Utilise uniquement les joueurs sélectionnés
+        audienceMembers = List.from(_selectedPlayersMatch);
+      }
       // Récupération du nom du club
       final clubSnap = await FirebaseFirestore.instance
           .collection('clubs')
@@ -225,6 +237,96 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
       }
     }
     return ids.toList();
+  }
+
+  Widget _buildMatchPlayersSelector() {
+    if (_selectedTeamName == null) return const SizedBox();
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('clubs')
+          .doc(widget.clubId)
+          .collection('teams')
+          .where('name', isEqualTo: _selectedTeamName)
+          .limit(1)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return const SizedBox();
+        }
+        final teamData = snapshot.data!.docs.first.data();
+        final playerIds =
+            (teamData['playerIds'] as List?)?.whereType<String>().toList() ??
+                [];
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SwitchListTile(
+              title: const Text("Convoquer toute l'équipe"),
+              value: _summonAllPlayers,
+              onChanged: (v) {
+                setState(() {
+                  _summonAllPlayers = v;
+                  if (v) _selectedPlayersMatch.clear();
+                });
+              },
+            ),
+            if (!_summonAllPlayers) ...[
+              const Text(
+                "Sélectionne les joueurs à convoquer :",
+                style: TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+              ...playerIds.map(
+                (id) => FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                  future: FirebaseFirestore.instance.collection('users').doc(id).get(),
+                  builder: (context, userSnap) {
+                    if (userSnap.connectionState == ConnectionState.waiting) {
+                      return const CheckboxListTile(
+                        dense: true,
+                        value: false,
+                        onChanged: null,
+                        title: Text("Chargement..."),
+                      );
+                    }
+                    final userData = userSnap.data?.data();
+                    if (userData == null) return const SizedBox();
+                    final first = (userData['firstName'] as String? ?? "").trim();
+                    final last = (userData['lastName'] as String? ?? "").trim();
+                    final name =
+                        "${first.isNotEmpty ? first[0].toUpperCase() + first.substring(1).toLowerCase() : ''} ${last.toUpperCase()}".trim();
+                    final avatar = userData['avatarUrl'] as String?;
+                    final checked = _selectedPlayersMatch.contains(id);
+                    return CheckboxListTile(
+                      dense: true,
+                      secondary: CircleAvatar(
+                        radius: 14,
+                        backgroundImage:
+                            (avatar != null && avatar.isNotEmpty) ? NetworkImage(avatar) : null,
+                        child: (avatar == null || avatar.isEmpty)
+                            ? const Icon(Icons.person, size: 14)
+                            : null,
+                      ),
+                      title: Text(name),
+                      value: checked,
+                      onChanged: (v) {
+                        setState(() {
+                          if (v == true) {
+                            _selectedPlayersMatch.add(id);
+                          } else {
+                            _selectedPlayersMatch.remove(id);
+                          }
+                        });
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+            const SizedBox(height: 10),
+          ],
+        );
+      },
+    );
   }
 
   // --- UI HELPERS ---
@@ -387,13 +489,17 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
                     label: "Type d'évènement",
                     value: _selectedType,
                     items: ['Entraînement', 'Match', 'Évènement', 'Autre'],
-                    onChanged: (val) => setState(() {
-                      _selectedType = val!;
-                      _allDay = false;
-                      _isRecurring = false;
-                      if (_selectedType == 'Match') _weeksCount = 1;
-                    }),
-                  ),
+                          onChanged: (val) => setState(() {
+                            _selectedType = val!;
+                            _allDay = false;
+                            _isRecurring = false;
+                            if (_selectedType != 'Match') {
+                              _summonAllPlayers = true;
+                              _selectedPlayersMatch.clear();
+                            }
+                          if (_selectedType == 'Match') _weeksCount = 1;
+                        }),
+                      ),
 
                   if (_selectedType != 'Entraînement' &&
                       _selectedType != 'Match')
@@ -440,8 +546,11 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
                           value: _selectedTeamName,
                           hint: "Choisir une équipe",
                           items: teams.map((t) => t['name'] as String).toList(),
-                          onChanged: (val) =>
-                              setState(() => _selectedTeamName = val),
+                          onChanged: (val) => setState(() {
+                            _selectedTeamName = val;
+                            _selectedPlayersMatch.clear();
+                            _summonAllPlayers = true;
+                          }),
                         );
                       }
 
@@ -492,6 +601,9 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
                       );
                     },
                   ),
+
+                  if (_selectedType == 'Match' && _selectedTeamName != null)
+                    _buildMatchPlayersSelector(),
 
                   TextFormField(
                     controller: _locationController,
