@@ -295,8 +295,16 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
     final bool canceled = data['canceled'] == true;
     final bool isMatch = data['type'] == 'Match';
     Color typeColor = _getTypeColor(data['type']);
-    final int presentCount = _countList(data['presentIds']);
-    final int absentCount = _countList(data['absentIds']);
+    final Map<String, dynamic> attendance =
+        Map<String, dynamic>.from(data['attendance'] ?? {});
+    int presentCount =
+        attendance.values.where((v) => v == 'present').length;
+    int absentCount = attendance.values.where((v) => v == 'absent').length;
+    // fallback sur anciennes listes si map vide
+    if (presentCount == 0 && absentCount == 0) {
+      presentCount = _countList(data['presentIds']);
+      absentCount = _countList(data['absentIds']);
+    }
     final int totalResponded = presentCount + absentCount;
     final int totalUnknown = _countList(data['teamMemberIds']) > 0
         ? (_countList(data['teamMemberIds']) - totalResponded).clamp(0, 9999)
