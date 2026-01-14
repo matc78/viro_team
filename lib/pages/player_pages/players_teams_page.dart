@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../../theme/viro_theme.dart';
 import '../../widget/viro_loader.dart';
+import '../../utils/firebase_helpers.dart';
 import '../profil_display_page.dart';
 
 class PlayerTeamsPage extends StatelessWidget {
@@ -23,8 +24,10 @@ class PlayerTeamsPage extends StatelessWidget {
         elevation: 0,
       ),
       body: FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-        future:
-            FirebaseFirestore.instance.collection('clubs').doc(clubId).get(),
+        future: FirebaseFirestore.instance
+            .collection('clubs')
+            .doc(clubId)
+            .get(),
         builder: (context, clubSnap) {
           if (clubSnap.connectionState == ConnectionState.waiting) {
             return const Center(child: ViroLoader());
@@ -62,12 +65,7 @@ class PlayerTeamsPage extends StatelessWidget {
                 itemCount: teams.length,
                 itemBuilder: (context, index) {
                   final teamData = teams[index].data() as Map<String, dynamic>;
-                  return _buildTeamCard(
-                    context,
-                    teamData,
-                    clubName,
-                    clubLogo,
-                  );
+                  return _buildTeamCard(context, teamData, clubName, clubLogo);
                 },
               );
             },
@@ -83,8 +81,10 @@ class PlayerTeamsPage extends StatelessWidget {
     String clubName,
     String clubLogo,
   ) {
-    final List playerIds = teamData['playerIds'] ?? [];
-    final List coachIds = teamData['coachIds'] ?? [];
+    final List<String> playerIds = ((teamData['playerIds'] ?? []) as List)
+        .cast<String>();
+    final List<String> coachIds = ((teamData['coachIds'] ?? []) as List)
+        .cast<String>();
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -94,8 +94,7 @@ class PlayerTeamsPage extends StatelessWidget {
             const Border(), // Retire la bordure par défaut de l'ExpansionTile
         leading: CircleAvatar(
           backgroundColor: ViroColors.primary.withOpacity(0.1),
-          backgroundImage:
-              clubLogo.isNotEmpty ? NetworkImage(clubLogo) : null,
+          backgroundImage: clubLogo.isNotEmpty ? NetworkImage(clubLogo) : null,
           child: clubLogo.isEmpty
               ? const Icon(Icons.shield_rounded, color: ViroColors.primary)
               : null,
@@ -115,19 +114,63 @@ class PlayerTeamsPage extends StatelessWidget {
         children: [
           const Divider(),
           // Section COACHS
-          _buildMemberSection(
-            context,
-            "Staff / Coachs",
-            coachIds,
-            isCoach: true,
+          FutureBuilder<List<DocumentSnapshot>>(
+            future: coachIds.isEmpty
+                ? Future.value(<DocumentSnapshot>[])
+                : fetchUsersBatch(coachIds),
+            builder: (context, coachSnap) {
+              if (!coachSnap.hasData) {
+                return const Center(
+                  child: SizedBox(
+                    height: 40,
+                    width: 40,
+                    child: CircularProgressIndicator(),
+                  ),
+                );
+              }
+              final coachDocs = coachSnap.data!;
+              final coachMap = {
+                for (var doc in coachDocs)
+                  doc.id: doc.data() as Map<String, dynamic>,
+              };
+              return _buildMemberSection(
+                context,
+                "Staff / Coachs",
+                coachIds,
+                coachMap,
+                isCoach: true,
+              );
+            },
           ),
           const SizedBox(height: 10),
           // Section JOUEURS
-          _buildMemberSection(
-            context,
-            "Coéquipiers",
-            playerIds,
-            isCoach: false,
+          FutureBuilder<List<DocumentSnapshot>>(
+            future: playerIds.isEmpty
+                ? Future.value(<DocumentSnapshot>[])
+                : fetchUsersBatch(playerIds),
+            builder: (context, playerSnap) {
+              if (!playerSnap.hasData) {
+                return const Center(
+                  child: SizedBox(
+                    height: 40,
+                    width: 40,
+                    child: CircularProgressIndicator(),
+                  ),
+                );
+              }
+              final playerDocs = playerSnap.data!;
+              final playerMap = {
+                for (var doc in playerDocs)
+                  doc.id: doc.data() as Map<String, dynamic>,
+              };
+              return _buildMemberSection(
+                context,
+                "Coéquipiers",
+                playerIds,
+                playerMap,
+                isCoach: false,
+              );
+            },
           ),
           const SizedBox(height: 8),
         ],
@@ -138,7 +181,8 @@ class PlayerTeamsPage extends StatelessWidget {
   Widget _buildMemberSection(
     BuildContext context,
     String title,
-    List ids, {
+    List<String> ids,
+    Map<String, Map<String, dynamic>> userMap, {
     required bool isCoach,
   }) {
     if (ids.isEmpty) return const SizedBox();
@@ -158,58 +202,50 @@ class PlayerTeamsPage extends StatelessWidget {
             ),
           ),
         ),
-        ...ids.map((id) => _MemberTile(userId: id)),
+        ...ids.map((id) {
+          final userData = userMap[id];
+          if (userData == null) return const SizedBox();
+          return _MemberTile(userData: userData, userId: id);
+        }),
       ],
     );
   }
 }
 
-// Widget interne pour récupérer les infos de chaque membre (nom/prénom)
+// Widget pour afficher un membre avec les données pré-chargées
 class _MemberTile extends StatelessWidget {
+  final Map<String, dynamic> userData;
   final String userId;
 
-  const _MemberTile({required this.userId});
+  const _MemberTile({required this.userData, required this.userId});
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<DocumentSnapshot>(
-      future: FirebaseFirestore.instance.collection('users').doc(userId).get(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) return const SizedBox();
-        final data = snapshot.data!.data() as Map<String, dynamic>?;
-        if (data == null) return const SizedBox();
-
-        return ListTile(
-          contentPadding: EdgeInsets.zero,
-          dense: true,
-          leading: CircleAvatar(
-            radius: 14,
-            backgroundImage: (data['avatarUrl'] != null &&
-                    (data['avatarUrl'] as String).isNotEmpty)
-                ? NetworkImage(data['avatarUrl'])
-                : null,
-            child: (data['avatarUrl'] == null ||
-                    (data['avatarUrl'] as String).isEmpty)
-                ? const Icon(Icons.person, size: 14)
-                : null,
-          ),
-          title: Text(
-            "${data['firstName']} ${data['lastName']}",
-            style: const TextStyle(fontSize: 13),
-          ),
-          trailing: const Icon(
-            Icons.chevron_right,
-            size: 16,
-            color: Colors.grey,
-          ),
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => ProfilDisplayPage(userId: userId),
-              ),
-            );
-          },
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      dense: true,
+      leading: CircleAvatar(
+        radius: 14,
+        backgroundImage:
+            (userData['avatarUrl'] != null &&
+                (userData['avatarUrl'] as String).isNotEmpty)
+            ? NetworkImage(userData['avatarUrl'] as String)
+            : null,
+        child:
+            (userData['avatarUrl'] == null ||
+                (userData['avatarUrl'] as String).isEmpty)
+            ? const Icon(Icons.person, size: 14)
+            : null,
+      ),
+      title: Text(
+        "${userData['firstName'] ?? ''} ${userData['lastName'] ?? ''}",
+        style: const TextStyle(fontSize: 13),
+      ),
+      trailing: const Icon(Icons.chevron_right, size: 16, color: Colors.grey),
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => ProfilDisplayPage(userId: userId)),
         );
       },
     );

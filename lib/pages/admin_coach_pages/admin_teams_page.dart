@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../../theme/viro_theme.dart';
+import '../../utils/firebase_error_handler.dart';
 import '../../widget/viro_loader.dart';
 import 'admin_teams_detail_page.dart';
 
@@ -248,8 +249,14 @@ class _AdminTeamsPageState extends State<AdminTeamsPage> {
             .collection('teams')
             .snapshots(),
         builder: (context, snapshot) {
-          if (snapshot.hasError)
-            return const Center(child: Text("Une erreur est survenue"));
+          if (snapshot.hasError) {
+            return Center(
+              child: FirebaseErrorHandler.buildErrorWidget(
+                context,
+                snapshot.error,
+              ),
+            );
+          }
           if (!snapshot.hasData)
             return const Center(child: ViroLoader(size: 50));
 

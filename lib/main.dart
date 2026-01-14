@@ -10,6 +10,7 @@ import 'pages/auth_page.dart';
 import 'pages/player_pages/player_home_page.dart';
 import 'pages/admin_coach_pages/admin_home_page.dart';
 import 'theme/viro_theme.dart';
+import 'utils/firebase_error_handler.dart';
 import 'widget/viro_loader.dart';
 
 void main() async {
@@ -59,9 +60,10 @@ class MyApp extends StatelessWidget {
                   );
                 }
                 if (userSnapshot.hasError) {
-                  return const Scaffold(
-                    body: Center(
-                      child: Text("Erreur de chargement des données"),
+                  return Scaffold(
+                    body: FirebaseErrorHandler.buildErrorWidget(
+                      context,
+                      userSnapshot.error,
                     ),
                   );
                 }

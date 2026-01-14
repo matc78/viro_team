@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:viro_team/pages/player_pages/players_teams_page.dart';
+import '../../utils/firebase_error_handler.dart';
 
 // Import de tes nouvelles pages
 import 'player_pending_page.dart';
@@ -70,8 +71,14 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
           .doc(_currentUserId)
           .snapshots(),
       builder: (context, snapshot) {
-        if (snapshot.hasError)
-          return const Scaffold(body: Center(child: Text("Erreur réseau")));
+        if (snapshot.hasError) {
+          return Scaffold(
+            body: FirebaseErrorHandler.buildErrorWidget(
+              context,
+              snapshot.error,
+            ),
+          );
+        }
         if (!snapshot.hasData)
           return const Scaffold(body: ViroLoader(size: 80));
 

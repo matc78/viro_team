@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../../theme/viro_theme.dart';
 import '../../widget/viro_loader.dart';
+import '../../utils/firebase_helpers.dart';
 import '../profil_display_page.dart';
 
 class TeamDetailsPage extends StatefulWidget {
@@ -287,18 +288,24 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
               style: TextStyle(color: Colors.grey, fontSize: 13),
             ),
           )
-        : ListView.builder(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            itemCount: ids.length,
-            itemBuilder: (ctx, i) => FutureBuilder<DocumentSnapshot>(
-              future: FirebaseFirestore.instance
-                  .collection('users')
-                  .doc(ids[i])
-                  .get(),
-              builder: (ctx, snap) {
-                if (!snap.hasData) return const SizedBox();
-                final userData = snap.data!.data() as Map<String, dynamic>?;
-                if (userData == null) return const SizedBox();
+        : FutureBuilder<List<DocumentSnapshot>>(
+            future: fetchUsersBatch(ids.cast<String>()),
+            builder: (ctx, snap) {
+              if (!snap.hasData) {
+                return const Center(child: ViroLoader(size: 40));
+              }
+              final userDocs = snap.data!;
+              final userMap = {
+                for (var doc in userDocs) doc.id: doc.data() as Map<String, dynamic>
+              };
+
+              return ListView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                itemCount: ids.length,
+                itemBuilder: (ctx, i) {
+                  final userId = ids[i] as String;
+                  final userData = userMap[userId];
+                  if (userData == null) return const SizedBox();
 
                 return Container(
                   margin: const EdgeInsets.only(bottom: 8),
@@ -340,7 +347,6 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
                               String field = (role == 'player')
                                   ? 'playerIds'
                                   : 'coachIds';
-                              final userId = ids[i];
                               await widget.teamDoc.reference.update({
                                 field: FieldValue.arrayRemove([userId]),
                               });
@@ -372,7 +378,6 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
                           )
                         : null,
                     onTap: () {
-                      final userId = snap.data!.id;
                       Navigator.of(context).push(
                         MaterialPageRoute(
                           builder: (_) => ProfilDisplayPage(userId: userId),
@@ -381,8 +386,9 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
                     },
                   ),
                 );
-              },
-            ),
+                },
+              );
+            },
           );
 
     if (isCoach) {
