@@ -346,11 +346,17 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
         .collection('clubs')
         .doc(widget.clubId)
         .get();
-    final sport = doc.data()?['sport'] as String?;
+    final data = doc.data();
+    final sport = data?['sport'] as String?;
+    final clubAddress = data?['address'] as String?;
     if (_locationController.text == "Stade du club") {
-      setState(
-        () => _locationController.text = _defaultLocationForSport(sport),
-      );
+      if (clubAddress != null && clubAddress.isNotEmpty) {
+        setState(() => _locationController.text = clubAddress);
+      } else {
+        setState(
+          () => _locationController.text = _defaultLocationForSport(sport),
+        );
+      }
     }
   }
 
