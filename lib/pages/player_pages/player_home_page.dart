@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:viro_team/pages/player_pages/players_teams_page.dart';
 
 // Import de tes nouvelles pages
 import 'player_pending_page.dart';
@@ -9,6 +10,7 @@ import 'player_no_club_page.dart';
 import 'player_profil_page.dart';
 import 'player_planning_page.dart';
 import 'player_event_details_page.dart';
+import 'player_infos_page.dart';
 
 import '../../theme/viro_theme.dart';
 import '../../widget/viro_loader.dart';
@@ -135,8 +137,22 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
                     );
                   }),
                   const SizedBox(width: 15),
-                  _buildMenuCard("Mon Équipe", Icons.group_rounded, () {
-                    // Optionnel: Navigator vers ta page équipe
+                  _buildMenuCard("Mes Équipes", Icons.group_rounded, () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => PlayerTeamsPage(clubId: clubId),
+                      ),
+                    );
+                  }),
+                  const SizedBox(width: 15),
+                  _buildMenuCard("Infos", Icons.notifications_none_rounded, () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => PlayerInfosPage(clubId: clubId),
+                      ),
+                    );
                   }),
                 ],
               ),
@@ -147,7 +163,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
 
               const SizedBox(height: 30),
 
-              _buildSectionTitle("ACTION REQUISE : TA PRÉSENCE"),
+              _buildSectionTitle("ACTION REQUISE : PRÉSENCE"),
               _buildPendingActions(clubId, userData),
             ],
           ),
@@ -520,18 +536,26 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
       unselectedItemColor: Colors.grey,
       type: BottomNavigationBarType.fixed,
       onTap: (index) {
-        if (index == 1)
+        if (index == 1) {
           Navigator.push(
             context,
             MaterialPageRoute(
               builder: (_) => PlayerPlanningPage(clubId: clubId),
             ),
           );
-        if (index == 3)
+        }
+        if (index == 2) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => PlayerInfosPage(clubId: clubId)),
+          );
+        }
+        if (index == 3) {
           Navigator.push(
             context,
             MaterialPageRoute(builder: (_) => const PlayerProfilPage()),
           );
+        }
       },
       items: const [
         BottomNavigationBarItem(

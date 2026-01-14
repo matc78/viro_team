@@ -5,6 +5,8 @@ import 'package:intl/intl.dart';
 import '../../theme/viro_theme.dart';
 import '../../widget/viro_loader.dart';
 import 'player_event_details_page.dart'; // Importation de ta page de détails player
+import 'player_infos_page.dart';
+import 'player_profil_page.dart';
 
 class PlayerPlanningPage extends StatefulWidget {
   final String clubId;
@@ -45,6 +47,7 @@ class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
             title: const Text("Mon Planning"),
             centerTitle: true,
             elevation: 0,
+            automaticallyImplyLeading: false,
           ),
           body: Column(
             children: [
@@ -52,6 +55,7 @@ class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
               Expanded(child: _buildEventList()),
             ],
           ),
+          bottomNavigationBar: _buildBottomNav(widget.clubId),
         );
       },
     );
@@ -355,6 +359,51 @@ class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildBottomNav(String clubId) {
+    return BottomNavigationBar(
+      elevation: 0,
+      backgroundColor: ViroColors.background,
+      selectedItemColor: ViroColors.primary,
+      unselectedItemColor: Colors.grey,
+      type: BottomNavigationBarType.fixed,
+      onTap: (index) {
+        if (index == 0) Navigator.pop(context); // Retour Home
+        if (index == 1) {} // déjà sur Planning
+        if (index == 2) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => PlayerInfosPage(clubId: clubId)),
+          );
+        }
+        if (index == 3) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const PlayerProfilPage()),
+          );
+        }
+      },
+      currentIndex: 1,
+      items: const [
+        BottomNavigationBarItem(
+          icon: Icon(Icons.home_filled),
+          label: "Accueil",
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.calendar_month),
+          label: "Planning",
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.notifications_none),
+          label: "Infos",
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.person_outline),
+          label: "Profil",
+        ),
+      ],
     );
   }
 }
