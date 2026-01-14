@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:viro_team/pages/admin_coach_pages/admin_club_communication_page.dart';
 import 'package:viro_team/pages/admin_coach_pages/admin_planning_page.dart';
 import 'package:viro_team/pages/admin_coach_pages/admin_teams_page.dart';
 import 'package:viro_team/pages/admin_coach_pages/profil_request_page.dart';
@@ -71,9 +72,9 @@ class _AdminHomePageState extends State<AdminHomePage> {
           StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
             stream: user != null
                 ? FirebaseFirestore.instance
-                    .collection('users')
-                    .doc(user!.uid)
-                    .snapshots()
+                      .collection('users')
+                      .doc(user!.uid)
+                      .snapshots()
                 : null,
             builder: (context, snap) {
               final avatarUrl = snap.data?.data()?['avatarUrl'] as String?;
@@ -220,11 +221,26 @@ class _AdminHomePageState extends State<AdminHomePage> {
                       },
                     ),
                     _adminCard(
-                      title: "Paramètres",
+                      title: "Communiquer",
                       count: "",
-                      icon: Icons.settings_suggest_outlined,
+                      icon: Icons.campaign_rounded,
                       color: ViroColors.accent,
-                      onTap: () => print("Réglages club"),
+                      onTap: () {
+                        if (clubId != null) {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  AdminClubCommunicationPage(clubId: clubId),
+                            ),
+                          );
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text("Erreur : ID du club introuvable"),
+                            ),
+                          );
+                        }
+                      },
                     ),
                   ],
                 ),
@@ -245,8 +261,9 @@ class _AdminHomePageState extends State<AdminHomePage> {
                         children: [
                           CircleAvatar(
                             radius: 32,
-                            backgroundImage:
-                                NetworkImage(club!['logoUrl'] as String),
+                            backgroundImage: NetworkImage(
+                              club!['logoUrl'] as String,
+                            ),
                             backgroundColor: Colors.transparent,
                           ),
                           const SizedBox(height: 8),

@@ -121,9 +121,12 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
           padding: const EdgeInsets.all(20.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+            children: [
               _buildHeader(name, userData?['avatarUrl'] as String?),
               const SizedBox(height: 25),
+
+              _buildAnnouncements(clubId, userData),
+              const SizedBox(height: 20),
 
               // Navigation Rapide
               Row(
@@ -175,6 +178,162 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
 
   // --- COMPOSANTS DE L'INTERFACE ---
 
+  Widget _buildAnnouncements(String clubId, Map<String, dynamic>? userData) {
+    final List<String> userTeamIds =
+        (userData?['teamIds'] as List?)?.whereType<String>().toList() ?? [];
+    final List<String> userTeamNames =
+        (userData?['teamNames'] as List?)?.whereType<String>().toList() ?? [];
+    final List<String> userCategories =
+        (userData?['categories'] as List?)?.whereType<String>().toList() ?? [];
+
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('clubs')
+          .doc(clubId)
+          .collection('announcements')
+          .orderBy('createdAt', descending: true)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const SizedBox.shrink();
+        }
+
+        final now = DateTime.now();
+        final docs = snapshot.data!.docs.where((doc) {
+          final data = doc.data() as Map<String, dynamic>;
+          final targetType = data['targetType'] as String? ?? '';
+          final targets =
+              (data['targetIds'] as List?)?.whereType<String>().toList() ?? [];
+          final durationDays = data['durationDays'] as int?;
+          final Timestamp? createdTs = data['createdAt'] as Timestamp?;
+          if (createdTs != null && durationDays != null) {
+            final expires = createdTs.toDate().add(
+              Duration(days: durationDays),
+            );
+            if (expires.isBefore(now)) return false;
+          }
+
+          if (targets.isEmpty) return true; // diffusion générale
+          switch (targetType) {
+            case 'Joueurs':
+              return targets.contains(_currentUserId);
+            case 'Équipes':
+              return targets.any(
+                    (t) => userTeamIds.contains(t) || userTeamNames.contains(t),
+                  ) ||
+                  (userTeamIds.isEmpty && userTeamNames.isEmpty);
+            case 'Catégories':
+              return targets.any(userCategories.contains);
+            default:
+              return false;
+          }
+        }).toList();
+
+        if (docs.isEmpty) return const SizedBox.shrink();
+
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: ViroColors.primary.withOpacity(0.08),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: ViroColors.primary.withOpacity(0.2)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: const [
+                  Icon(Icons.campaign_rounded, color: ViroColors.primary),
+                  SizedBox(width: 8),
+                  Text(
+                    "Message(s) du club",
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              ...docs.take(3).map((doc) {
+                final data = doc.data() as Map<String, dynamic>;
+                final created = (data['createdAt'] as Timestamp?)
+                    ?.toDate()
+                    .toLocal();
+                final senderId = data['senderId'] as String?;
+                final dateLabel = created != null
+                    ? DateFormat('dd/MM à HH:mm').format(created)
+                    : '';
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (dateLabel.isNotEmpty)
+                        Text(
+                          dateLabel,
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: Colors.grey,
+                          ),
+                        ),
+                      Text(
+                        data['message'] ?? '',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      if (senderId != null) ...[
+                        const SizedBox(height: 4),
+                        FutureBuilder<DocumentSnapshot>(
+                          future: FirebaseFirestore.instance
+                              .collection('users')
+                              .doc(senderId)
+                              .get(),
+                          builder: (context, userSnap) {
+                            if (!userSnap.hasData ||
+                                !(userSnap.data?.exists ?? false)) {
+                              return const SizedBox.shrink();
+                            }
+                            final uData =
+                                userSnap.data!.data() as Map<String, dynamic>?;
+                            final senderName = _formatName(
+                              uData?['firstName'] as String?,
+                              uData?['lastName'] as String?,
+                            );
+                            if (senderName.isEmpty) {
+                              return const SizedBox.shrink();
+                            }
+                            return Text(
+                              "Par $senderName",
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Colors.black87,
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                    ],
+                  ),
+                );
+              }),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  String _formatName(String? first, String? last) {
+    final f = (first ?? "").trim();
+    final l = (last ?? "").trim();
+    final fFormatted = f.isEmpty
+        ? ""
+        : "${f[0].toUpperCase()}${f.length > 1 ? f.substring(1).toLowerCase() : ""}";
+    final lFormatted = l.isEmpty ? "" : l.toUpperCase();
+    return [fFormatted, lFormatted].where((s) => s.isNotEmpty).join(" ").trim();
+  }
+
   Widget _buildHeader(String name, String? avatarUrl) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -200,8 +359,9 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
           child: CircleAvatar(
             backgroundColor: ViroColors.primary,
             radius: 22,
-            backgroundImage:
-                (avatarUrl != null && avatarUrl.isNotEmpty) ? NetworkImage(avatarUrl) : null,
+            backgroundImage: (avatarUrl != null && avatarUrl.isNotEmpty)
+                ? NetworkImage(avatarUrl)
+                : null,
             child: (avatarUrl == null || avatarUrl.isEmpty)
                 ? const Icon(Icons.person, color: Colors.white)
                 : null,
@@ -582,5 +742,4 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
       ],
     );
   }
-
 }
