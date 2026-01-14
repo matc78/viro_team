@@ -40,18 +40,18 @@ class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
         }
         _userData = snapshot.data?.data();
         return Scaffold(
-      backgroundColor: ViroColors.background,
-      appBar: AppBar(
-        title: const Text("Mon Planning"),
-        centerTitle: true,
-        elevation: 0,
-      ),
-      body: Column(
-        children: [
-          _buildDaySelector(),
-          Expanded(child: _buildEventList()),
-        ],
-      ),
+          backgroundColor: ViroColors.background,
+          appBar: AppBar(
+            title: const Text("Mon Planning"),
+            centerTitle: true,
+            elevation: 0,
+          ),
+          body: Column(
+            children: [
+              _buildDaySelector(),
+              Expanded(child: _buildEventList()),
+            ],
+          ),
         );
       },
     );
@@ -143,34 +143,39 @@ class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
 
         final events = snapshot.data!.docs.where((doc) {
           final data = doc.data() as Map<String, dynamic>;
-          final memberIds =
-              (data['teamMemberIds'] as List<dynamic>?) ?? [];
+          final memberIds = (data['teamMemberIds'] as List<dynamic>?) ?? [];
           final teamNames =
               (data['teamNames'] as List?)?.whereType<String>().toList() ?? [];
           final teamName = data['teamName'] as String?;
           final eventCategory = data['category'] as String?;
 
           final userTeams =
-              (_userData?['teamNames'] as List?)?.whereType<String>().toList() ??
-                  [];
+              (_userData?['teamNames'] as List?)
+                  ?.whereType<String>()
+                  .toList() ??
+              [];
           if (userTeams.isEmpty && _userData?['teamName'] is String) {
             userTeams.add(_userData?['teamName'] as String);
           }
           final userCategories =
-              (_userData?['categories'] as List?)?.whereType<String>().toList() ??
-                  [];
+              (_userData?['categories'] as List?)
+                  ?.whereType<String>()
+                  .toList() ??
+              [];
           if (userCategories.isEmpty && _userData?['category'] is String) {
             userCategories.add(_userData?['category'] as String);
           }
 
           final bool inMemberIds =
               memberIds.isNotEmpty && memberIds.contains(_currentUserId);
-          final bool matchTeam = teamNames.any(userTeams.contains) ||
+          final bool matchTeam =
+              teamNames.any(userTeams.contains) ||
               (teamName != null && userTeams.contains(teamName));
           final bool matchCat =
               eventCategory != null && userCategories.contains(eventCategory);
-          final isConcerned =
-              memberIds.isEmpty ? (matchTeam || matchCat) : inMemberIds;
+          final isConcerned = memberIds.isEmpty
+              ? (matchTeam || matchCat)
+              : inMemberIds;
           return isConcerned;
         }).toList();
 
@@ -193,6 +198,7 @@ class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
     final time = isAllDay ? "ALL DAY" : (data['startTime'] ?? "--:--");
     final teamName = data['teamName'] ?? "Club";
     final location = data['location'] ?? "Lieu non défini";
+    final bool canceled = data['canceled'] == true;
 
     // On vérifie le statut de présence du joueur actuel pour afficher un indicateur
     final attendance = data['attendance'] as Map<String, dynamic>? ?? {};
@@ -201,7 +207,7 @@ class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: canceled ? Colors.grey.shade300 : Colors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
@@ -256,6 +262,15 @@ class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (canceled)
+              const Text(
+                "ANNULÉ",
+                style: TextStyle(
+                  color: Colors.red,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                ),
+              ),
             const SizedBox(height: 4),
             Text(
               teamName,

@@ -80,12 +80,24 @@ class AdminEventDetailsPage extends StatelessWidget {
     String team,
     List<String> categories,
   ) {
+    final bool canceled = event['canceled'] == true;
     return Container(
       width: double.infinity,
       color: Colors.white,
       padding: const EdgeInsets.all(24),
       child: Column(
         children: [
+          if (canceled) ...[
+            const Text(
+              "ANNULÉ",
+              style: TextStyle(
+                color: Colors.red,
+                fontWeight: FontWeight.w900,
+                fontSize: 40,
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
           Text(
             DateFormat('EEEE d MMMM', 'fr_FR').format(date).toUpperCase(),
             style: const TextStyle(

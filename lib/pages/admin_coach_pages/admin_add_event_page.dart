@@ -78,6 +78,12 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
         isTraining: _selectedType == 'Entraînement',
         isMatch: _selectedType == 'Match',
       );
+      // Récupération du nom du club
+      final clubSnap = await FirebaseFirestore.instance
+          .collection('clubs')
+          .doc(widget.clubId)
+          .get();
+      final clubName = clubSnap.data()?['name'] as String? ?? "";
 
       // Récupération de la catégorie pour les entraînements/matchs (utilisée pour les filtres)
       String? categoryForEvent = _selectedCategoriesAudience.isNotEmpty
@@ -157,6 +163,7 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
           'attendance': initialAttendance,
           'teamMemberIds': audienceMembers,
           'creatorId': FirebaseAuth.instance.currentUser?.uid,
+          'clubName': clubName,
         });
       }
 

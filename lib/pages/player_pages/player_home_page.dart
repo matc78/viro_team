@@ -207,41 +207,50 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
         if (!snapshot.hasData) return const SizedBox();
         final docs = snapshot.data!.docs.where((doc) {
           final data = doc.data() as Map<String, dynamic>;
-          final memberIds =
-              (data['teamMemberIds'] as List<dynamic>?) ?? [];
+          final memberIds = (data['teamMemberIds'] as List<dynamic>?) ?? [];
           final teamNames =
               (data['teamNames'] as List?)?.whereType<String>().toList() ?? [];
           final teamName = data['teamName'] as String?;
           final eventCategory = data['category'] as String?;
 
           final userTeams =
-              (_manualUserData?['teamNames'] as List?)?.whereType<String>().toList() ??
-                  (userData?['teamNames'] as List?)?.whereType<String>().toList() ??
-                  [];
+              (_manualUserData?['teamNames'] as List?)
+                  ?.whereType<String>()
+                  .toList() ??
+              (userData?['teamNames'] as List?)?.whereType<String>().toList() ??
+              [];
           if (userTeams.isEmpty && _manualUserData?['teamName'] is String) {
             userTeams.add(_manualUserData?['teamName'] as String);
           } else if (userTeams.isEmpty && userData?['teamName'] is String) {
             userTeams.add(userData?['teamName'] as String);
           }
           final userCategories =
-              (_manualUserData?['categories'] as List?)?.whereType<String>().toList() ??
-                  (userData?['categories'] as List?)?.whereType<String>().toList() ??
-                  [];
-          if (userCategories.isEmpty && _manualUserData?['category'] is String) {
+              (_manualUserData?['categories'] as List?)
+                  ?.whereType<String>()
+                  .toList() ??
+              (userData?['categories'] as List?)
+                  ?.whereType<String>()
+                  .toList() ??
+              [];
+          if (userCategories.isEmpty &&
+              _manualUserData?['category'] is String) {
             userCategories.add(_manualUserData?['category'] as String);
-          } else if (userCategories.isEmpty && userData?['category'] is String) {
+          } else if (userCategories.isEmpty &&
+              userData?['category'] is String) {
             userCategories.add(userData?['category'] as String);
           }
 
           final bool inMemberIds =
               memberIds.isNotEmpty && memberIds.contains(_currentUserId);
-          final bool matchTeam = teamNames.any(userTeams.contains) ||
+          final bool matchTeam =
+              teamNames.any(userTeams.contains) ||
               (teamName != null && userTeams.contains(teamName));
           final bool matchCat =
               eventCategory != null && userCategories.contains(eventCategory);
 
-          final isConcerned =
-              memberIds.isEmpty ? (matchTeam || matchCat) : inMemberIds;
+          final isConcerned = memberIds.isEmpty
+              ? (matchTeam || matchCat)
+              : inMemberIds;
           return isConcerned;
         }).toList();
         if (docs.isEmpty)
@@ -291,15 +300,15 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
           final teamName = data['teamName'] as String?;
           final eventCategory = data['category'] as String?;
 
-          final userTeams = (userData?['teamNames'] as List?)
-                  ?.whereType<String>()
-                  .toList() ??
+          final userTeams =
+              (userData?['teamNames'] as List?)?.whereType<String>().toList() ??
               [];
           if (userTeams.isEmpty && userData?['teamName'] is String) {
             userTeams.add(userData?['teamName'] as String);
           }
 
-          final userCategories = (userData?['categories'] as List?)
+          final userCategories =
+              (userData?['categories'] as List?)
                   ?.whereType<String>()
                   .toList() ??
               [];
@@ -309,13 +318,15 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
 
           final bool inMemberIds =
               memberIds.isNotEmpty && memberIds.contains(_currentUserId);
-          final bool matchTeam = teamNames.any(userTeams.contains) ||
+          final bool matchTeam =
+              teamNames.any(userTeams.contains) ||
               (teamName != null && userTeams.contains(teamName));
-          final bool matchCat = eventCategory != null &&
-              userCategories.contains(eventCategory);
+          final bool matchCat =
+              eventCategory != null && userCategories.contains(eventCategory);
 
-          final isConcerned =
-              memberIds.isEmpty ? (matchTeam || matchCat) : inMemberIds;
+          final isConcerned = memberIds.isEmpty
+              ? (matchTeam || matchCat)
+              : inMemberIds;
           return isConcerned &&
               (attendance[_currentUserId] == null ||
                   attendance[_currentUserId] == 'none');
@@ -346,6 +357,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
     final isAllDay = data['startTime'] == null && data['endTime'] == null;
     final timeLabel = isAllDay ? "ALL DAY" : (data['startTime'] ?? "--:--");
     final typeLabel = data['title'] ?? data['type'] ?? "Événement";
+    final bool canceled = data['canceled'] == true;
     return Card(
       elevation: 0,
       margin: const EdgeInsets.only(bottom: 8),
@@ -353,6 +365,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
         borderRadius: BorderRadius.circular(12),
         side: const BorderSide(color: ViroColors.borderColor),
       ),
+      color: canceled ? Colors.grey.shade300 : Colors.white,
       child: ListTile(
         leading: CircleAvatar(
           backgroundColor: ViroColors.secondary,
@@ -371,8 +384,14 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
         ),
         subtitle: Text(
-          data['location'] ?? "",
-          style: const TextStyle(fontSize: 12, color: Colors.grey),
+          canceled
+              ? "ANNULÉ • ${data['location'] ?? ''}"
+              : (data['location'] ?? ""),
+          style: TextStyle(
+            fontSize: 12,
+            color: canceled ? Colors.red : Colors.grey,
+            fontWeight: canceled ? FontWeight.w700 : FontWeight.normal,
+          ),
         ),
         onTap: () => Navigator.push(
           context,

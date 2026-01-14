@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../theme/viro_theme.dart';
@@ -7,7 +8,6 @@ import '../../widget/viro_loader.dart';
 class PlayerEventDetailsPage extends StatelessWidget {
   final String clubId;
   final String eventId;
-
   const PlayerEventDetailsPage({
     super.key,
     required this.clubId,
@@ -80,12 +80,24 @@ class PlayerEventDetailsPage extends StatelessWidget {
     String team,
     List<String> categories,
   ) {
+    final bool canceled = event['canceled'] == true;
     return Container(
       width: double.infinity,
       color: Colors.white,
       padding: const EdgeInsets.all(24),
       child: Column(
         children: [
+          if (canceled) ...[
+            const Text(
+              "ANNULÉ",
+              style: TextStyle(
+                color: Colors.red,
+                fontWeight: FontWeight.w900,
+                fontSize: 40,
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
           Text(
             DateFormat('EEEE d MMMM', 'fr_FR').format(date).toUpperCase(),
             style: const TextStyle(
@@ -121,6 +133,7 @@ class PlayerEventDetailsPage extends StatelessWidget {
     final startTime = event['startTime'];
     final endTime = event['endTime'];
     final bool allDay = startTime == null && endTime == null;
+    final clubName = event['clubName'] as String? ?? "Club";
 
     return Container(
       margin: const EdgeInsets.all(16),
@@ -141,6 +154,8 @@ class PlayerEventDetailsPage extends StatelessWidget {
           ),
           const Divider(height: 30),
           _infoRow(Icons.location_on_outlined, "Lieu", location),
+          const Divider(height: 30),
+          _infoRow(Icons.emoji_events_outlined, "Club", clubName),
         ],
       ),
     );
@@ -171,6 +186,34 @@ class PlayerEventDetailsPage extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  Future<void> _toggleAttendance(
+    String clubId,
+    String eventId,
+    String newStatus,
+  ) async {
+    final String uid = FirebaseAuth.instance.currentUser?.uid ?? "";
+    if (uid.isEmpty) {
+      debugPrint("[Attendance] Pas d'utilisateur connecté.");
+      return;
+    }
+
+    debugPrint(
+      "[Attendance] club=$clubId event=$eventId user=$uid -> $newStatus",
+    );
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('clubs')
+          .doc(clubId)
+          .collection('events')
+          .doc(eventId)
+          .update({'attendance.$uid': newStatus});
+      debugPrint("[Attendance] Mise à jour réussie.");
+    } catch (e) {
+      debugPrint("Erreur lors du changement de présence : $e");
+    }
   }
 
   Widget _buildAttendanceSummary(Map<String, dynamic> attendance) {
@@ -207,19 +250,24 @@ class PlayerEventDetailsPage extends StatelessWidget {
             Text(
               count.toString(),
               style: TextStyle(
-                fontSize: 20,
+                fontSize: 18,
                 fontWeight: FontWeight.bold,
                 color: color,
               ),
             ),
-            Text(
-              label,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 8,
-                fontWeight: FontWeight.w900,
-                color: color,
-              ),
+            const SizedBox(height: 4),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 9,
+                    fontWeight: FontWeight.w900,
+                    color: color,
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -273,7 +321,8 @@ class PlayerEventDetailsPage extends StatelessWidget {
             const Center(child: Text("Aucun joueur convoqué"))
           else
             ...sortedEntries.map(
-              (entry) => _buildPlayerTile(entry.key, entry.value),
+              (entry) =>
+                  _buildPlayerTile(entry.key, entry.value, clubId, eventId),
             ),
         ],
       ),
@@ -287,7 +336,12 @@ class PlayerEventDetailsPage extends StatelessWidget {
     return single?.toString() ?? 'N/A';
   }
 
-  Widget _buildPlayerTile(String userId, dynamic status) {
+  Widget _buildPlayerTile(
+    String userId,
+    dynamic status,
+    String clubId,
+    String eventId,
+  ) {
     return FutureBuilder<DocumentSnapshot>(
       future: FirebaseFirestore.instance.collection('users').doc(userId).get(),
       builder: (context, snap) {
@@ -298,6 +352,13 @@ class PlayerEventDetailsPage extends StatelessWidget {
         Color statusColor = status == 'present'
             ? ViroColors.primary
             : (status == 'absent' ? Colors.red : Colors.orange);
+
+        final String uid = FirebaseAuth.instance.currentUser?.uid ?? "";
+        final bool isCurrentUser = uid == userId;
+        String nextStatus() {
+          if (status == 'present') return 'absent';
+          return 'present';
+        }
 
         return Container(
           margin: const EdgeInsets.only(bottom: 8),
@@ -324,20 +385,31 @@ class PlayerEventDetailsPage extends StatelessWidget {
                 style: const TextStyle(fontWeight: FontWeight.w600),
               ),
               const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: statusColor.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  status == 'present'
-                      ? "Présent"
-                      : (status == 'absent' ? "Absent" : "En attente"),
-                  style: TextStyle(
-                    color: statusColor,
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
+              GestureDetector(
+                onTap: isCurrentUser
+                    ? () => _toggleAttendance(clubId, eventId, nextStatus())
+                    : null,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: statusColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(20),
+                    border: isCurrentUser
+                        ? Border.all(color: statusColor.withOpacity(0.5))
+                        : null,
+                  ),
+                  child: Text(
+                    status == 'present'
+                        ? "Présent"
+                        : (status == 'absent' ? "Absent" : "En attente"),
+                    style: TextStyle(
+                      color: statusColor,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
               ),
