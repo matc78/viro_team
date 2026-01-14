@@ -14,10 +14,29 @@ class AdminTeamsPage extends StatefulWidget {
 
 class _AdminTeamsPageState extends State<AdminTeamsPage> {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
+  String? _clubSport;
+  String? _clubLogoUrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadClubInfo();
+  }
+
+  Future<void> _loadClubInfo() async {
+    final doc = await _db.collection('clubs').doc(widget.clubId).get();
+    final data = doc.data();
+    if (data == null) return;
+    setState(() {
+      _clubSport = (data['sport'] as String?) ?? "";
+      _clubLogoUrl = data['logoUrl'] as String?;
+    });
+  }
 
   void _showCreateTeamDialog() {
     final nameController = TextEditingController();
-    String category = "Sénior";
+    final categories = getCategoriesBySport(_clubSport ?? "");
+    String category = categories.isNotEmpty ? categories.first : "Sénior";
 
     showDialog(
       context: context,
@@ -46,14 +65,9 @@ class _AdminTeamsPageState extends State<AdminTeamsPage> {
                   borderRadius: BorderRadius.circular(12),
                 ),
               ),
-              items: [
-                "M11",
-                "M13",
-                "M15",
-                "M18",
-                "Sénior",
-                "Loisir",
-              ].map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+              items: categories
+                  .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+                  .toList(),
               onChanged: (val) => category = val!,
             ),
           ],
@@ -103,6 +117,121 @@ class _AdminTeamsPageState extends State<AdminTeamsPage> {
       final name = [first, last].where((e) => e.isNotEmpty).join(" ");
       return name.isEmpty ? "Coach" : name;
     }).toList();
+  }
+
+  static List<String> getCategoriesBySport(String sportName) {
+    final sport = sportName.toLowerCase().trim().replaceAll('-', '');
+    switch (sport) {
+      case 'football':
+        return [
+          'U7',
+          'U8',
+          'U9',
+          'U10',
+          'U11',
+          'U12',
+          'U13',
+          'U14',
+          'U15',
+          'U16',
+          'U17',
+          'U18',
+          'U19',
+          'Sénior',
+          'Vétéran',
+          'Féminines',
+          'Loisir',
+        ];
+      case 'basketball':
+        return [
+          'U7',
+          'U9',
+          'U11',
+          'U13',
+          'U15',
+          'U17',
+          'U18',
+          'U20',
+          'Sénior',
+          'Sénior +',
+          'Loisir',
+        ];
+      case 'volleyball':
+        return [
+          'M7',
+          'M9',
+          'M11',
+          'M13',
+          'M15',
+          'M18',
+          'M21',
+          'Sénior',
+          'Loisir',
+          'Soft',
+        ];
+      case 'handball':
+        return [
+          '-9',
+          '-11',
+          '-13',
+          '-15',
+          '-18',
+          'Sénior',
+          'Féminines',
+          'Loisir',
+        ];
+      case 'rugby':
+        return [
+          'M6',
+          'M8',
+          'M10',
+          'M12',
+          'M14',
+          'M16',
+          'M19',
+          'Sénior',
+          'Vétéran (+35)',
+          'Loisir',
+        ];
+      case 'tennis':
+        return [
+          'Galaxie Rouge',
+          'Galaxie Orange',
+          'Galaxie Vert',
+          '11/12 ans',
+          '13/14 ans',
+          '15/16 ans',
+          '17/18 ans',
+          'Sénior',
+          'Sénior +',
+          'Loisir',
+        ];
+      case 'judo':
+        return [
+          'Éveil',
+          'Mini-poussin',
+          'Poussin',
+          'Benjamin',
+          'Minime',
+          'Cadet',
+          'Junior',
+          'Sénior',
+          'Vétéran',
+        ];
+      case 'natation':
+        return [
+          'Avenirs',
+          'Benjamins',
+          'Juniors 1',
+          'Juniors 2',
+          'Juniors 3',
+          'Juniors 4',
+          'Séniors',
+          'Masters',
+        ];
+      default:
+        return ['U13', 'U15', 'U17', 'Sénior', 'Loisir'];
+    }
   }
 
   @override
@@ -164,24 +293,33 @@ class _AdminTeamsPageState extends State<AdminTeamsPage> {
                     horizontal: 16,
                     vertical: 8,
                   ),
-                  leading: FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-                    future: _db.collection('clubs').doc(widget.clubId).get(),
-                    builder: (context, clubSnap) {
-                      final logoUrl =
-                          clubSnap.data?.data()?['logoUrl'] as String? ?? "";
-                      return CircleAvatar(
-                        backgroundColor: ViroColors.primary.withOpacity(0.1),
-                        backgroundImage:
-                            logoUrl.isNotEmpty ? NetworkImage(logoUrl) : null,
-                        child: logoUrl.isEmpty
-                            ? const Icon(
-                                Icons.groups_rounded,
-                                color: ViroColors.primary,
-                              )
-                            : null,
-                      );
-                    },
-                  ),
+                  leading:
+                      FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                        future: _db
+                            .collection('clubs')
+                            .doc(widget.clubId)
+                            .get(),
+                        builder: (context, clubSnap) {
+                          final logoUrl =
+                              _clubLogoUrl ??
+                              (clubSnap.data?.data()?['logoUrl'] as String? ??
+                                  "");
+                          return CircleAvatar(
+                            backgroundColor: ViroColors.primary.withOpacity(
+                              0.1,
+                            ),
+                            backgroundImage: logoUrl.isNotEmpty
+                                ? NetworkImage(logoUrl)
+                                : null,
+                            child: logoUrl.isEmpty
+                                ? const Icon(
+                                    Icons.groups_rounded,
+                                    color: ViroColors.primary,
+                                  )
+                                : null,
+                          );
+                        },
+                      ),
                   title: Text(
                     data['name'] ?? "Sans nom",
                     style: const TextStyle(

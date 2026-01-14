@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../theme/viro_theme.dart';
 import '../../widget/viro_loader.dart';
 
@@ -10,10 +11,12 @@ class ProfilDisplayPage extends StatelessWidget {
   const ProfilDisplayPage({super.key, required this.userId});
 
   // Vérifie si l'utilisateur actuel a le droit de voir les infos privées
-  Future<bool> _canSeePrivateInfo() async {
+  Future<Map<String, dynamic>> _viewerInfo() async {
     final currentUid = FirebaseAuth.instance.currentUser?.uid;
-    if (currentUid == null) return false;
-    if (currentUid == userId) return true; // On peut voir son propre profil
+    if (currentUid == null) return {'hasAccess': false, 'role': null};
+    if (currentUid == userId) {
+      return {'hasAccess': true, 'role': null};
+    }
 
     final currentUserDoc = await FirebaseFirestore.instance
         .collection('users')
@@ -22,7 +25,74 @@ class ProfilDisplayPage extends StatelessWidget {
 
     final role = currentUserDoc.data()?['role'];
     // Seuls les admins et coachs ont accès aux coordonnées
-    return role == 'admin_fondateur' || role == 'coach';
+    final hasAccess = role == 'admin_fondateur' || role == 'coach';
+    return {'hasAccess': hasAccess, 'role': role};
+  }
+
+  Future<void> _editLicense(
+    BuildContext context,
+    String? currentValue,
+  ) async {
+    final controller = TextEditingController(text: currentValue ?? "");
+    final formKey = GlobalKey<FormState>();
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Modifier le numéro de licence"),
+        content: Form(
+          key: formKey,
+          child: TextFormField(
+            controller: controller,
+            decoration: const InputDecoration(hintText: "Numéro de licence"),
+            inputFormatters: [
+              TextInputFormatter.withFunction(
+                (oldValue, newValue) => newValue.copyWith(
+                  text: newValue.text.toUpperCase(),
+                  selection: newValue.selection,
+                ),
+              ),
+            ],
+            validator: (val) {
+              if (val == null || val.trim().isEmpty) {
+                return "Champ requis";
+              }
+              return null;
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Annuler"),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              if (!(formKey.currentState?.validate() ?? false)) return;
+              final newVal = controller.text.trim();
+              try {
+                await FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(userId)
+                    .update({'licenseNumber': newVal});
+                if (context.mounted) Navigator.pop(ctx);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("Licence mise à jour")),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text("Erreur : $e")),
+                  );
+                }
+              }
+            },
+            child: const Text("Enregistrer"),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -34,11 +104,11 @@ class ProfilDisplayPage extends StatelessWidget {
         centerTitle: true,
         elevation: 0,
       ),
-      body: FutureBuilder<DocumentSnapshot>(
-        future: FirebaseFirestore.instance
+      body: StreamBuilder<DocumentSnapshot>(
+        stream: FirebaseFirestore.instance
             .collection('users')
             .doc(userId)
-            .get(),
+            .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: ViroLoader(size: 60));
@@ -55,9 +125,11 @@ class ProfilDisplayPage extends StatelessWidget {
           final String? clubId = data['clubId'] as String?;
 
           return FutureBuilder<bool>(
-            future: _canSeePrivateInfo(),
+            future: _viewerInfo().then((v) => v['hasAccess'] as bool),
             builder: (context, accessSnapshot) {
               final bool hasAccess = accessSnapshot.data ?? false;
+              final Future<Map<String, dynamic>> viewerInfoFuture =
+                  _viewerInfo();
 
               return SingleChildScrollView(
                 padding: const EdgeInsets.all(24),
@@ -147,6 +219,29 @@ class ProfilDisplayPage extends StatelessWidget {
                     // --- SECTION : INFOS GÉNÉRALES ---
                     _buildSectionTitle("INFORMATIONS"),
                     _buildInfoTile(Icons.badge_outlined, "Rôle au club", role),
+                    FutureBuilder<Map<String, dynamic>>(
+                      future: viewerInfoFuture,
+                      builder: (context, viewerSnap) {
+                        final viewerRole = viewerSnap.data?['role'] as String?;
+                        final isAdminOrCoach = viewerRole == 'admin_fondateur' ||
+                            viewerRole == 'coach';
+                        final license = data['licenseNumber'] as String?;
+                        return _buildInfoTile(
+                          Icons.credit_card,
+                          "Numéro de licence",
+                          license?.isNotEmpty == true
+                              ? license!
+                              : "Non renseigné",
+                          trailing: isAdminOrCoach
+                              ? IconButton(
+                                  icon: const Icon(Icons.edit),
+                                  onPressed: () =>
+                                      _editLicense(context, license),
+                                )
+                              : null,
+                        );
+                      },
+                    ),
                     if (clubId != null)
                       FutureBuilder<List<String>>(
                         future: _fetchTeams(clubId, userId),
@@ -238,7 +333,12 @@ class ProfilDisplayPage extends StatelessWidget {
     );
   }
 
-  Widget _buildInfoTile(IconData icon, String label, String value) {
+  Widget _buildInfoTile(
+    IconData icon,
+    String label,
+    String value, {
+    Widget? trailing,
+  }) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
@@ -251,22 +351,25 @@ class ProfilDisplayPage extends StatelessWidget {
         children: [
           Icon(icon, color: ViroColors.primary, size: 24),
           const SizedBox(width: 16),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: const TextStyle(color: Colors.grey, fontSize: 12),
-              ),
-              Text(
-                value,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(color: Colors.grey, fontSize: 12),
                 ),
-              ),
-            ],
+                Text(
+                  value,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+              ],
+            ),
           ),
+          if (trailing != null) trailing,
         ],
       ),
     );
