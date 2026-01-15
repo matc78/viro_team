@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../theme/viro_theme.dart';
 import '../../widget/viro_loader.dart';
+import '../../utils/firebase_helpers.dart';
 
 class PlayerEventDetailsPage extends StatelessWidget {
   final String clubId;
@@ -279,15 +280,16 @@ class PlayerEventDetailsPage extends StatelessWidget {
     Map<String, dynamic> attendance,
     List<dynamic> teamMembers,
   ) {
-    // 1. Préparation de la liste complète
+    // 1. Préparation de la liste complète (id -> statut)
     final Map<String, dynamic> fullList = Map.from(attendance);
-    for (var id in teamMembers) {
-      if (!fullList.containsKey(id)) {
-        fullList[id] = 'none';
+    for (final id in teamMembers) {
+      final key = id.toString();
+      if (!fullList.containsKey(key)) {
+        fullList[key] = 'none';
       }
     }
 
-    // 2. Logique de tri extraite pour la clarté
+    // 2. Tri par statut puis par id
     final sortedEntries = fullList.entries.toList();
     sortedEntries.sort((a, b) {
       int score(String v) {
@@ -300,8 +302,10 @@ class PlayerEventDetailsPage extends StatelessWidget {
       final sb = score(b.value as String? ?? 'none');
 
       if (sa != sb) return sa.compareTo(sb);
-      return (a.key).compareTo(b.key); // Tri par ID si statut identique
+      return (a.key).compareTo(b.key);
     });
+
+    final userIds = sortedEntries.map((e) => e.key.toString()).toList();
 
     return Padding(
       padding: const EdgeInsets.all(16),
@@ -320,9 +324,34 @@ class PlayerEventDetailsPage extends StatelessWidget {
           if (sortedEntries.isEmpty)
             const Center(child: Text("Aucun joueur convoqué"))
           else
-            ...sortedEntries.map(
-              (entry) =>
-                  _buildPlayerTile(entry.key, entry.value, clubId, eventId),
+            FutureBuilder<List<DocumentSnapshot>>(
+              future: fetchUsersBatch(userIds),
+              builder: (context, snap) {
+                if (!snap.hasData) {
+                  return const Center(child: ViroLoader(size: 40));
+                }
+                final docs = snap.data!;
+                final userMap = {
+                  for (final doc in docs)
+                    doc.id: doc.data() as Map<String, dynamic>
+                };
+
+                return Column(
+                  children: sortedEntries.map((entry) {
+                    final userId = entry.key.toString();
+                    final user =
+                        userMap[userId] ?? <String, dynamic>{};
+                    if (user.isEmpty) return const SizedBox.shrink();
+                    return _buildPlayerTile(
+                      userId,
+                      user,
+                      entry.value,
+                      clubId,
+                      eventId,
+                    );
+                  }).toList(),
+                );
+              },
             ),
         ],
       ),
@@ -338,85 +367,77 @@ class PlayerEventDetailsPage extends StatelessWidget {
 
   Widget _buildPlayerTile(
     String userId,
+    Map<String, dynamic> user,
     dynamic status,
     String clubId,
     String eventId,
   ) {
-    return FutureBuilder<DocumentSnapshot>(
-      future: FirebaseFirestore.instance.collection('users').doc(userId).get(),
-      builder: (context, snap) {
-        if (!snap.hasData) return const SizedBox();
-        final user = snap.data!.data() as Map<String, dynamic>?;
-        if (user == null) return const SizedBox();
+    Color statusColor = status == 'present'
+        ? ViroColors.primary
+        : (status == 'absent' ? Colors.red : Colors.orange);
 
-        Color statusColor = status == 'present'
-            ? ViroColors.primary
-            : (status == 'absent' ? Colors.red : Colors.orange);
+    final String uid = FirebaseAuth.instance.currentUser?.uid ?? "";
+    final bool isCurrentUser = uid == userId;
+    String nextStatus() {
+      if (status == 'present') return 'absent';
+      return 'present';
+    }
 
-        final String uid = FirebaseAuth.instance.currentUser?.uid ?? "";
-        final bool isCurrentUser = uid == userId;
-        String nextStatus() {
-          if (status == 'present') return 'absent';
-          return 'present';
-        }
-
-        return Container(
-          margin: const EdgeInsets.only(bottom: 8),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: ViroColors.borderColor),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: ViroColors.borderColor),
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 16,
+            backgroundColor: ViroColors.primary.withOpacity(0.1),
+            child: const Icon(
+              Icons.person,
+              size: 18,
+              color: ViroColors.primary,
+            ),
           ),
-          child: Row(
-            children: [
-              CircleAvatar(
-                radius: 16,
-                backgroundColor: ViroColors.primary.withOpacity(0.1),
-                child: const Icon(
-                  Icons.person,
-                  size: 18,
-                  color: ViroColors.primary,
-                ),
+          const SizedBox(width: 12),
+          Text(
+            "${user['firstName']} ${user['lastName']}",
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+          const Spacer(),
+          GestureDetector(
+            onTap: isCurrentUser
+                ? () => _toggleAttendance(clubId, eventId, nextStatus())
+                : null,
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 8,
+                vertical: 4,
               ),
-              const SizedBox(width: 12),
-              Text(
-                "${user['firstName']} ${user['lastName']}",
-                style: const TextStyle(fontWeight: FontWeight.w600),
-              ),
-              const Spacer(),
-              GestureDetector(
-                onTap: isCurrentUser
-                    ? () => _toggleAttendance(clubId, eventId, nextStatus())
+              decoration: BoxDecoration(
+                color: statusColor.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(20),
+                border: isCurrentUser
+                    ? Border.all(color: statusColor.withOpacity(0.5))
                     : null,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: statusColor.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(20),
-                    border: isCurrentUser
-                        ? Border.all(color: statusColor.withOpacity(0.5))
-                        : null,
-                  ),
-                  child: Text(
-                    status == 'present'
-                        ? "Présent"
-                        : (status == 'absent' ? "Absent" : "En attente"),
-                    style: TextStyle(
-                      color: statusColor,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+              ),
+              child: Text(
+                status == 'present'
+                    ? "Présent"
+                    : (status == 'absent' ? "Absent" : "En attente"),
+                style: TextStyle(
+                  color: statusColor,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
-            ],
+            ),
           ),
-        );
-      },
+        ],
+      ),
     );
   }
 }

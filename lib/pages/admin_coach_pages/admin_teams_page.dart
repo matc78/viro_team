@@ -300,33 +300,19 @@ class _AdminTeamsPageState extends State<AdminTeamsPage> {
                     horizontal: 16,
                     vertical: 8,
                   ),
-                  leading:
-                      FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-                        future: _db
-                            .collection('clubs')
-                            .doc(widget.clubId)
-                            .get(),
-                        builder: (context, clubSnap) {
-                          final logoUrl =
-                              _clubLogoUrl ??
-                              (clubSnap.data?.data()?['logoUrl'] as String? ??
-                                  "");
-                          return CircleAvatar(
-                            backgroundColor: ViroColors.primary.withOpacity(
-                              0.1,
-                            ),
-                            backgroundImage: logoUrl.isNotEmpty
-                                ? NetworkImage(logoUrl)
-                                : null,
-                            child: logoUrl.isEmpty
-                                ? const Icon(
-                                    Icons.groups_rounded,
-                                    color: ViroColors.primary,
-                                  )
-                                : null,
-                          );
-                        },
-                      ),
+                  leading: CircleAvatar(
+                    backgroundColor: ViroColors.primary.withOpacity(0.1),
+                    backgroundImage:
+                        (_clubLogoUrl != null && _clubLogoUrl!.isNotEmpty)
+                        ? NetworkImage(_clubLogoUrl!)
+                        : null,
+                    child: (_clubLogoUrl == null || _clubLogoUrl!.isEmpty)
+                        ? const Icon(
+                            Icons.groups_rounded,
+                            color: ViroColors.primary,
+                          )
+                        : null,
+                  ),
                   title: Text(
                     data['name'] ?? "Sans nom",
                     style: const TextStyle(

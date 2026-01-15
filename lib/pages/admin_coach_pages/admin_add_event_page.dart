@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../theme/viro_theme.dart';
+import '../../utils/firebase_helpers.dart';
 
 class AdminAddEventPage extends StatefulWidget {
   final String clubId;
@@ -276,50 +277,64 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
                 "Sélectionne les joueurs à convoquer :",
                 style: TextStyle(fontSize: 12, color: Colors.grey),
               ),
-              ...playerIds.map(
-                (id) => FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-                  future: FirebaseFirestore.instance.collection('users').doc(id).get(),
-                  builder: (context, userSnap) {
-                    if (userSnap.connectionState == ConnectionState.waiting) {
-                      return const CheckboxListTile(
-                        dense: true,
-                        value: false,
-                        onChanged: null,
-                        title: Text("Chargement..."),
-                      );
-                    }
-                    final userData = userSnap.data?.data();
-                    if (userData == null) return const SizedBox();
-                    final first = (userData['firstName'] as String? ?? "").trim();
-                    final last = (userData['lastName'] as String? ?? "").trim();
-                    final name =
-                        "${first.isNotEmpty ? first[0].toUpperCase() + first.substring(1).toLowerCase() : ''} ${last.toUpperCase()}".trim();
-                    final avatar = userData['avatarUrl'] as String?;
-                    final checked = _selectedPlayersMatch.contains(id);
-                    return CheckboxListTile(
-                      dense: true,
-                      secondary: CircleAvatar(
-                        radius: 14,
-                        backgroundImage:
-                            (avatar != null && avatar.isNotEmpty) ? NetworkImage(avatar) : null,
-                        child: (avatar == null || avatar.isEmpty)
-                            ? const Icon(Icons.person, size: 14)
-                            : null,
+              FutureBuilder<List<DocumentSnapshot>>(
+                future: fetchUsersBatch(playerIds),
+                builder: (context, userSnap) {
+                  if (!userSnap.hasData) {
+                    return const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 8.0),
+                      child: Center(
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: ViroColors.primary,
+                        ),
                       ),
-                      title: Text(name),
-                      value: checked,
-                      onChanged: (v) {
-                        setState(() {
-                          if (v == true) {
-                            _selectedPlayersMatch.add(id);
-                          } else {
-                            _selectedPlayersMatch.remove(id);
-                          }
-                        });
-                      },
                     );
-                  },
-                ),
+                  }
+                  final docs = userSnap.data!;
+                  final users = {
+                    for (final doc in docs)
+                      doc.id: doc.data() as Map<String, dynamic>
+                  };
+
+                  return Column(
+                    children: playerIds.map((id) {
+                      final userData = users[id];
+                      if (userData == null) return const SizedBox.shrink();
+                      final first =
+                          (userData['firstName'] as String? ?? "").trim();
+                      final last =
+                          (userData['lastName'] as String? ?? "").trim();
+                      final name =
+                          "${first.isNotEmpty ? first[0].toUpperCase() + first.substring(1).toLowerCase() : ''} ${last.toUpperCase()}".trim();
+                      final avatar = userData['avatarUrl'] as String?;
+                      final checked = _selectedPlayersMatch.contains(id);
+                      return CheckboxListTile(
+                        dense: true,
+                        secondary: CircleAvatar(
+                          radius: 14,
+                          backgroundImage: (avatar != null && avatar.isNotEmpty)
+                              ? NetworkImage(avatar)
+                              : null,
+                          child: (avatar == null || avatar.isEmpty)
+                              ? const Icon(Icons.person, size: 14)
+                              : null,
+                        ),
+                        title: Text(name),
+                        value: checked,
+                        onChanged: (v) {
+                          setState(() {
+                            if (v == true) {
+                              _selectedPlayersMatch.add(id);
+                            } else {
+                              _selectedPlayersMatch.remove(id);
+                            }
+                          });
+                        },
+                      );
+                    }).toList(),
+                  );
+                },
               ),
             ],
             const SizedBox(height: 10),
