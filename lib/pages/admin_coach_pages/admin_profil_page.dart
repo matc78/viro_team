@@ -162,6 +162,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
     return Column(
       children: [
         Stack(
+          clipBehavior: Clip.none,
           children: [
             CircleAvatar(
               radius: 55,

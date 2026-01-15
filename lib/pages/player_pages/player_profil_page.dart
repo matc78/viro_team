@@ -144,6 +144,7 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
       children: [
         Center(
           child: Stack(
+            clipBehavior: Clip.none,
             children: [
               CircleAvatar(
                 radius: 55,
