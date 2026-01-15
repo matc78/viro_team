@@ -116,6 +116,14 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
                               widget.teamDoc.id,
                             ]),
                           };
+                          if (role == 'coach') {
+                            userUpdate['coachedTeams'] = FieldValue.arrayUnion([
+                              {
+                                'teamId': widget.teamDoc.id,
+                                'teamName': teamName,
+                              },
+                            ]);
+                          }
                           if (teamName.isNotEmpty) {
                             userUpdate['teamNames'] = FieldValue.arrayUnion([
                               teamName,
@@ -355,6 +363,15 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
                                   widget.teamDoc.id,
                                 ]),
                               };
+                              if (role == 'coach') {
+                                userUpdate['coachedTeams'] =
+                                    FieldValue.arrayRemove([
+                                  {
+                                    'teamId': widget.teamDoc.id,
+                                    'teamName': teamName,
+                                  }
+                                ]);
+                              }
                               if (teamName.isNotEmpty) {
                                 userUpdate['teamNames'] =
                                     FieldValue.arrayRemove([teamName]);

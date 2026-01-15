@@ -60,9 +60,9 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
                 FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
                   future: clubId.isNotEmpty
                       ? FirebaseFirestore.instance
-                          .collection('clubs')
-                          .doc(clubId)
-                          .get()
+                            .collection('clubs')
+                            .doc(clubId)
+                            .get()
                       : null,
                   builder: (context, snap) {
                     final logoUrl =
@@ -115,7 +115,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
                 _buildMenuCard(
                   icon: Icons.switch_account_outlined,
                   title: "Changer de compte",
-                  subtitle: "Se déconnecter et changer de profil",
+                  subtitle: "Changer de profil",
                   onTap: () => _handleSignOut(context),
                 ),
                 _buildMenuCard(
@@ -483,8 +483,10 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
   Future<void> _pickClubLogo(String clubId) async {
     try {
       final picker = ImagePicker();
-      final XFile? file =
-          await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
+      final XFile? file = await picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 80,
+      );
       if (file == null) return; // annulé par l'utilisateur
 
       final storageRef = FirebaseStorage.instance
@@ -496,10 +498,9 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
       await storageRef.putFile(File(file.path));
       final url = await storageRef.getDownloadURL();
 
-      await FirebaseFirestore.instance
-          .collection('clubs')
-          .doc(clubId)
-          .set({'logoUrl': url}, SetOptions(merge: true));
+      await FirebaseFirestore.instance.collection('clubs').doc(clubId).set({
+        'logoUrl': url,
+      }, SetOptions(merge: true));
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
