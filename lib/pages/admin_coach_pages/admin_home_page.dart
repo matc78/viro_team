@@ -9,6 +9,8 @@ import 'admin_members_page.dart';
 import 'admin_profil_page.dart';
 import 'package:intl/intl.dart';
 import '../../theme/viro_theme.dart';
+import '../../utils/firebase_helpers.dart';
+import '../../widget/profile_switcher_dialog.dart';
 
 class AdminHomePage extends StatefulWidget {
   const AdminHomePage({super.key});
@@ -21,25 +23,6 @@ class _AdminHomePageState extends State<AdminHomePage> {
   final user = FirebaseAuth.instance.currentUser;
   bool _showAllRequests = false;
   String? _processingRequestId;
-
-  // Récupération des données du club lié à l'admin
-  Future<Map<String, dynamic>?> _getClubData() async {
-    final userDoc = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(user?.uid)
-        .get();
-    final clubId = userDoc.data()?['clubId'];
-
-    if (clubId != null) {
-      final clubDoc = await FirebaseFirestore.instance
-          .collection('clubs')
-          .doc(clubId)
-          .get();
-      final data = clubDoc.data() ?? {};
-      return {...data, 'id': clubId};
-    }
-    return null;
-  }
 
   String _formatName(
     dynamic firstName,
@@ -69,6 +52,17 @@ class _AdminHomePageState extends State<AdminHomePage> {
       appBar: AppBar(
         title: const Text("Tableau de bord"),
         actions: [
+          // Bouton pour changer de profil
+          IconButton(
+            icon: const Icon(Icons.swap_horiz),
+            tooltip: 'Changer de profil',
+            onPressed: () {
+              showDialog(
+                context: context,
+                builder: (_) => const ProfileSwitcherDialog(),
+              );
+            },
+          ),
           StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
             stream: user != null
                 ? FirebaseFirestore.instance
@@ -99,18 +93,46 @@ class _AdminHomePageState extends State<AdminHomePage> {
           ),
         ],
       ),
-      body: FutureBuilder<Map<String, dynamic>?>(
-        future: _getClubData(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
+      body: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+        stream: user != null
+            ? FirebaseFirestore.instance
+                .collection('users')
+                .doc(user!.uid)
+                .snapshots()
+            : null,
+        builder: (context, userSnapshot) {
+          if (userSnapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
 
-          final club = snapshot.data;
-          final clubName = club?['name'] ?? "Mon Club";
-          final clubId = club?['id'] as String?;
+          // Extraire le clubId depuis le document utilisateur
+          final userData = userSnapshot.data?.data();
+          final activeContext = userData?['activeContext'] as Map<String, dynamic>?;
+          final clubId = activeContext?['clubId'] as String? ?? userData?['clubId'] as String?;
 
-          return SingleChildScrollView(
+          // Si pas de clubId, afficher un message
+          if (clubId == null) {
+            return const Center(
+              child: Text("Aucun club associé à votre compte"),
+            );
+          }
+
+          // Récupérer les données du club
+          return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+            stream: FirebaseFirestore.instance
+                .collection('clubs')
+                .doc(clubId)
+                .snapshots(),
+            builder: (context, clubSnapshot) {
+              if (clubSnapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+
+              final clubData = clubSnapshot.data?.data() ?? {};
+              final club = {...clubData, 'id': clubId};
+              final clubName = club['name'] ?? "Mon Club";
+
+              return SingleChildScrollView(
             padding: const EdgeInsets.all(20.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -140,42 +162,38 @@ class _AdminHomePageState extends State<AdminHomePage> {
                   mainAxisSpacing: 15,
                   children: [
                     StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                      stream: clubId == null
-                          ? null
-                          : FirebaseFirestore.instance
-                                .collection('users')
-                                .where('clubId', isEqualTo: clubId)
-                                .snapshots(),
+                      stream: FirebaseFirestore.instance
+                          .collection('users')
+                          .snapshots(),
                       builder: (context, snap) {
-                        final count = snap.data?.docs.length ?? 0;
+                        // Filtrer les membres du club côté client
+                        final allDocs = snap.data?.docs ?? [];
+                        final clubMembers = filterUsersByClub(allDocs, clubId);
+                        final count = clubMembers.length;
                         return _adminCard(
                           title: "Membres",
                           count: count == 0 ? "" : "$count",
                           icon: Icons.group_outlined,
                           color: ViroColors.accent,
                           onTap: () {
-                            if (clubId != null) {
-                              Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (_) => AdminMembersPage(
-                                    clubId: clubId,
-                                    clubName: clubName,
-                                  ),
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => AdminMembersPage(
+                                  clubId: clubId,
+                                  clubName: clubName,
                                 ),
-                              );
-                            }
+                              ),
+                            );
                           },
                         );
                       },
                     ),
                     StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                      stream: clubId == null
-                          ? null
-                          : FirebaseFirestore.instance
-                                .collection('clubs')
-                                .doc(clubId)
-                                .collection('teams')
-                                .snapshots(),
+                      stream: FirebaseFirestore.instance
+                          .collection('clubs')
+                          .doc(clubId)
+                          .collection('teams')
+                          .snapshots(),
                       builder: (context, snap) {
                         final teamCount = snap.data?.docs.length ?? 0;
                         return _adminCard(
@@ -184,14 +202,12 @@ class _AdminHomePageState extends State<AdminHomePage> {
                           icon: Icons.groups_rounded,
                           color: ViroColors.primary,
                           onTap: () {
-                            if (clubId != null) {
-                              Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (_) =>
-                                      AdminTeamsPage(clubId: clubId),
-                                ),
-                              );
-                            }
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    AdminTeamsPage(clubId: clubId),
+                              ),
+                            );
                           },
                         );
                       },
@@ -205,19 +221,11 @@ class _AdminHomePageState extends State<AdminHomePage> {
                       icon: Icons.calendar_today_rounded,
                       color: ViroColors.primary,
                       onTap: () {
-                        if (clubId != null) {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => AdminPlanningPage(clubId: clubId),
-                            ),
-                          );
-                        } else {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text("Erreur : ID du club introuvable"),
-                            ),
-                          );
-                        }
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => AdminPlanningPage(clubId: clubId),
+                          ),
+                        );
                       },
                     ),
                     _adminCard(
@@ -226,20 +234,12 @@ class _AdminHomePageState extends State<AdminHomePage> {
                       icon: Icons.campaign_rounded,
                       color: ViroColors.accent,
                       onTap: () {
-                        if (clubId != null) {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) =>
-                                  AdminClubCommunicationPage(clubId: clubId),
-                            ),
-                          );
-                        } else {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text("Erreur : ID du club introuvable"),
-                            ),
-                          );
-                        }
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                AdminClubCommunicationPage(clubId: clubId),
+                          ),
+                        );
                       },
                     ),
                   ],
@@ -247,39 +247,39 @@ class _AdminHomePageState extends State<AdminHomePage> {
 
                 const SizedBox(height: 30),
 
-                if (clubId != null) ...[
-                  const Text(
-                    "À ne pas manquer",
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                  ),
-                  const SizedBox(height: 10),
-                  _buildJoinRequestsSection(clubId, clubName),
-                  const SizedBox(height: 24),
-                  if ((club?['logoUrl'] as String?)?.isNotEmpty ?? false)
-                    Center(
-                      child: Column(
-                        children: [
-                          CircleAvatar(
-                            radius: 32,
-                            backgroundImage: NetworkImage(
-                              club!['logoUrl'] as String,
-                            ),
-                            backgroundColor: Colors.transparent,
+                const Text(
+                  "À ne pas manquer",
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+                const SizedBox(height: 10),
+                _buildJoinRequestsSection(clubId, clubName),
+                const SizedBox(height: 24),
+                if ((club['logoUrl'] as String?)?.isNotEmpty ?? false)
+                  Center(
+                    child: Column(
+                      children: [
+                        CircleAvatar(
+                          radius: 32,
+                          backgroundImage: NetworkImage(
+                            club['logoUrl'] as String,
                           ),
-                          const SizedBox(height: 8),
-                          Text(
-                            clubName,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.grey,
-                            ),
+                          backgroundColor: Colors.transparent,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          clubName,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.grey,
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
-                ],
+                  ),
               ],
             ),
+          );
+            },
           );
         },
       ),
@@ -549,16 +549,133 @@ class _AdminHomePageState extends State<AdminHomePage> {
           'status': 'accepted',
           'respondedAt': FieldValue.serverTimestamp(),
         });
+
+        // Récupérer les données utilisateur existantes
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(userId)
+            .get();
+        final userData = userDoc.data() ?? {};
+        final roles = userData['roles'] as Map<String, dynamic>? ?? {};
+        final activeContext = userData['activeContext'] as Map<String, dynamic>?;
+
+        // Déterminer le rôle réel (normaliser admin_fondateur en admin)
+        final normalizedRole = (role == 'admin_fondateur') ? 'admin' : (role ?? 'player');
+
+        // Construire la nouvelle structure roles sans écraser
+        final Map<String, dynamic> updatedRoles = Map<String, dynamic>.from(roles);
+
+        if (normalizedRole == 'player') {
+          // Player : ajouter le club à la liste des clubs (peut avoir plusieurs clubs)
+          final existingPlayer = roles['player'] as Map<String, dynamic>?;
+          
+          if (existingPlayer == null) {
+            // Premier club : créer la structure avec liste de clubs
+            // Récupérer la licence depuis les données de la demande si disponible
+            final requestDoc = await FirebaseFirestore.instance
+                .collection('join_requests')
+                .doc(requestId)
+                .get();
+            final requestData = requestDoc.data() ?? {};
+            final license = requestData['license'] as String?;
+            
+            updatedRoles['player'] = {
+              'clubs': [
+                {
+                  'clubId': clubId,
+                  'teamIds': [],
+                  if (license != null && license.isNotEmpty) 'license': license,
+                }
+              ],
+            };
+          } else {
+            // Ajouter le club à la liste existante
+            List<Map<String, dynamic>> clubsList;
+            
+            // Vérifier si c'est la nouvelle structure avec "clubs"
+            if (existingPlayer['clubs'] is List) {
+              clubsList = (existingPlayer['clubs'] as List)
+                  .map((e) => e as Map<String, dynamic>)
+                  .toList();
+            } 
+            // Migration depuis l'ancienne structure (clubId direct)
+            else if (existingPlayer['clubId'] != null) {
+              clubsList = [
+                {
+                  'clubId': existingPlayer['clubId'],
+                  'teamIds': existingPlayer['teamIds'] ?? [],
+                  if (existingPlayer['license'] != null) 'license': existingPlayer['license'],
+                }
+              ];
+            } else {
+              clubsList = [];
+            }
+            
+            // Vérifier qu'on n'ajoute pas un doublon
+            if (!clubsList.any((c) => c['clubId'] == clubId)) {
+              // Récupérer la licence depuis les données de la demande si disponible
+              final requestDoc = await FirebaseFirestore.instance
+                  .collection('join_requests')
+                  .doc(requestId)
+                  .get();
+              final requestData = requestDoc.data() ?? {};
+              final license = requestData['license'] as String?;
+              
+              clubsList.add({
+                'clubId': clubId,
+                'teamIds': [],
+                if (license != null && license.isNotEmpty) 'license': license,
+              });
+            }
+            
+            // Préserver les autres champs (comme license)
+            updatedRoles['player'] = {
+              ...existingPlayer,
+              'clubs': clubsList,
+            };
+          }
+        } else if (normalizedRole == 'coach') {
+          // Coach : ajouter à la liste
+          final existingCoaches = (roles['coach'] as List?)?.map((e) => e as Map<String, dynamic>).toList() ?? [];
+          // Vérifier qu'on n'ajoute pas un doublon
+          if (!existingCoaches.any((c) => c['clubId'] == clubId)) {
+            existingCoaches.add({
+              'clubId': clubId,
+              'teams': [],
+            });
+            updatedRoles['coach'] = existingCoaches;
+          }
+        } else if (normalizedRole == 'admin') {
+          // Admin : ajouter à la liste de clubIds
+          final existingAdmins = (roles['admin'] as List?)?.whereType<String>().toList() ?? [];
+          if (!existingAdmins.contains(clubId)) {
+            existingAdmins.add(clubId!);
+            updatedRoles['admin'] = existingAdmins;
+          }
+        }
+
+        // Définir activeContext si c'est le premier profil
+        Map<String, dynamic>? newActiveContext;
+        if (activeContext == null || activeContext.isEmpty) {
+          newActiveContext = {
+            'role': normalizedRole,
+            'clubId': clubId,
+          };
+        } else {
+          // Garder le contexte actuel
+          newActiveContext = Map<String, dynamic>.from(activeContext);
+        }
+
+        // Mettre à jour le document utilisateur
         await FirebaseFirestore.instance.collection('users').doc(userId).set({
-          'clubId': clubId,
-          'clubName': clubName,
           'hasPendingRequest': false,
-          'role': role ?? 'player',
+          'roles': updatedRoles,
+          'activeContext': newActiveContext,
         }, SetOptions(merge: true));
 
         // Ajouter l'utilisateur dans la liste des membres ou coachs du club
         if (clubId != null) {
-          final field = (role == 'admin_fondateur' || role == 'coach')
+          final field = (normalizedRole == 'admin' || normalizedRole == 'coach')
               ? 'coaches'
               : 'members';
           await FirebaseFirestore.instance

@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../../theme/viro_theme.dart';
+import '../../utils/firebase_helpers.dart';
 import '../../widget/viro_loader.dart';
 import '../profil_display_page.dart';
 import 'player_planning_page.dart';
@@ -205,7 +206,6 @@ class _ClubDetailsPage extends StatelessWidget {
     // 2. Compteurs (C'est mieux d'avoir des compteurs stockés, mais voici la méthode brute pour l'instant)
     final usersQuery = await db
         .collection('users')
-        .where('clubId', isEqualTo: clubId)
         .get();
     final teamsQuery = await db
         .collection('clubs')
@@ -214,25 +214,42 @@ class _ClubDetailsPage extends StatelessWidget {
         .count()
         .get();
 
-    final users = usersQuery.docs;
+    final allUsers = usersQuery.docs;
+    // Filtrer les utilisateurs du club
+    final users = filterUsersByClub(allUsers, clubId);
 
-    // Filtrage simple
+    // Filtrage simple avec la nouvelle structure
     final playersCount = users
-        .where((u) => u.data()['role'] == 'player')
+        .where((u) => getUserRoleInClub(u.data() as Map<String, dynamic>, clubId) == 'player')
         .length;
-    final coachsCount = users.where((u) => u.data()['role'] == 'coach').length;
+    final coachsCount = users
+        .where((u) => getUserRoleInClub(u.data() as Map<String, dynamic>, clubId) == 'coach')
+        .length;
     final adminsCount = users
-        .where((u) => ['admin', 'admin_fondateur'].contains(u.data()['role']))
+        .where((u) {
+          final role = getUserRoleInClub(u.data() as Map<String, dynamic>, clubId);
+          return role == 'admin' || role == 'admin_fondateur';
+        })
         .length;
 
     // Trouver le fondateur
     String founderName = "Non défini";
     try {
       final founder = users.firstWhere(
-        (u) => u.data()['role'] == 'admin_fondateur',
+        (u) {
+          final data = u.data() as Map<String, dynamic>?;
+          if (data == null) return false;
+          final role = getUserRoleInClub(data, clubId);
+          return role == 'admin_fondateur' || role == 'admin';
+        },
       );
-      founderName =
-          "${founder.data()['firstName']} ${founder.data()['lastName']}";
+      final founderData = founder.data() as Map<String, dynamic>?;
+      if (founderData != null) {
+        final firstName = founderData['firstName'] as String? ?? "";
+        final lastName = founderData['lastName'] as String? ?? "";
+        founderName = "$firstName $lastName".trim();
+        if (founderName.isEmpty) founderName = "Non défini";
+      }
     } catch (_) {}
 
     return {
@@ -405,16 +422,18 @@ class _StaffListPage extends StatelessWidget {
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection('users')
-            .where('clubId', isEqualTo: clubId)
-            .where(
-              'role',
-              whereIn: ['coach', 'admin', 'admin_fondateur'],
-            ) // On filtre pour ne pas voir les joueurs
             .snapshots(),
         builder: (context, snapshot) {
           if (!snapshot.hasData) return const Center(child: ViroLoader());
 
-          final docs = snapshot.data!.docs;
+          final allDocs = snapshot.data!.docs;
+          // Filtrer les utilisateurs du club avec les rôles staff
+          final docs = allDocs.where((doc) {
+            final data = doc.data() as Map<String, dynamic>?;
+            if (data == null) return false;
+            final role = getUserRoleInClub(data, clubId);
+            return role == 'coach' || role == 'admin' || role == 'admin_fondateur';
+          }).toList();
           if (docs.isEmpty)
             return const Center(child: Text("Aucun contact trouvé"));
 
@@ -422,8 +441,12 @@ class _StaffListPage extends StatelessWidget {
             padding: const EdgeInsets.all(16),
             itemCount: docs.length,
             itemBuilder: (context, index) {
-              final data = docs[index].data() as Map<String, dynamic>;
-              final String role = data['role'] ?? 'user';
+              final rawData = docs[index].data();
+              final data = rawData as Map<String, dynamic>?;
+              if (data == null) return const SizedBox.shrink();
+              
+              // Utiliser la nouvelle fonction pour obtenir le rôle dans ce club
+              final String role = getUserRoleInClub(data, clubId) ?? 'user';
               final String uid = docs[index].id;
 
               // Définition de l'affichage du rôle

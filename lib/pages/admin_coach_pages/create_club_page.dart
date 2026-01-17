@@ -58,13 +58,50 @@ class _CreateClubPageState extends State<CreateClubPage> {
             'phone': _phoneController.text.trim(),
             'description': _descriptionController.text.trim(),
             'adminId': user.uid,
+            'admins': [user.uid], // Ajouter l'admin_fondateur à la liste des admins
             'createdAt': FieldValue.serverTimestamp(),
             'memberCount': 1,
           });
 
-      // 2. Mise à jour de l'utilisateur (Rôle + ID du club)
+      // 2. Mise à jour de l'utilisateur avec la nouvelle structure multi-tenant
+      // Récupérer les données existantes pour ne pas écraser
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+      final existingData = userDoc.data() ?? {};
+      final existingRoles = existingData['roles'] as Map<String, dynamic>? ?? {};
+      
+      // Ajouter le clubId à la liste des admins (sans écraser)
+      final existingAdmins = (existingRoles['admin'] as List?)?.whereType<String>().toList() ?? [];
+      if (!existingAdmins.contains(clubRef.id)) {
+        existingAdmins.add(clubRef.id);
+      }
+      
+      // Construire la nouvelle structure roles
+      final updatedRoles = {
+        ...existingRoles,
+        'admin': existingAdmins,
+      };
+      
+      // Définir activeContext si ce n'est pas déjà défini
+      final activeContext = existingData['activeContext'] as Map<String, dynamic>?;
+      final Map<String, dynamic> newActiveContext;
+      if (activeContext == null || activeContext.isEmpty) {
+        newActiveContext = {
+          'role': 'admin',
+          'clubId': clubRef.id,
+        };
+      } else {
+        // Garder le contexte actuel
+        newActiveContext = Map<String, dynamic>.from(activeContext);
+      }
+      
+      // Mettre à jour le document utilisateur avec la nouvelle structure
       await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
-        'role': 'admin_fondateur',
+        'roles': updatedRoles,
+        'activeContext': newActiveContext,
+        // Garder clubId et clubName pour compatibilité avec l'ancien système
         'clubId': clubRef.id,
         'clubName': _nameController.text.trim(),
       }, SetOptions(merge: true));

@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../../theme/viro_theme.dart';
+import '../../utils/firebase_helpers.dart';
 import '../profil_display_page.dart';
 
 class AdminMembersPage extends StatefulWidget {
@@ -149,9 +150,10 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
           ),
           Expanded(
             child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+              // Récupérer tous les utilisateurs et filtrer côté client
+              // car la nouvelle structure utilise roles/activeContext
               stream: FirebaseFirestore.instance
                   .collection('users')
-                  .where('clubId', isEqualTo: widget.clubId)
                   .snapshots(),
               builder: (context, snapshot) {
                 if (snapshot.hasError) {
@@ -163,10 +165,14 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
                   return const Center(child: CircularProgressIndicator());
                 }
 
-                final docs = snapshot.data?.docs ?? [];
+                final allDocs = snapshot.data?.docs ?? [];
+                // Filtrer les utilisateurs qui appartiennent au club
+                final clubMembers = filterUsersByClub(allDocs, widget.clubId);
+                
                 final filtered =
-                    docs.where((doc) {
-                      final data = doc.data();
+                    clubMembers.where((doc) {
+                      final data = doc.data() as Map<String, dynamic>?;
+                      if (data == null) return false;
                       final first = (data['firstName'] as String? ?? "")
                           .toLowerCase();
                       final last = (data['lastName'] as String? ?? "")
@@ -209,9 +215,11 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
                           email.contains(_search);
                       return matchesSearch && catOk && teamOk;
                     }).toList()..sort((a, b) {
-                      final aLast = (a.data()['lastName'] as String? ?? "")
+                      final aData = a.data() as Map<String, dynamic>?;
+                      final bData = b.data() as Map<String, dynamic>?;
+                      final aLast = (aData?['lastName'] as String? ?? "")
                           .toLowerCase();
-                      final bLast = (b.data()['lastName'] as String? ?? "")
+                      final bLast = (bData?['lastName'] as String? ?? "")
                           .toLowerCase();
                       return aLast.compareTo(bLast);
                     });
@@ -224,11 +232,15 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
                   itemCount: filtered.length,
                   separatorBuilder: (_, __) => const Divider(height: 1),
                   itemBuilder: (context, index) {
-                    final data = filtered[index].data();
+                    final rawData = filtered[index].data();
+                    final data = rawData as Map<String, dynamic>?;
+                    if (data == null) return const SizedBox.shrink();
+                    
                     final userId = filtered[index].id;
                     final firstName = data['firstName'] as String? ?? "";
                     final lastName = data['lastName'] as String? ?? "";
-                    final role = data['role'] as String? ?? "";
+                    // Utiliser la nouvelle fonction pour obtenir le rôle dans ce club
+                    final role = getUserRoleInClub(data, widget.clubId) ?? "";
                     final name = _formatName(firstName, lastName);
                     final categories =
                         (data['categories'] as List?)?.whereType<String>().toList() ??

@@ -15,6 +15,7 @@ import 'player_infos_page.dart';
 
 import '../../theme/viro_theme.dart';
 import '../../widget/viro_loader.dart';
+import '../../widget/profile_switcher_dialog.dart';
 
 class PlayerHomePage extends StatefulWidget {
   const PlayerHomePage({super.key});
@@ -85,7 +86,15 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
         final userData =
             _manualUserData ?? snapshot.data!.data() as Map<String, dynamic>?;
         final bool hasPendingRequest = userData?['hasPendingRequest'] ?? false;
-        final String? clubId = userData?['clubId'];
+        
+        // Utiliser activeContext au lieu de clubId à la racine
+        final activeContext = userData?['activeContext'] as Map<String, dynamic>?;
+        final String? clubId = activeContext?['clubId'] as String?;
+        
+        // Fallback pour compatibilité avec ancien système
+        final String? legacyClubId = userData?['clubId'] as String?;
+        final String? finalClubId = clubId ?? legacyClubId;
+        
         final String firstName = userData?['firstName'] ?? "Sportif";
 
         // 1. SI DEMANDE EN ATTENTE
@@ -98,11 +107,18 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
         }
 
         // 2. SI MEMBRE D'UN CLUB (VUE NORMALE)
-        if (clubId != null && clubId.isNotEmpty) {
+        if (finalClubId != null && finalClubId.isNotEmpty) {
+          // Récupérer le nom du club depuis activeContext ou depuis userData
+          String? clubName = activeContext?['clubName'] as String?;
+          if (clubName == null) {
+            // Essayer de récupérer depuis Firestore si nécessaire
+            clubName = userData?['clubName'] as String? ?? "Mon Club";
+          }
+          
           return _buildClubMemberView(
             firstName,
-            clubId,
-            userData?['clubName'] ?? "Mon Club",
+            finalClubId,
+            clubName,
             userData,
           );
         }
@@ -123,6 +139,25 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
   ) {
     return Scaffold(
       backgroundColor: ViroColors.background,
+      appBar: AppBar(
+        title: Text("Bonjour, $name"),
+        backgroundColor: ViroColors.background,
+        elevation: 0,
+        automaticallyImplyLeading: false,
+        actions: [
+          // Bouton pour changer de profil
+          IconButton(
+            icon: const Icon(Icons.swap_horiz),
+            tooltip: 'Changer de profil',
+            onPressed: () {
+              showDialog(
+                context: context,
+                builder: (_) => const ProfileSwitcherDialog(),
+              );
+            },
+          ),
+        ],
+      ),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(20.0),

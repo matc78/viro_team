@@ -9,6 +9,7 @@ import 'package:intl/intl.dart';
 import '../../theme/viro_theme.dart';
 import '../../widget/viro_loader.dart';
 import '../auth_page.dart';
+import '../multirole_selection_page.dart';
 
 class PlayerProfilPage extends StatefulWidget {
   const PlayerProfilPage({super.key});
@@ -44,13 +45,56 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
         final rawLast = data?['lastName'] as String? ?? "";
         final displayFirst = _formatFirst(rawFirst);
         final displayLast = _formatLast(rawLast);
-        final clubName = data?['clubName'] as String?;
-        final String? clubId = data?['clubId'] as String?;
-        final List<String> clubIds = {
-          if (data?['clubIds'] is List)
-            ...(data!['clubIds'] as List).whereType<String>(),
-          if (clubId != null) clubId,
-        }.toList();
+
+        // Utiliser activeContext pour le club actuel
+        final activeContext = data?['activeContext'] as Map<String, dynamic>?;
+        final String? clubName =
+            activeContext?['clubName'] as String? ??
+            data?['clubName'] as String?;
+
+        // Construire la liste de tous les clubIds depuis roles
+        final roles = data?['roles'] as Map<String, dynamic>? ?? {};
+        final Set<String> clubIdsSet = {};
+
+        // Player
+        if (roles['player'] is Map) {
+          final playerData = roles['player'] as Map;
+          
+          // Nouvelle structure : liste de clubs
+          if (playerData['clubs'] is List) {
+            final clubs = (playerData['clubs'] as List).whereType<Map>();
+            for (var club in clubs) {
+              final clubId = club['clubId'] as String?;
+              if (clubId != null) clubIdsSet.add(clubId);
+            }
+          }
+          // Ancienne structure : clubId direct (compatibilité)
+          else {
+            final playerClubId = playerData['clubId'] as String?;
+            if (playerClubId != null) clubIdsSet.add(playerClubId);
+          }
+        }
+
+        // Coach
+        if (roles['coach'] is List) {
+          for (var coach in (roles['coach'] as List)) {
+            if (coach is Map) {
+              final coachClubId = coach['clubId'] as String?;
+              if (coachClubId != null) clubIdsSet.add(coachClubId);
+            }
+          }
+        }
+
+        // Admin
+        if (roles['admin'] is List) {
+          clubIdsSet.addAll((roles['admin'] as List).whereType<String>());
+        }
+
+        // Fallback pour compatibilité
+        final legacyClubId = data?['clubId'] as String?;
+        if (legacyClubId != null) clubIdsSet.add(legacyClubId);
+
+        final List<String> clubIds = clubIdsSet.toList();
         final avatarUrl = data?['avatarUrl'] as String?;
         final email = data?['email'] as String? ?? user.email ?? "";
 
@@ -109,6 +153,19 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
                   Icons.info_outline,
                   "Afficher mes infos",
                   () => _showInfoDialog(data ?? {}, user),
+                ),
+                const SizedBox(height: 30),
+
+                _buildSectionHeader("PROFILS & CLUBS"),
+                _buildActionTile(
+                  Icons.add_circle_outline,
+                  "Ajouter un profil",
+                  () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const MultiRoleSelectionPage(),
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 30),
 
@@ -567,18 +624,35 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
                     .doc(uid)
                     .get();
                 final data = userDoc.data();
-                final clubId = data?['clubId'] as String?;
-                final role = data?['role'] as String?;
+
+                // Utiliser activeContext pour le club actuel
+                final activeContext =
+                    data?['activeContext'] as Map<String, dynamic>?;
+                final clubId = activeContext?['clubId'] as String?;
+                final role = activeContext?['role'] as String?;
+
+                // Fallback pour compatibilité
+                final legacyClubId = data?['clubId'] as String?;
+                final legacyRole = data?['role'] as String?;
+                final finalClubId = clubId ?? legacyClubId;
+                final finalRole = role ?? legacyRole;
 
                 // Retirer l'utilisateur des membres / coaches du club
-                if (clubId != null) {
-                  final field = (role == 'admin_fondateur' || role == 'coach')
+                // Note: Avec la nouvelle structure, il faudrait retirer de tous les clubs
+                // Pour l'instant, on retire seulement du club actif
+                if (finalClubId != null) {
+                  final field =
+                      (finalRole == 'admin' ||
+                          finalRole == 'admin_fondateur' ||
+                          finalRole == 'coach')
                       ? 'coaches'
                       : 'members';
-                  await firestore.collection('clubs').doc(clubId).update({
+                  await firestore.collection('clubs').doc(finalClubId).update({
                     field: FieldValue.arrayRemove([uid]),
                   });
                 }
+
+                // TODO: Retirer aussi de tous les autres clubs dans roles.coach et roles.admin
 
                 // Supprimer les demandes d'adhésion associées
                 final requests = await firestore
@@ -634,10 +708,39 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
       createdLabel = DateFormat('dd/MM/yyyy').format(createdAt.toDate());
     }
     final club = data['clubName'] as String? ?? "À préciser";
-    final license =
-        data['licenseNumber'] as String? ??
-        data['license'] as String? ??
-        "À préciser";
+    
+    // Récupérer la licence depuis la nouvelle structure roles.player.clubs
+    String license = "À préciser";
+    final activeContext = data['activeContext'] as Map<String, dynamic>?;
+    final activeClubId = activeContext?['clubId'] as String?;
+    
+    if (activeClubId != null) {
+      final roles = data['roles'] as Map<String, dynamic>? ?? {};
+      final playerData = roles['player'] as Map<String, dynamic>?;
+      
+      if (playerData != null) {
+        // Nouvelle structure : liste de clubs
+        if (playerData['clubs'] is List) {
+          final clubs = (playerData['clubs'] as List).whereType<Map>();
+          final clubInfo = clubs.firstWhere(
+            (club) => club['clubId'] == activeClubId,
+            orElse: () => {},
+          );
+          license = clubInfo['license'] as String? ?? "À préciser";
+        }
+        // Ancienne structure : clubId direct (compatibilité)
+        else if (playerData['clubId'] == activeClubId) {
+          license = playerData['license'] as String? ?? "À préciser";
+        }
+      }
+    }
+    
+    // Fallback vers les anciens champs
+    if (license == "À préciser") {
+      license = data['licenseNumber'] as String? ??
+          data['license'] as String? ??
+          "À préciser";
+    }
 
     List<String> teamNames = [];
     if (data['teamNames'] is List) {

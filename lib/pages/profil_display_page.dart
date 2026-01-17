@@ -23,10 +23,17 @@ class ProfilDisplayPage extends StatelessWidget {
         .doc(currentUid)
         .get();
 
-    final role = currentUserDoc.data()?['role'];
+    // Utiliser activeContext pour le rôle actuel
+    final activeContext = currentUserDoc.data()?['activeContext'] as Map<String, dynamic>?;
+    final role = activeContext?['role'] as String?;
+    
+    // Fallback pour compatibilité avec ancien système
+    final legacyRole = currentUserDoc.data()?['role'] as String?;
+    final finalRole = role ?? legacyRole;
+    
     // Seuls les admins et coachs ont accès aux coordonnées
-    final hasAccess = role == 'admin_fondateur' || role == 'coach';
-    return {'hasAccess': hasAccess, 'role': role};
+    final hasAccess = finalRole == 'admin' || finalRole == 'admin_fondateur' || finalRole == 'coach';
+    return {'hasAccess': hasAccess, 'role': finalRole};
   }
 
   Future<void> _editLicense(

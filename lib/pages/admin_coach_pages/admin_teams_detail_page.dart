@@ -1,8 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../../theme/viro_theme.dart';
-import '../../widget/viro_loader.dart';
 import '../../utils/firebase_helpers.dart';
+import '../../widget/viro_loader.dart';
 import '../profil_display_page.dart';
 
 class TeamDetailsPage extends StatefulWidget {
@@ -30,24 +30,27 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
     List coachIds,
     List playerIds,
   ) {
-    final roles = role == 'coach' ? ['coach', 'admin_fondateur'] : ['player'];
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (ctx) => StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('users')
-            .where('clubId', isEqualTo: widget.clubId)
-            .where('role', whereIn: roles)
-            .snapshots(),
+        stream: FirebaseFirestore.instance.collection('users').snapshots(),
         builder: (context, snapshot) {
           if (!snapshot.hasData)
             return const Center(child: ViroLoader(size: 40));
           final existingIds = role == 'coach' ? coachIds : playerIds;
 
-          final users = snapshot.data!.docs
+          // Filtrer les utilisateurs du club avec le bon rôle
+          final allDocs = snapshot.data!.docs;
+          final clubMembers = filterUsersByClub(
+            allDocs,
+            widget.clubId,
+            role: role == 'coach' ? 'coach' : 'player',
+          );
+
+          final users = clubMembers
               .where((doc) => !existingIds.contains(doc.id))
               .toList();
 
@@ -304,7 +307,8 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
               }
               final userDocs = snap.data!;
               final userMap = {
-                for (var doc in userDocs) doc.id: doc.data() as Map<String, dynamic>
+                for (var doc in userDocs)
+                  doc.id: doc.data() as Map<String, dynamic>,
               };
 
               return ListView.builder(
@@ -315,94 +319,99 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
                   final userData = userMap[userId];
                   if (userData == null) return const SizedBox();
 
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: ViroColors.borderColor.withOpacity(0.5),
-                    ),
-                  ),
-                  child: ListTile(
-                    visualDensity: VisualDensity.compact,
-                    leading: CircleAvatar(
-                      radius: 18,
-                      backgroundImage: (userData['avatarUrl'] != null &&
-                              (userData['avatarUrl'] as String).isNotEmpty)
-                          ? NetworkImage(userData['avatarUrl'])
-                          : null,
-                      child: (userData['avatarUrl'] == null ||
-                              (userData['avatarUrl'] as String).isEmpty)
-                          ? const Icon(Icons.person_outline, size: 18)
-                          : null,
-                    ),
-                    title: Text(
-                      _formatName(userData['firstName'], userData['lastName']),
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: ViroColors.borderColor.withOpacity(0.5),
                       ),
                     ),
-                    trailing: _isEditing
-                        ? IconButton(
-                            icon: const Icon(
-                              Icons.remove_circle_outline,
-                              size: 20,
-                              color: Colors.redAccent,
-                            ),
-                            onPressed: () async {
-                              String field = (role == 'player')
-                                  ? 'playerIds'
-                                  : 'coachIds';
-                              await widget.teamDoc.reference.update({
-                                field: FieldValue.arrayRemove([userId]),
-                              });
-                              final Map<String, dynamic> userUpdate = {
-                                'teamIds': FieldValue.arrayRemove([
-                                  widget.teamDoc.id,
-                                ]),
-                              };
-                              if (role == 'coach') {
-                                userUpdate['coachedTeams'] =
-                                    FieldValue.arrayRemove([
-                                  {
-                                    'teamId': widget.teamDoc.id,
-                                    'teamName': teamName,
-                                  }
-                                ]);
-                              }
-                              if (teamName.isNotEmpty) {
-                                userUpdate['teamNames'] =
-                                    FieldValue.arrayRemove([teamName]);
-                              }
-                              if (teamCategory.isNotEmpty) {
-                                userUpdate['categories'] =
-                                    FieldValue.arrayRemove([teamCategory]);
-                              }
-                              await FirebaseFirestore.instance
-                                  .collection('users')
-                                  .doc(userId)
-                                  .set(userUpdate, SetOptions(merge: true));
-                              if (role == 'player') {
-                                await _updateEventsAttendanceForPlayer(
-                                  userId,
-                                  teamName,
-                                  add: false,
-                                );
-                              }
-                            },
-                          )
-                        : null,
-                    onTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => ProfilDisplayPage(userId: userId),
+                    child: ListTile(
+                      visualDensity: VisualDensity.compact,
+                      leading: CircleAvatar(
+                        radius: 18,
+                        backgroundImage:
+                            (userData['avatarUrl'] != null &&
+                                (userData['avatarUrl'] as String).isNotEmpty)
+                            ? NetworkImage(userData['avatarUrl'])
+                            : null,
+                        child:
+                            (userData['avatarUrl'] == null ||
+                                (userData['avatarUrl'] as String).isEmpty)
+                            ? const Icon(Icons.person_outline, size: 18)
+                            : null,
+                      ),
+                      title: Text(
+                        _formatName(
+                          userData['firstName'],
+                          userData['lastName'],
                         ),
-                      );
-                    },
-                  ),
-                );
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      trailing: _isEditing
+                          ? IconButton(
+                              icon: const Icon(
+                                Icons.remove_circle_outline,
+                                size: 20,
+                                color: Colors.redAccent,
+                              ),
+                              onPressed: () async {
+                                String field = (role == 'player')
+                                    ? 'playerIds'
+                                    : 'coachIds';
+                                await widget.teamDoc.reference.update({
+                                  field: FieldValue.arrayRemove([userId]),
+                                });
+                                final Map<String, dynamic> userUpdate = {
+                                  'teamIds': FieldValue.arrayRemove([
+                                    widget.teamDoc.id,
+                                  ]),
+                                };
+                                if (role == 'coach') {
+                                  userUpdate['coachedTeams'] =
+                                      FieldValue.arrayRemove([
+                                        {
+                                          'teamId': widget.teamDoc.id,
+                                          'teamName': teamName,
+                                        },
+                                      ]);
+                                }
+                                if (teamName.isNotEmpty) {
+                                  userUpdate['teamNames'] =
+                                      FieldValue.arrayRemove([teamName]);
+                                }
+                                if (teamCategory.isNotEmpty) {
+                                  userUpdate['categories'] =
+                                      FieldValue.arrayRemove([teamCategory]);
+                                }
+                                await FirebaseFirestore.instance
+                                    .collection('users')
+                                    .doc(userId)
+                                    .set(userUpdate, SetOptions(merge: true));
+                                if (role == 'player') {
+                                  await _updateEventsAttendanceForPlayer(
+                                    userId,
+                                    teamName,
+                                    add: false,
+                                  );
+                                }
+                              },
+                            )
+                          : null,
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => ProfilDisplayPage(userId: userId),
+                          ),
+                        );
+                      },
+                    ),
+                  );
                 },
               );
             },

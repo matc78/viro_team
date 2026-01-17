@@ -124,13 +124,14 @@ class _RoleSelectionPageState extends State<RoleSelectionPage> {
         });
       }
 
-      // 2. Mise à jour du profil utilisateur
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).update(
+      // 2. Mise à jour du profil utilisateur (marquer la demande en attente)
+      // On ne modifie PAS la structure roles ici, c'est l'admin qui le fera lors de l'acceptation
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).set(
         {
           'hasPendingRequest': true,
           'lastClubRequested': _selectedClubName,
-          'role': _selectedRole, // On définit le rôle choisi même si en attente
         },
+        SetOptions(merge: true),
       );
 
       if (mounted) {

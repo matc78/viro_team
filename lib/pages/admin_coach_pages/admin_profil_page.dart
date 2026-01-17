@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:viro_team/pages/multirole_selection_page.dart';
 import '../../theme/viro_theme.dart';
 import '../../widget/viro_loader.dart';
 import '../auth_page.dart';
@@ -114,9 +115,17 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
                 _buildSectionTitle("PARAMÈTRES DU COMPTE"),
                 _buildMenuCard(
                   icon: Icons.switch_account_outlined,
-                  title: "Changer de compte",
-                  subtitle: "Changer de profil",
-                  onTap: () => _handleSignOut(context),
+                  title: "Ajouter un nouveau profil",
+                  subtitle:
+                      "Création d'un compte joueur/coach ou d'un nouveau club",
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const MultiRoleSelectionPage(),
+                      ),
+                    );
+                  },
                 ),
                 _buildMenuCard(
                   icon: Icons.lock_outline,

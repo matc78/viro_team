@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../theme/viro_theme.dart';
+import '../../utils/firebase_helpers.dart';
 import '../../widget/viro_loader.dart';
 
 class AdminClubCommunicationPage extends StatefulWidget {
@@ -326,16 +327,19 @@ class _AdminClubCommunicationPageState
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('users')
-          .where('clubId', isEqualTo: widget.clubId)
           .snapshots(),
       builder: (context, snapshot) {
         if (!snapshot.hasData) return const LinearProgressIndicator();
-        final docs = snapshot.data!.docs;
-        final users = docs.map((doc) {
+        final allDocs = snapshot.data!.docs;
+        // Filtrer les utilisateurs du club
+        final clubDocs = filterUsersByClub(allDocs, widget.clubId);
+        
+        final users = clubDocs.map((doc) {
           final data = doc.data() as Map<String, dynamic>;
           final first = (data['firstName'] as String? ?? "").trim();
           final last = (data['lastName'] as String? ?? "").trim();
-          final role = data['role'] as String? ?? "";
+          // Utiliser la nouvelle fonction pour obtenir le rôle dans ce club
+          final role = getUserRoleInClub(data, widget.clubId) ?? "";
           final fullName =
               "${first.isNotEmpty ? first[0].toUpperCase() + first.substring(1).toLowerCase() : ''} ${last.toUpperCase()}"
                   .trim();
@@ -348,7 +352,7 @@ class _AdminClubCommunicationPageState
         final staff =
             users.where((u) {
               final r = u['role'] ?? '';
-              return r == 'admin_fondateur' || r == 'coach';
+              return r == 'admin' || r == 'admin_fondateur' || r == 'coach';
             }).toList()..sort(
               (a, b) => (a['name'] as String).toLowerCase().compareTo(
                 (b['name'] as String).toLowerCase(),
@@ -357,7 +361,7 @@ class _AdminClubCommunicationPageState
         final players =
             users.where((u) {
               final r = u['role'] ?? '';
-              return !(r == 'admin_fondateur' || r == 'coach');
+              return !(r == 'admin' || r == 'admin_fondateur' || r == 'coach');
             }).toList()..sort(
               (a, b) => (a['name'] as String).toLowerCase().compareTo(
                 (b['name'] as String).toLowerCase(),
