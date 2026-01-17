@@ -6,6 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:intl/intl.dart';
 import 'package:viro_team/pages/multirole_selection_page.dart';
 import '../../theme/viro_theme.dart';
 import '../../widget/viro_loader.dart';
@@ -22,6 +23,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   bool _isUploadingAvatar = false;
+  bool _isSaving = false;
 
   @override
   Widget build(BuildContext context) {
@@ -81,6 +83,40 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
                 ),
                 const SizedBox(height: 30),
 
+                // --- SECTION : MES INFORMATIONS ---
+                _buildSectionTitle("MES INFORMATIONS"),
+                _buildMenuCard(
+                  icon: Icons.badge_outlined,
+                  title: "Modifier mon nom & prénom",
+                  subtitle: "$displayFirst $displayLast",
+                  onTap: () => _editName(firstName, lastName),
+                ),
+                _buildMenuCard(
+                  icon: Icons.alternate_email,
+                  title: "Changer d'adresse email",
+                  subtitle: userData?['email'] ?? user.email ?? "",
+                  onTap: () => _changeEmail(userData?['email'] ?? user.email ?? ""),
+                ),
+                _buildMenuCard(
+                  icon: Icons.phone_outlined,
+                  title: "Changer mon téléphone",
+                  subtitle: userData?['phone'] as String? ?? "Non renseigné",
+                  onTap: () => _changePhone(userData?['phone'] as String? ?? ""),
+                ),
+                _buildMenuCard(
+                  icon: Icons.lock_open_outlined,
+                  title: "Changer mon mot de passe",
+                  subtitle: "Modifier le mot de passe",
+                  onTap: _changePassword,
+                ),
+                _buildMenuCard(
+                  icon: Icons.info_outline,
+                  title: "Afficher mes infos",
+                  subtitle: "Voir toutes mes informations",
+                  onTap: () => _showInfoDialog(userData ?? {}, user),
+                ),
+                const SizedBox(height: 30),
+
                 // --- SECTION : GESTION DU CLUB ---
                 _buildSectionTitle("GESTION DU CLUB"),
                 _buildMenuCard(
@@ -127,12 +163,6 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
                       ),
                     );
                   },
-                ),
-                _buildMenuCard(
-                  icon: Icons.lock_outline,
-                  title: "Sécurité",
-                  subtitle: "Modifier le mot de passe",
-                  onTap: () {},
                 ),
                 _buildMenuCard(
                   icon: Icons.notifications_active_outlined,
@@ -292,7 +322,6 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
         border: Border.all(color: ViroColors.borderColor),
       ),
       child: ListTile(
-        onTap: onTap,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
         leading: Container(
           padding: const EdgeInsets.all(8),
@@ -317,6 +346,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
           size: 14,
           color: ViroColors.borderColor,
         ),
+        onTap: _isSaving ? null : onTap,
       ),
     );
   }
@@ -626,4 +656,357 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
   }
 
   String _formatLast(String value) => value.toUpperCase();
+
+  // --- MÉTHODES D'ÉDITION DES INFORMATIONS PERSONNELLES ---
+
+  Future<void> _editName(String currentFirst, String currentLast) async {
+    final firstController = TextEditingController(text: currentFirst);
+    final lastController = TextEditingController(text: currentLast);
+
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Modifier le nom"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: firstController,
+              decoration: const InputDecoration(labelText: "Prénom"),
+            ),
+            TextField(
+              controller: lastController,
+              decoration: const InputDecoration(labelText: "Nom"),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Annuler"),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final user = _auth.currentUser;
+              if (user == null) return;
+              final first = firstController.text.trim();
+              final last = lastController.text.trim();
+              setState(() => _isSaving = true);
+              try {
+                await _firestore.collection('users').doc(user.uid).set({
+                  'firstName': first,
+                  'lastName': last,
+                }, SetOptions(merge: true));
+                if (mounted) Navigator.pop(context);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("Nom mis à jour avec succès")),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text("Impossible de mettre à jour le nom : $e")),
+                  );
+                }
+              } finally {
+                if (mounted) setState(() => _isSaving = false);
+              }
+            },
+            child: const Text("Enregistrer"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _changeEmail(String currentEmail) async {
+    final controller = TextEditingController(text: currentEmail);
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Changer l'email"),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(labelText: "Nouvel email"),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Annuler"),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final user = _auth.currentUser;
+              if (user == null) return;
+              final newEmail = controller.text.trim();
+              setState(() => _isSaving = true);
+              try {
+                // verifyBeforeUpdateEmail envoie un email de validation puis change l'email
+                await user.verifyBeforeUpdateEmail(newEmail);
+                await _firestore.collection('users').doc(user.uid).set({
+                  'email': newEmail,
+                }, SetOptions(merge: true));
+                if (mounted) Navigator.pop(context);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        "Email mis à jour (vérifiez votre boîte mail pour confirmer si nécessaire)",
+                      ),
+                    ),
+                  );
+                }
+              } on FirebaseAuthException catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        e.code == 'requires-recent-login'
+                            ? "Reconnectez-vous puis réessayez."
+                            : (e.message ?? "Erreur lors du changement d'email"),
+                      ),
+                    ),
+                  );
+                }
+              } finally {
+                if (mounted) setState(() => _isSaving = false);
+              }
+            },
+            child: const Text("Enregistrer"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _changePhone(String currentPhone) async {
+    final controller = TextEditingController(text: currentPhone);
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Changer le téléphone"),
+        content: TextField(
+          controller: controller,
+          keyboardType: TextInputType.phone,
+          decoration: const InputDecoration(labelText: "Nouveau numéro"),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Annuler"),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final user = _auth.currentUser;
+              if (user == null) return;
+              final newPhone = controller.text.trim();
+              setState(() => _isSaving = true);
+              try {
+                await _firestore.collection('users').doc(user.uid).set({
+                  'phone': newPhone,
+                }, SetOptions(merge: true));
+                if (mounted) Navigator.pop(context);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("Téléphone mis à jour")),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text("Erreur lors de la mise à jour : $e")),
+                  );
+                }
+              } finally {
+                if (mounted) setState(() => _isSaving = false);
+              }
+            },
+            child: const Text("Enregistrer"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _changePassword() async {
+    final currentController = TextEditingController();
+    final newController = TextEditingController();
+    final confirmController = TextEditingController();
+
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Changer le mot de passe"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: currentController,
+              obscureText: true,
+              decoration: const InputDecoration(
+                labelText: "Mot de passe actuel",
+              ),
+            ),
+            TextField(
+              controller: newController,
+              obscureText: true,
+              decoration: const InputDecoration(
+                labelText: "Nouveau mot de passe",
+              ),
+            ),
+            TextField(
+              controller: confirmController,
+              obscureText: true,
+              decoration: const InputDecoration(
+                labelText: "Confirmer le nouveau mot de passe",
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Annuler"),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final user = _auth.currentUser;
+              if (user == null) return;
+
+              final currentPass = currentController.text.trim();
+              final newPass = newController.text.trim();
+              final confirmPass = confirmController.text.trim();
+
+              if (newPass.length < 6) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        "Le mot de passe doit contenir au moins 6 caractères",
+                      ),
+                    ),
+                  );
+                }
+                return;
+              }
+              if (newPass != confirmPass) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        "Les nouveaux mots de passe ne correspondent pas",
+                      ),
+                    ),
+                  );
+                }
+                return;
+              }
+
+              setState(() => _isSaving = true);
+              try {
+                // Re-auth pour sécurité
+                final credential = EmailAuthProvider.credential(
+                  email: user.email ?? "",
+                  password: currentPass,
+                );
+                await user.reauthenticateWithCredential(credential);
+                await user.updatePassword(newPass);
+                if (mounted) Navigator.pop(context);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("Mot de passe mis à jour")),
+                  );
+                }
+              } on FirebaseAuthException catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        e.code == 'wrong-password'
+                            ? "Mot de passe actuel incorrect."
+                            : (e.code == 'requires-recent-login'
+                                  ? "Reconnectez-vous puis réessayez."
+                                  : (e.message ??
+                                        "Erreur lors du changement de mot de passe")),
+                      ),
+                    ),
+                  );
+                }
+              } finally {
+                if (mounted) setState(() => _isSaving = false);
+              }
+            },
+            child: const Text("Enregistrer"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showInfoDialog(Map<String, dynamic> data, User user) {
+    final first = data['firstName'] as String? ?? "À préciser";
+    final last = data['lastName'] as String? ?? "À préciser";
+    final email = data['email'] as String? ?? user.email ?? "À préciser";
+    final phone = data['phone'] as String? ?? "À préciser";
+    final createdAt = data['createdAt'];
+    String createdLabel = "À préciser";
+    if (createdAt is Timestamp) {
+      createdLabel = DateFormat('dd/MM/yyyy').format(createdAt.toDate());
+    }
+    final club = data['clubName'] as String? ?? "À préciser";
+    final role = data['role'] as String? ?? data['activeContext']?['role'] as String? ?? "À préciser";
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Mes informations"),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _infoLine("Nom", _formatLast(last)),
+              _infoLine("Prénom", _formatFirst(first)),
+              _infoLine("Email", email),
+              _infoLine("Téléphone", phone),
+              _infoLine("Date de création", createdLabel),
+              _infoLine("Club", club),
+              _infoLine("Rôle", role == 'admin_fondateur' ? "Fondateur" : (role == 'admin' ? "Administrateur" : (role == 'coach' ? "Coach" : role))),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Fermer"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _infoLine(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8.0),
+      child: Row(
+        children: [
+          Expanded(
+            flex: 2,
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontWeight: FontWeight.w700,
+                color: Colors.black87,
+              ),
+            ),
+          ),
+          Expanded(
+            flex: 3,
+            child: Text(value, style: const TextStyle(color: Colors.black54)),
+          ),
+        ],
+      ),
+    );
+  }
 }
