@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -77,7 +78,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
                   radius: 16,
                   backgroundColor: ViroColors.primary.withOpacity(0.1),
                   backgroundImage: (avatarUrl != null && avatarUrl.isNotEmpty)
-                      ? NetworkImage(avatarUrl)
+                      ? CachedNetworkImageProvider(avatarUrl)
                       : null,
                   child: (avatarUrl == null || avatarUrl.isEmpty)
                       ? const Icon(Icons.person, color: ViroColors.primary)
@@ -161,57 +162,8 @@ class _AdminHomePageState extends State<AdminHomePage> {
                   crossAxisSpacing: 15,
                   mainAxisSpacing: 15,
                   children: [
-                    StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                      stream: FirebaseFirestore.instance
-                          .collection('users')
-                          .snapshots(),
-                      builder: (context, snap) {
-                        // Filtrer les membres du club côté client
-                        final allDocs = snap.data?.docs ?? [];
-                        final clubMembers = filterUsersByClub(allDocs, clubId);
-                        final count = clubMembers.length;
-                        return _adminCard(
-                          title: "Membres",
-                          count: count == 0 ? "" : "$count",
-                          icon: Icons.group_outlined,
-                          color: ViroColors.accent,
-                          onTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => AdminMembersPage(
-                                  clubId: clubId,
-                                  clubName: clubName,
-                                ),
-                              ),
-                            );
-                          },
-                        );
-                      },
-                    ),
-                    StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                      stream: FirebaseFirestore.instance
-                          .collection('clubs')
-                          .doc(clubId)
-                          .collection('teams')
-                          .snapshots(),
-                      builder: (context, snap) {
-                        final teamCount = snap.data?.docs.length ?? 0;
-                        return _adminCard(
-                          title: "Équipes",
-                          count: teamCount == 0 ? "" : "$teamCount",
-                          icon: Icons.groups_rounded,
-                          color: ViroColors.primary,
-                          onTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) =>
-                                    AdminTeamsPage(clubId: clubId),
-                              ),
-                            );
-                          },
-                        );
-                      },
-                    ),
+                    _MembersCountCard(clubId: clubId, clubName: clubName),
+                    _TeamsCountCard(clubId: clubId),
                     _adminCard(
                       title: "Planning",
                       count: DateFormat(
@@ -260,7 +212,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
                       children: [
                         CircleAvatar(
                           radius: 32,
-                          backgroundImage: NetworkImage(
+                          backgroundImage: CachedNetworkImageProvider(
                             club['logoUrl'] as String,
                           ),
                           backgroundColor: Colors.transparent,
@@ -293,45 +245,12 @@ class _AdminHomePageState extends State<AdminHomePage> {
     required Color color,
     required VoidCallback onTap,
   }) {
-    return InkWell(
+    return _AdminCard(
+      title: title,
+      count: count,
+      icon: icon,
+      color: color,
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(15),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 5),
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            CircleAvatar(
-              backgroundColor: color.withOpacity(0.1),
-              child: Icon(icon, color: color),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              title,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-            ),
-            if (count.isNotEmpty)
-              Text(
-                count,
-                style: TextStyle(
-                  color: color,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 12,
-                ),
-              ),
-          ],
-        ),
-      ),
     );
   }
 
@@ -708,6 +627,66 @@ class _AdminHomePageState extends State<AdminHomePage> {
   }
 }
 
+class _AdminCard extends StatelessWidget {
+  final String title;
+  final String count;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _AdminCard({
+    required this.title,
+    required this.count,
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(15),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 5),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircleAvatar(
+              backgroundColor: color.withOpacity(0.1),
+              child: Icon(icon, color: color),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              title,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+            if (count.isNotEmpty)
+              Text(
+                count,
+                style: TextStyle(
+                  color: color,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _infoCard extends StatelessWidget {
   final Widget child;
   const _infoCard({required this.child});
@@ -723,6 +702,81 @@ class _infoCard extends StatelessWidget {
         border: Border.all(color: ViroColors.borderColor),
       ),
       child: child,
+    );
+  }
+}
+
+// Widgets extraits pour optimiser les rebuilds
+class _MembersCountCard extends StatelessWidget {
+  final String clubId;
+  final String clubName;
+
+  const _MembersCountCard({
+    required this.clubId,
+    required this.clubName,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .snapshots(),
+      builder: (context, snap) {
+        // Filtrer les membres du club côté client
+        final allDocs = snap.data?.docs ?? [];
+        final clubMembers = filterUsersByClub(allDocs, clubId);
+        final count = clubMembers.length;
+        return _AdminCard(
+          title: "Membres",
+          count: count == 0 ? "" : "$count",
+          icon: Icons.group_outlined,
+          color: ViroColors.accent,
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => AdminMembersPage(
+                  clubId: clubId,
+                  clubName: clubName,
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+class _TeamsCountCard extends StatelessWidget {
+  final String clubId;
+
+  const _TeamsCountCard({required this.clubId});
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('clubs')
+          .doc(clubId)
+          .collection('teams')
+          .snapshots(),
+      builder: (context, snap) {
+        final teamCount = snap.data?.docs.length ?? 0;
+        return _AdminCard(
+          title: "Équipes",
+          count: teamCount == 0 ? "" : "$teamCount",
+          icon: Icons.groups_rounded,
+          color: ViroColors.primary,
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => AdminTeamsPage(clubId: clubId),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }

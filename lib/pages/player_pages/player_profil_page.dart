@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -207,7 +208,7 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
                 radius: 55,
                 backgroundColor: ViroColors.primary.withOpacity(0.1),
                 backgroundImage: (avatarUrl != null && avatarUrl.isNotEmpty)
-                    ? NetworkImage(avatarUrl)
+                    ? CachedNetworkImageProvider(avatarUrl)
                     : null,
                 child: (avatarUrl == null || avatarUrl.isEmpty)
                     ? const Icon(
@@ -253,7 +254,7 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
                     child: CircleAvatar(
                       radius: 15,
                       backgroundColor: Colors.white,
-                      backgroundImage: NetworkImage(clubLogos[i]),
+                      backgroundImage: CachedNetworkImageProvider(clubLogos[i]),
                     ),
                   ),
                 ),

@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../../theme/viro_theme.dart';
@@ -321,7 +322,7 @@ class _AdminTeamsPageState extends State<AdminTeamsPage> {
                           backgroundColor: ViroColors.primary.withOpacity(0.1),
                           backgroundImage:
                               (_clubLogoUrl != null && _clubLogoUrl!.isNotEmpty)
-                                  ? NetworkImage(_clubLogoUrl!)
+                                  ? CachedNetworkImageProvider(_clubLogoUrl!)
                                   : null,
                           child:
                               (_clubLogoUrl == null || _clubLogoUrl!.isEmpty)

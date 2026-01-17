@@ -66,14 +66,17 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
   }
 
   Widget _buildDayPicker() {
+    final days = _getDays();
     return Container(
       height: 90,
       padding: const EdgeInsets.symmetric(vertical: 10),
-      child: ListView(
+      child: ListView.builder(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16),
-        children: _getDays().map((date) {
-          bool isSelected = DateUtils.isSameDay(date, _selectedDate);
+        itemCount: days.length,
+        itemBuilder: (context, index) {
+          final date = days[index];
+          final isSelected = DateUtils.isSameDay(date, _selectedDate);
           return GestureDetector(
             onTap: () => setState(() => _selectedDate = date),
             child: Container(
@@ -106,7 +109,7 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
               ),
             ),
           );
-        }).toList(),
+        },
       ),
     );
   }

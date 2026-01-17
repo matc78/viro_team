@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -159,7 +160,7 @@ class ProfilDisplayPage extends StatelessWidget {
                                         ViroColors.primary.withOpacity(0.1),
                                     backgroundImage: (data['avatarUrl'] != null &&
                                             (data['avatarUrl'] as String).isNotEmpty)
-                                        ? NetworkImage(data['avatarUrl'])
+                                        ? CachedNetworkImageProvider(data['avatarUrl'])
                                         : null,
                                     child: (data['avatarUrl'] == null ||
                                             (data['avatarUrl'] as String).isEmpty)
@@ -181,7 +182,7 @@ class ProfilDisplayPage extends StatelessWidget {
                                           radius: 15,
                                           backgroundColor: Colors.white,
                                           backgroundImage:
-                                              NetworkImage(logos[i]),
+                                              CachedNetworkImageProvider(logos[i]),
                                         ),
                                       ),
                                     ),

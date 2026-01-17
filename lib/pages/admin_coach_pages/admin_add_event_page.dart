@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -314,7 +315,7 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
                         secondary: CircleAvatar(
                           radius: 14,
                           backgroundImage: (avatar != null && avatar.isNotEmpty)
-                              ? NetworkImage(avatar)
+                              ? CachedNetworkImageProvider(avatar)
                               : null,
                           child: (avatar == null || avatar.isEmpty)
                               ? const Icon(Icons.person, size: 14)

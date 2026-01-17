@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -287,6 +288,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
                     ? DateFormat('dd/MM à HH:mm').format(created)
                     : '';
                 return Padding(
+                  key: ValueKey(doc.id),
                   padding: const EdgeInsets.only(bottom: 10),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -384,7 +386,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
             backgroundColor: ViroColors.primary,
             radius: 22,
             backgroundImage: (avatarUrl != null && avatarUrl.isNotEmpty)
-                ? NetworkImage(avatarUrl)
+                ? CachedNetworkImageProvider(avatarUrl)
                 : null,
             child: (avatarUrl == null || avatarUrl.isEmpty)
                 ? const Icon(Icons.person, color: Colors.white)
@@ -468,6 +470,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
           children: docs
               .map(
                 (doc) => _eventSmallTile(
+                  key: ValueKey(doc.id),
                   doc.id,
                   doc.data() as Map<String, dynamic>,
                   clubId,
@@ -547,6 +550,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
           children: pendingDocs
               .map(
                 (doc) => _pendingActionCard(
+                  key: ValueKey(doc.id),
                   doc.id,
                   doc.data() as Map<String, dynamic>,
                   clubId,
@@ -558,12 +562,13 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
     );
   }
 
-  Widget _eventSmallTile(String id, Map<String, dynamic> data, String clubId) {
+  Widget _eventSmallTile(String id, Map<String, dynamic> data, String clubId, {Key? key}) {
     final isAllDay = data['startTime'] == null && data['endTime'] == null;
     final timeLabel = isAllDay ? "ALL DAY" : (data['startTime'] ?? "--:--");
     final typeLabel = data['title'] ?? data['type'] ?? "Événement";
     final bool canceled = data['canceled'] == true;
     return Card(
+      key: key,
       elevation: 0,
       margin: const EdgeInsets.only(bottom: 8),
       shape: RoundedRectangleBorder(
@@ -611,12 +616,14 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
   Widget _pendingActionCard(
     String id,
     Map<String, dynamic> data,
-    String clubId,
-  ) {
+    String clubId, {
+    Key? key,
+  }) {
     final date = (data['date'] as Timestamp).toDate();
     final dateStr = DateFormat('EEEE d', 'fr_FR').format(date);
 
     return Container(
+      key: key,
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(

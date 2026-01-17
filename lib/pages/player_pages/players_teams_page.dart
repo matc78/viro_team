@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -94,7 +95,7 @@ class PlayerTeamsPage extends StatelessWidget {
             const Border(), // Retire la bordure par défaut de l'ExpansionTile
         leading: CircleAvatar(
           backgroundColor: ViroColors.primary.withOpacity(0.1),
-          backgroundImage: clubLogo.isNotEmpty ? NetworkImage(clubLogo) : null,
+          backgroundImage: clubLogo.isNotEmpty ? CachedNetworkImageProvider(clubLogo) : null,
           child: clubLogo.isEmpty
               ? const Icon(Icons.shield_rounded, color: ViroColors.primary)
               : null,
@@ -229,7 +230,7 @@ class _MemberTile extends StatelessWidget {
         backgroundImage:
             (userData['avatarUrl'] != null &&
                 (userData['avatarUrl'] as String).isNotEmpty)
-            ? NetworkImage(userData['avatarUrl'] as String)
+            ? CachedNetworkImageProvider(userData['avatarUrl'] as String)
             : null,
         child:
             (userData['avatarUrl'] == null ||

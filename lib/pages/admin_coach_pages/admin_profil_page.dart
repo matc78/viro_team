@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -177,7 +178,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
               radius: 55,
               backgroundColor: ViroColors.primary.withOpacity(0.1),
               backgroundImage: avatarUrl != null
-                  ? NetworkImage(avatarUrl)
+                  ? CachedNetworkImageProvider(avatarUrl)
                   : null,
               child: avatarUrl == null
                   ? const Icon(
@@ -227,7 +228,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
                   child: CircleAvatar(
                     radius: 15,
                     backgroundColor: Colors.white,
-                    backgroundImage: NetworkImage(clubLogoUrl),
+                    backgroundImage: CachedNetworkImageProvider(clubLogoUrl),
                   ),
                 ),
               ),

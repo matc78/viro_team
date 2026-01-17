@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../../theme/viro_theme.dart';
@@ -335,7 +336,7 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
                         backgroundImage:
                             (userData['avatarUrl'] != null &&
                                 (userData['avatarUrl'] as String).isNotEmpty)
-                            ? NetworkImage(userData['avatarUrl'])
+                            ? CachedNetworkImageProvider(userData['avatarUrl'])
                             : null,
                         child:
                             (userData['avatarUrl'] == null ||
