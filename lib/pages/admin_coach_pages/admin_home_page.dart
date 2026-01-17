@@ -79,14 +79,19 @@ class _AdminHomePageState extends State<AdminHomePage> {
                   child: (avatarUrl != null && avatarUrl.isNotEmpty)
                       ? CachedNetworkImage(
                           imageUrl: avatarUrl,
-                          imageBuilder: (context, imageProvider) => CircleAvatar(
-                            radius: 16,
-                            backgroundColor: ViroColors.primary.withOpacity(0.1),
-                            backgroundImage: imageProvider,
-                          ),
+                          imageBuilder: (context, imageProvider) =>
+                              CircleAvatar(
+                                radius: 16,
+                                backgroundColor: ViroColors.primary.withOpacity(
+                                  0.1,
+                                ),
+                                backgroundImage: imageProvider,
+                              ),
                           placeholder: (context, url) => CircleAvatar(
                             radius: 16,
-                            backgroundColor: ViroColors.primary.withOpacity(0.1),
+                            backgroundColor: ViroColors.primary.withOpacity(
+                              0.1,
+                            ),
                             child: const SizedBox(
                               width: 16,
                               height: 16,
@@ -95,8 +100,13 @@ class _AdminHomePageState extends State<AdminHomePage> {
                           ),
                           errorWidget: (context, url, error) => CircleAvatar(
                             radius: 16,
-                            backgroundColor: ViroColors.primary.withOpacity(0.1),
-                            child: const Icon(Icons.person, color: ViroColors.primary),
+                            backgroundColor: ViroColors.primary.withOpacity(
+                              0.1,
+                            ),
+                            child: const Icon(
+                              Icons.person,
+                              color: ViroColors.primary,
+                            ),
                           ),
                           memCacheWidth: 64,
                           memCacheHeight: 64,
@@ -104,7 +114,10 @@ class _AdminHomePageState extends State<AdminHomePage> {
                       : CircleAvatar(
                           radius: 16,
                           backgroundColor: ViroColors.primary.withOpacity(0.1),
-                          child: const Icon(Icons.person, color: ViroColors.primary),
+                          child: const Icon(
+                            Icons.person,
+                            color: ViroColors.primary,
+                          ),
                         ),
                 ),
               );

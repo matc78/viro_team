@@ -65,6 +65,52 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
     }
   }
 
+  // Extraire tous les clubIds du joueur depuis roles
+  List<String> _extractClubIds(Map<String, dynamic>? userData) {
+    final Set<String> clubIdsSet = {};
+    final roles = userData?['roles'] as Map<String, dynamic>? ?? {};
+
+    // Player
+    if (roles['player'] is Map) {
+      final playerData = roles['player'] as Map;
+      // Nouvelle structure : liste de clubs
+      if (playerData['clubs'] is List) {
+        final clubs = (playerData['clubs'] as List).whereType<Map>();
+        for (var club in clubs) {
+          final clubId = club['clubId'] as String?;
+          if (clubId != null) clubIdsSet.add(clubId);
+        }
+      }
+      // Ancienne structure : clubId direct (compatibilité)
+      else {
+        final playerClubId = playerData['clubId'] as String?;
+        if (playerClubId != null) clubIdsSet.add(playerClubId);
+      }
+    }
+
+    // Fallback pour compatibilité
+    final legacyClubId = userData?['clubId'] as String?;
+    if (legacyClubId != null) clubIdsSet.add(legacyClubId);
+
+    return clubIdsSet.toList();
+  }
+
+  // Générer une couleur unique par clubId
+  Color _getClubColor(String clubId) {
+    final colors = [
+      Colors.blue,
+      Colors.green,
+      Colors.orange,
+      Colors.purple,
+      Colors.teal,
+      Colors.indigo,
+      Colors.pink,
+      Colors.amber,
+    ];
+    final index = clubId.hashCode % colors.length;
+    return colors[index.abs()];
+  }
+
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<DocumentSnapshot>(
@@ -87,15 +133,16 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
         final userData =
             _manualUserData ?? snapshot.data!.data() as Map<String, dynamic>?;
         final bool hasPendingRequest = userData?['hasPendingRequest'] ?? false;
-        
+
         // Utiliser activeContext au lieu de clubId à la racine
-        final activeContext = userData?['activeContext'] as Map<String, dynamic>?;
+        final activeContext =
+            userData?['activeContext'] as Map<String, dynamic>?;
         final String? clubId = activeContext?['clubId'] as String?;
-        
+
         // Fallback pour compatibilité avec ancien système
         final String? legacyClubId = userData?['clubId'] as String?;
         final String? finalClubId = clubId ?? legacyClubId;
-        
+
         final String firstName = userData?['firstName'] ?? "Sportif";
 
         // 1. SI DEMANDE EN ATTENTE
@@ -111,16 +158,20 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
         if (finalClubId != null && finalClubId.isNotEmpty) {
           // Récupérer le nom du club depuis activeContext ou depuis userData
           String? clubName = activeContext?['clubName'] as String?;
-          if (clubName == null) {
-            // Essayer de récupérer depuis Firestore si nécessaire
-            clubName = userData?['clubName'] as String? ?? "Mon Club";
-          }
-          
+          clubName ??= userData?['clubName'] as String? ?? "Mon Club";
+
+          final allClubIds = _extractClubIds(userData);
+          // Utiliser le premier clubId pour la compatibilité avec les paramètres existants
+          final primaryClubId = finalClubId.isNotEmpty
+              ? finalClubId
+              : (allClubIds.isNotEmpty ? allClubIds.first : "");
+
           return _buildClubMemberView(
             firstName,
-            finalClubId,
+            primaryClubId,
             clubName,
             userData,
+            allClubIds,
           );
         }
 
@@ -137,6 +188,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
     String clubId,
     String clubName,
     Map<String, dynamic>? userData,
+    List<String> allClubIds,
   ) {
     return Scaffold(
       backgroundColor: ViroColors.background,
@@ -169,14 +221,19 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
                   child: (avatarUrl != null && avatarUrl.isNotEmpty)
                       ? CachedNetworkImage(
                           imageUrl: avatarUrl,
-                          imageBuilder: (context, imageProvider) => CircleAvatar(
-                            radius: 18,
-                            backgroundColor: ViroColors.primary.withOpacity(0.1),
-                            backgroundImage: imageProvider,
-                          ),
+                          imageBuilder: (context, imageProvider) =>
+                              CircleAvatar(
+                                radius: 18,
+                                backgroundColor: ViroColors.primary.withOpacity(
+                                  0.1,
+                                ),
+                                backgroundImage: imageProvider,
+                              ),
                           placeholder: (context, url) => CircleAvatar(
                             radius: 18,
-                            backgroundColor: ViroColors.primary.withOpacity(0.1),
+                            backgroundColor: ViroColors.primary.withOpacity(
+                              0.1,
+                            ),
                             child: const SizedBox(
                               width: 18,
                               height: 18,
@@ -185,8 +242,13 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
                           ),
                           errorWidget: (context, url, error) => CircleAvatar(
                             radius: 18,
-                            backgroundColor: ViroColors.primary.withOpacity(0.1),
-                            child: const Icon(Icons.person, color: ViroColors.primary),
+                            backgroundColor: ViroColors.primary.withOpacity(
+                              0.1,
+                            ),
+                            child: const Icon(
+                              Icons.person,
+                              color: ViroColors.primary,
+                            ),
                           ),
                           memCacheWidth: 72,
                           memCacheHeight: 72,
@@ -194,7 +256,10 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
                       : CircleAvatar(
                           radius: 18,
                           backgroundColor: ViroColors.primary.withOpacity(0.1),
-                          child: const Icon(Icons.person, color: ViroColors.primary),
+                          child: const Icon(
+                            Icons.person,
+                            color: ViroColors.primary,
+                          ),
                         ),
                 ),
               );
@@ -230,12 +295,12 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
               const SizedBox(height: 30),
 
               _buildSectionTitle("À NE PAS MANQUER AUJOURD'HUI"),
-              _buildTodayEvents(clubId, userData),
+              _buildTodayEvents(allClubIds, userData),
 
               const SizedBox(height: 30),
 
               _buildSectionTitle("ACTION REQUISE : PRÉSENCE"),
-              _buildPendingActions(clubId, userData),
+              _buildPendingActions(allClubIds, userData),
             ],
           ),
         ),
@@ -419,211 +484,377 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
     );
   }
 
-  Widget _buildTodayEvents(String clubId, Map<String, dynamic>? userData) {
+  Widget _buildTodayEvents(
+    List<String> clubIds,
+    Map<String, dynamic>? userData,
+  ) {
+    if (clubIds.isEmpty) {
+      return const Text(
+        "Rien de prévu aujourd'hui.",
+        style: TextStyle(color: Colors.grey, fontSize: 13),
+      );
+    }
+
     final now = DateTime.now();
     final startOfDay = DateTime(now.year, now.month, now.day);
     final endOfDay = startOfDay.add(const Duration(days: 1));
 
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
+    // Créer les streams pour chaque club
+    final streams = clubIds.map((clubId) {
+      return FirebaseFirestore.instance
           .collection('clubs')
           .doc(clubId)
           .collection('events')
           .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
           .where('date', isLessThan: Timestamp.fromDate(endOfDay))
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) return const SizedBox();
-        final docs = snapshot.data!.docs.where((doc) {
-          final data = doc.data() as Map<String, dynamic>;
-          final memberIds = (data['teamMemberIds'] as List<dynamic>?) ?? [];
-          final teamNames =
-              (data['teamNames'] as List?)?.whereType<String>().toList() ?? [];
-          final teamName = data['teamName'] as String?;
-          final eventCategory = data['category'] as String?;
+          .snapshots();
+    }).toList();
 
-          final userTeams =
-              (_manualUserData?['teamNames'] as List?)
-                  ?.whereType<String>()
-                  .toList() ??
-              (userData?['teamNames'] as List?)?.whereType<String>().toList() ??
-              [];
-          if (userTeams.isEmpty && _manualUserData?['teamName'] is String) {
-            userTeams.add(_manualUserData?['teamName'] as String);
-          } else if (userTeams.isEmpty && userData?['teamName'] is String) {
-            userTeams.add(userData?['teamName'] as String);
-          }
-          final userCategories =
-              (_manualUserData?['categories'] as List?)
-                  ?.whereType<String>()
-                  .toList() ??
-              (userData?['categories'] as List?)
-                  ?.whereType<String>()
-                  .toList() ??
-              [];
-          if (userCategories.isEmpty &&
-              _manualUserData?['category'] is String) {
-            userCategories.add(_manualUserData?['category'] as String);
-          } else if (userCategories.isEmpty &&
-              userData?['category'] is String) {
-            userCategories.add(userData?['category'] as String);
-          }
-
-          final bool inMemberIds =
-              memberIds.isNotEmpty && memberIds.contains(_currentUserId);
-          final bool matchTeam =
-              teamNames.any(userTeams.contains) ||
-              (teamName != null && userTeams.contains(teamName));
-          final bool matchCat =
-              eventCategory != null && userCategories.contains(eventCategory);
-
-          final isConcerned = memberIds.isEmpty
-              ? (matchTeam || matchCat)
-              : inMemberIds;
-          return isConcerned;
-        }).toList();
-        if (docs.isEmpty)
-          return const Text(
-            "Rien de prévu aujourd'hui.",
-            style: TextStyle(color: Colors.grey, fontSize: 13),
-          );
-
-        return Column(
-          children: docs
-              .map(
-                (doc) => _eventSmallTile(
-                  key: ValueKey(doc.id),
-                  doc.id,
-                  doc.data() as Map<String, dynamic>,
-                  clubId,
-                ),
-              )
-              .toList(),
-        );
-      },
+    return _buildCombinedEventStreams(
+      streams,
+      clubIds,
+      userData,
+      isToday: true,
     );
   }
 
-  Widget _buildPendingActions(String clubId, Map<String, dynamic>? userData) {
+  Widget _buildPendingActions(
+    List<String> clubIds,
+    Map<String, dynamic>? userData,
+  ) {
+    if (clubIds.isEmpty) {
+      return const Text(
+        "Tu es à jour ! ✅",
+        style: TextStyle(color: Colors.grey, fontSize: 13),
+      );
+    }
+
     final now = DateTime.now();
     final startOfDay = DateTime(now.year, now.month, now.day);
     final nextSunday = startOfDay.add(Duration(days: 7 - now.weekday + 1));
 
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
+    // Créer les streams pour chaque club
+    final streams = clubIds.map((clubId) {
+      return FirebaseFirestore.instance
           .collection('clubs')
           .doc(clubId)
           .collection('events')
           .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
           .where('date', isLessThan: Timestamp.fromDate(nextSunday))
           .orderBy('date')
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) return const SizedBox();
+          .snapshots();
+    }).toList();
 
-        final pendingDocs = snapshot.data!.docs.where((doc) {
-          final data = doc.data() as Map<String, dynamic>;
-          final attendance = data['attendance'] as Map? ?? {};
-          final memberIds = (data['teamMemberIds'] as List<dynamic>?) ?? [];
-          final teamNames =
-              (data['teamNames'] as List?)?.whereType<String>().toList() ?? [];
-          final teamName = data['teamName'] as String?;
-          final eventCategory = data['category'] as String?;
+    return _buildCombinedEventStreams(
+      streams,
+      clubIds,
+      userData,
+      isToday: false,
+    );
+  }
 
-          final userTeams =
-              (userData?['teamNames'] as List?)?.whereType<String>().toList() ??
-              [];
-          if (userTeams.isEmpty && userData?['teamName'] is String) {
-            userTeams.add(userData?['teamName'] as String);
-          }
+  // Construire des StreamBuilder imbriqués pour combiner les streams
+  Widget _buildCombinedEventStreams(
+    List<Stream<QuerySnapshot>> streams,
+    List<String> clubIds,
+    Map<String, dynamic>? userData, {
+    required bool isToday,
+  }) {
+    if (streams.isEmpty) {
+      return isToday
+          ? const Text(
+              "Rien de prévu aujourd'hui.",
+              style: TextStyle(color: Colors.grey, fontSize: 13),
+            )
+          : const Text(
+              "Tu es à jour ! ✅",
+              style: TextStyle(color: Colors.grey, fontSize: 13),
+            );
+    }
 
-          final userCategories =
-              (userData?['categories'] as List?)
-                  ?.whereType<String>()
-                  .toList() ??
-              [];
-          if (userCategories.isEmpty && userData?['category'] is String) {
-            userCategories.add(userData?['category'] as String);
-          }
-
-          final bool inMemberIds =
-              memberIds.isNotEmpty && memberIds.contains(_currentUserId);
-          final bool matchTeam =
-              teamNames.any(userTeams.contains) ||
-              (teamName != null && userTeams.contains(teamName));
-          final bool matchCat =
-              eventCategory != null && userCategories.contains(eventCategory);
-
-          final isConcerned = memberIds.isEmpty
-              ? (matchTeam || matchCat)
-              : inMemberIds;
-          return isConcerned &&
-              (attendance[_currentUserId] == null ||
-                  attendance[_currentUserId] == 'none');
-        }).toList();
-
-        if (pendingDocs.isEmpty)
-          return const Text(
-            "Tu es à jour ! ✅",
-            style: TextStyle(color: Colors.grey, fontSize: 13),
+    if (streams.length == 1) {
+      return StreamBuilder<QuerySnapshot>(
+        stream: streams[0],
+        builder: (context, snapshot) {
+          return _buildEventsFromSnapshots(
+            [snapshot.data],
+            clubIds,
+            userData,
+            isToday: isToday,
           );
+        },
+      );
+    }
 
-        return Column(
-          children: pendingDocs
-              .map(
-                (doc) => _pendingActionCard(
-                  key: ValueKey(doc.id),
-                  doc.id,
-                  doc.data() as Map<String, dynamic>,
-                  clubId,
-                ),
-              )
-              .toList(),
+    if (streams.length == 2) {
+      return StreamBuilder<QuerySnapshot>(
+        stream: streams[0],
+        builder: (context, snapshot0) {
+          return StreamBuilder<QuerySnapshot>(
+            stream: streams[1],
+            builder: (context, snapshot1) {
+              return _buildEventsFromSnapshots(
+                [snapshot0.data, snapshot1.data],
+                clubIds,
+                userData,
+                isToday: isToday,
+              );
+            },
+          );
+        },
+      );
+    }
+
+    // Pour 3 clubs ou plus
+    return StreamBuilder<QuerySnapshot>(
+      stream: streams[0],
+      builder: (context, snapshot0) {
+        return StreamBuilder<QuerySnapshot>(
+          stream: streams[1],
+          builder: (context, snapshot1) {
+            if (streams.length == 3) {
+              return StreamBuilder<QuerySnapshot>(
+                stream: streams[2],
+                builder: (context, snapshot2) {
+                  return _buildEventsFromSnapshots(
+                    [snapshot0.data, snapshot1.data, snapshot2.data],
+                    clubIds,
+                    userData,
+                    isToday: isToday,
+                  );
+                },
+              );
+            }
+            // Pour plus de 3 clubs, traiter les 3 premiers
+            return _buildEventsFromSnapshots(
+              [snapshot0.data, snapshot1.data, if (streams.length > 2) null],
+              clubIds.take(3).toList(),
+              userData,
+              isToday: isToday,
+            );
+          },
         );
       },
     );
   }
 
-  Widget _eventSmallTile(String id, Map<String, dynamic> data, String clubId, {Key? key}) {
+  // Construire les événements à partir des snapshots
+  Widget _buildEventsFromSnapshots(
+    List<QuerySnapshot?>? snapshots,
+    List<String> clubIds,
+    Map<String, dynamic>? userData, {
+    required bool isToday,
+  }) {
+    if (snapshots == null || snapshots.isEmpty) {
+      return const SizedBox();
+    }
+
+    // Combiner tous les événements avec leur clubId
+    final List<Map<String, dynamic>> allEventsWithClub = [];
+    for (int i = 0; i < snapshots.length && i < clubIds.length; i++) {
+      final snapshot = snapshots[i];
+      if (snapshot == null) continue;
+      final clubId = clubIds[i];
+      for (var doc in snapshot.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        final memberIds = (data['teamMemberIds'] as List<dynamic>?) ?? [];
+        final teamNames =
+            (data['teamNames'] as List?)?.whereType<String>().toList() ?? [];
+        final teamName = data['teamName'] as String?;
+        final eventCategory = data['category'] as String?;
+
+        final userTeams =
+            (_manualUserData?['teamNames'] as List?)
+                ?.whereType<String>()
+                .toList() ??
+            (userData?['teamNames'] as List?)?.whereType<String>().toList() ??
+            [];
+        if (userTeams.isEmpty && _manualUserData?['teamName'] is String) {
+          userTeams.add(_manualUserData?['teamName'] as String);
+        } else if (userTeams.isEmpty && userData?['teamName'] is String) {
+          userTeams.add(userData?['teamName'] as String);
+        }
+        final userCategories =
+            (_manualUserData?['categories'] as List?)
+                ?.whereType<String>()
+                .toList() ??
+            (userData?['categories'] as List?)?.whereType<String>().toList() ??
+            [];
+        if (userCategories.isEmpty && _manualUserData?['category'] is String) {
+          userCategories.add(_manualUserData?['category'] as String);
+        } else if (userCategories.isEmpty && userData?['category'] is String) {
+          userCategories.add(userData?['category'] as String);
+        }
+
+        final bool inMemberIds =
+            memberIds.isNotEmpty && memberIds.contains(_currentUserId);
+        final bool matchTeam =
+            teamNames.any(userTeams.contains) ||
+            (teamName != null && userTeams.contains(teamName));
+        final bool matchCat =
+            eventCategory != null && userCategories.contains(eventCategory);
+
+        final isConcerned = memberIds.isEmpty
+            ? (matchTeam || matchCat)
+            : inMemberIds;
+
+        if (isToday) {
+          // Pour les événements d'aujourd'hui
+          if (isConcerned) {
+            allEventsWithClub.add({
+              'eventId': doc.id,
+              'eventData': data,
+              'clubId': clubId,
+            });
+          }
+        } else {
+          // Pour les actions en attente, vérifier aussi la présence
+          final attendance = data['attendance'] as Map? ?? {};
+          final needsAction =
+              (attendance[_currentUserId] == null ||
+              attendance[_currentUserId] == 'none');
+          if (isConcerned && needsAction) {
+            allEventsWithClub.add({
+              'eventId': doc.id,
+              'eventData': data,
+              'clubId': clubId,
+            });
+          }
+        }
+      }
+    }
+
+    if (allEventsWithClub.isEmpty) {
+      return isToday
+          ? const Text(
+              "Rien de prévu aujourd'hui.",
+              style: TextStyle(color: Colors.grey, fontSize: 13),
+            )
+          : const Text(
+              "Tu es à jour ! ✅",
+              style: TextStyle(color: Colors.grey, fontSize: 13),
+            );
+    }
+
+    if (isToday) {
+      return Column(
+        children: allEventsWithClub
+            .map(
+              (eventInfo) => _eventSmallTile(
+                key: ValueKey(eventInfo['eventId']),
+                eventInfo['eventId'] as String,
+                eventInfo['eventData'] as Map<String, dynamic>,
+                eventInfo['clubId'] as String,
+              ),
+            )
+            .toList(),
+      );
+    } else {
+      return Column(
+        children: allEventsWithClub
+            .map(
+              (eventInfo) => _pendingActionCard(
+                key: ValueKey(eventInfo['eventId']),
+                eventInfo['eventId'] as String,
+                eventInfo['eventData'] as Map<String, dynamic>,
+                eventInfo['clubId'] as String,
+              ),
+            )
+            .toList(),
+      );
+    }
+  }
+
+  Widget _eventSmallTile(
+    String id,
+    Map<String, dynamic> data,
+    String clubId, {
+    Key? key,
+  }) {
     final isAllDay = data['startTime'] == null && data['endTime'] == null;
     final timeLabel = isAllDay ? "ALL DAY" : (data['startTime'] ?? "--:--");
     final typeLabel = data['title'] ?? data['type'] ?? "Événement";
     final bool canceled = data['canceled'] == true;
+    final clubColor = _getClubColor(clubId);
+
     return Card(
       key: key,
       elevation: 0,
       margin: const EdgeInsets.only(bottom: 8),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: const BorderSide(color: ViroColors.borderColor),
+        side: BorderSide(
+          color: canceled ? ViroColors.borderColor : clubColor.withOpacity(0.5),
+          width: canceled ? 1 : 2,
+        ),
       ),
       color: canceled ? Colors.grey.shade300 : Colors.white,
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: ViroColors.secondary,
+          backgroundColor: clubColor.withOpacity(0.1),
           child: Text(
             timeLabel,
             textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: ViroColors.primary,
+            style: TextStyle(
+              color: clubColor,
               fontWeight: FontWeight.bold,
               fontSize: 10,
             ),
           ),
         ),
-        title: Text(
-          typeLabel,
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+        title: Row(
+          children: [
+            Expanded(
+              child: Text(
+                typeLabel,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
+              ),
+            ),
+            Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                color: clubColor,
+                shape: BoxShape.circle,
+              ),
+            ),
+          ],
         ),
-        subtitle: Text(
-          canceled
-              ? "ANNULÉ • ${data['location'] ?? ''}"
-              : (data['location'] ?? ""),
-          style: TextStyle(
-            fontSize: 12,
-            color: canceled ? Colors.red : Colors.grey,
-            fontWeight: canceled ? FontWeight.w700 : FontWeight.normal,
-          ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            FutureBuilder<DocumentSnapshot>(
+              future: FirebaseFirestore.instance
+                  .collection('clubs')
+                  .doc(clubId)
+                  .get(),
+              builder: (context, clubSnap) {
+                final clubData = clubSnap.data?.data() as Map<String, dynamic>?;
+                final clubName = clubData?['name'] as String? ?? "Club";
+                return Text(
+                  clubName,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: clubColor,
+                    fontWeight: FontWeight.w600,
+                  ),
+                );
+              },
+            ),
+            Text(
+              canceled
+                  ? "ANNULÉ • ${data['location'] ?? ''}"
+                  : (data['location'] ?? ""),
+              style: TextStyle(
+                fontSize: 12,
+                color: canceled ? Colors.red : Colors.grey,
+                fontWeight: canceled ? FontWeight.w700 : FontWeight.normal,
+              ),
+            ),
+          ],
         ),
         onTap: () => Navigator.push(
           context,
@@ -643,6 +874,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
   }) {
     final date = (data['date'] as Timestamp).toDate();
     final dateStr = DateFormat('EEEE d', 'fr_FR').format(date);
+    final clubColor = _getClubColor(clubId);
 
     return Container(
       key: key,
@@ -651,7 +883,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: Colors.orange.withOpacity(0.3)),
+        border: Border.all(color: clubColor.withOpacity(0.5), width: 2),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -659,19 +891,51 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                data['type']?.toUpperCase() ?? "ÉVÉNEMENT",
-                style: const TextStyle(
-                  color: Colors.orange,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 10,
-                ),
+              Row(
+                children: [
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: clubColor,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    data['type']?.toUpperCase() ?? "ÉVÉNEMENT",
+                    style: TextStyle(
+                      color: clubColor,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 10,
+                    ),
+                  ),
+                ],
               ),
               Text(
                 dateStr,
                 style: const TextStyle(color: Colors.grey, fontSize: 12),
               ),
             ],
+          ),
+          const SizedBox(height: 4),
+          FutureBuilder<DocumentSnapshot>(
+            future: FirebaseFirestore.instance
+                .collection('clubs')
+                .doc(clubId)
+                .get(),
+            builder: (context, clubSnap) {
+              final clubData = clubSnap.data?.data() as Map<String, dynamic>?;
+              final clubName = clubData?['name'] as String? ?? "Club";
+              return Text(
+                clubName,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: clubColor,
+                  fontWeight: FontWeight.w600,
+                ),
+              );
+            },
           ),
           const SizedBox(height: 8),
           Text(

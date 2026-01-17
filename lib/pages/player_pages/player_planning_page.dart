@@ -29,6 +29,52 @@ class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
     );
   }
 
+  // Extraire tous les clubIds du joueur depuis roles
+  List<String> _extractClubIds(Map<String, dynamic>? userData) {
+    final Set<String> clubIdsSet = {};
+    final roles = userData?['roles'] as Map<String, dynamic>? ?? {};
+
+    // Player
+    if (roles['player'] is Map) {
+      final playerData = roles['player'] as Map;
+      // Nouvelle structure : liste de clubs
+      if (playerData['clubs'] is List) {
+        final clubs = (playerData['clubs'] as List).whereType<Map>();
+        for (var club in clubs) {
+          final clubId = club['clubId'] as String?;
+          if (clubId != null) clubIdsSet.add(clubId);
+        }
+      }
+      // Ancienne structure : clubId direct (compatibilité)
+      else {
+        final playerClubId = playerData['clubId'] as String?;
+        if (playerClubId != null) clubIdsSet.add(playerClubId);
+      }
+    }
+
+    // Fallback pour compatibilité
+    final legacyClubId = userData?['clubId'] as String?;
+    if (legacyClubId != null) clubIdsSet.add(legacyClubId);
+
+    return clubIdsSet.toList();
+  }
+
+  // Générer une couleur unique par clubId
+  Color _getClubColor(String clubId) {
+    final colors = [
+      Colors.blue,
+      Colors.green,
+      Colors.orange,
+      Colors.purple,
+      Colors.teal,
+      Colors.indigo,
+      Colors.pink,
+      Colors.amber,
+    ];
+    final index = clubId.hashCode % colors.length;
+    return colors[index.abs()];
+  }
+
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
@@ -120,6 +166,12 @@ class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
 
   // --- LISTE DES ÉVÉNEMENTS (STREAM) ---
   Widget _buildEventList() {
+    final clubIds = _extractClubIds(_userData);
+
+    if (clubIds.isEmpty) {
+      return _buildEmptyState();
+    }
+
     final startOfDay = DateTime(
       _selectedDate.year,
       _selectedDate.month,
@@ -127,76 +179,186 @@ class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
     );
     final endOfDay = startOfDay.add(const Duration(days: 1));
 
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
+    // Créer les streams pour chaque club
+    final streams = clubIds.map((clubId) {
+      return FirebaseFirestore.instance
           .collection('clubs')
-          .doc(widget.clubId)
+          .doc(clubId)
           .collection('events')
           .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
           .where('date', isLessThan: Timestamp.fromDate(endOfDay))
           .orderBy('date')
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: ViroLoader(size: 50));
-        }
+          .snapshots();
+    }).toList();
 
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return _buildEmptyState();
-        }
+    // Utiliser des StreamBuilder imbriqués pour combiner les événements
+    return _buildCombinedStreamBuilder(streams, clubIds);
+  }
 
-        final events = snapshot.data!.docs.where((doc) {
-          final data = doc.data() as Map<String, dynamic>;
-          final memberIds = (data['teamMemberIds'] as List<dynamic>?) ?? [];
-          final teamNames =
-              (data['teamNames'] as List?)?.whereType<String>().toList() ?? [];
-          final teamName = data['teamName'] as String?;
-          final eventCategory = data['category'] as String?;
+  // Construire des StreamBuilder imbriqués pour combiner les streams
+  Widget _buildCombinedStreamBuilder(
+    List<Stream<QuerySnapshot>> streams,
+    List<String> clubIds,
+  ) {
+    if (streams.isEmpty) {
+      return _buildEmptyState();
+    }
 
-          final userTeams =
-              (_userData?['teamNames'] as List?)
-                  ?.whereType<String>()
-                  .toList() ??
-              [];
-          if (userTeams.isEmpty && _userData?['teamName'] is String) {
-            userTeams.add(_userData?['teamName'] as String);
-          }
-          final userCategories =
-              (_userData?['categories'] as List?)
-                  ?.whereType<String>()
-                  .toList() ??
-              [];
-          if (userCategories.isEmpty && _userData?['category'] is String) {
-            userCategories.add(_userData?['category'] as String);
-          }
+    if (streams.length == 1) {
+      return StreamBuilder<QuerySnapshot>(
+        stream: streams[0],
+        builder: (context, snapshot) {
+          return _buildEventsListFromSnapshots(context, [
+            snapshot.data,
+          ], clubIds);
+        },
+      );
+    }
 
-          final bool inMemberIds =
-              memberIds.isNotEmpty && memberIds.contains(_currentUserId);
-          final bool matchTeam =
-              teamNames.any(userTeams.contains) ||
-              (teamName != null && userTeams.contains(teamName));
-          final bool matchCat =
-              eventCategory != null && userCategories.contains(eventCategory);
-          final isConcerned = memberIds.isEmpty
-              ? (matchTeam || matchCat)
-              : inMemberIds;
-          return isConcerned;
-        }).toList();
+    if (streams.length == 2) {
+      return StreamBuilder<QuerySnapshot>(
+        stream: streams[0],
+        builder: (context, snapshot0) {
+          return StreamBuilder<QuerySnapshot>(
+            stream: streams[1],
+            builder: (context, snapshot1) {
+              return _buildEventsListFromSnapshots(context, [
+                snapshot0.data,
+                snapshot1.data,
+              ], clubIds);
+            },
+          );
+        },
+      );
+    }
 
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: events.length,
-          itemBuilder: (context, index) {
-            final eventDoc = events[index];
-            final event = eventDoc.data() as Map<String, dynamic>;
-            return _buildEventCard(eventDoc.id, event);
+    // Pour 3 clubs ou plus, continuer l'imbrication
+    return StreamBuilder<QuerySnapshot>(
+      stream: streams[0],
+      builder: (context, snapshot0) {
+        return StreamBuilder<QuerySnapshot>(
+          stream: streams[1],
+          builder: (context, snapshot1) {
+            if (streams.length == 3) {
+              return StreamBuilder<QuerySnapshot>(
+                stream: streams[2],
+                builder: (context, snapshot2) {
+                  return _buildEventsListFromSnapshots(context, [
+                    snapshot0.data,
+                    snapshot1.data,
+                    snapshot2.data,
+                  ], clubIds);
+                },
+              );
+            }
+            // Pour plus de 3 clubs, traiter les 3 premiers (peut être étendu)
+            return _buildEventsListFromSnapshots(context, [
+              snapshot0.data,
+              snapshot1.data,
+              if (streams.length > 2) null,
+            ], clubIds.take(3).toList());
           },
         );
       },
     );
   }
 
-  Widget _buildEventCard(String docId, Map<String, dynamic> data) {
+  // Construire la liste d'événements à partir des snapshots
+  Widget _buildEventsListFromSnapshots(
+    BuildContext context,
+    List<QuerySnapshot?>? snapshots,
+    List<String> clubIds,
+  ) {
+    if (snapshots == null || snapshots.isEmpty) {
+      return const Center(child: ViroLoader(size: 50));
+    }
+
+    // Combiner tous les événements avec leur clubId
+    final List<Map<String, dynamic>> allEventsWithClub = [];
+    for (int i = 0; i < snapshots.length && i < clubIds.length; i++) {
+      final snapshot = snapshots[i];
+      if (snapshot == null) continue;
+      final clubId = clubIds[i];
+      for (var doc in snapshot.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        // Vérifier si le joueur est concerné par cet événement
+        if (_isEventRelevantForPlayer(data)) {
+          allEventsWithClub.add({
+            'eventId': doc.id,
+            'eventData': data,
+            'clubId': clubId,
+          });
+        }
+      }
+    }
+
+    // Trier par date
+    allEventsWithClub.sort((a, b) {
+      final eventDataA = a['eventData'] as Map<String, dynamic>;
+      final eventDataB = b['eventData'] as Map<String, dynamic>;
+      final dateA =
+          (eventDataA['date'] as Timestamp?)?.toDate() ?? DateTime.now();
+      final dateB =
+          (eventDataB['date'] as Timestamp?)?.toDate() ?? DateTime.now();
+      return dateA.compareTo(dateB);
+    });
+
+    if (allEventsWithClub.isEmpty) {
+      return _buildEmptyState();
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: allEventsWithClub.length,
+      itemBuilder: (context, index) {
+        final eventInfo = allEventsWithClub[index];
+        final eventId = eventInfo['eventId'] as String;
+        final eventData = eventInfo['eventData'] as Map<String, dynamic>;
+        final clubId = eventInfo['clubId'] as String;
+        return _buildEventCard(eventId, eventData, clubId);
+      },
+    );
+  }
+
+  // Vérifier si un événement concerne le joueur
+  bool _isEventRelevantForPlayer(Map<String, dynamic> eventData) {
+    final memberIds = (eventData['teamMemberIds'] as List<dynamic>?) ?? [];
+    final teamNames =
+        (eventData['teamNames'] as List?)?.whereType<String>().toList() ?? [];
+    final teamName = eventData['teamName'] as String?;
+    final eventCategory = eventData['category'] as String?;
+
+    // Si l'événement a des teamMemberIds, vérifier si le joueur y est
+    if (memberIds.isNotEmpty) {
+      return memberIds.contains(_currentUserId);
+    }
+
+    // Sinon, vérifier par équipe ou catégorie
+    final userTeams =
+        (_userData?['teamNames'] as List?)?.whereType<String>().toList() ?? [];
+    if (userTeams.isEmpty && _userData?['teamName'] is String) {
+      userTeams.add(_userData?['teamName'] as String);
+    }
+    final userCategories =
+        (_userData?['categories'] as List?)?.whereType<String>().toList() ?? [];
+    if (userCategories.isEmpty && _userData?['category'] is String) {
+      userCategories.add(_userData?['category'] as String);
+    }
+
+    final bool matchTeam =
+        teamNames.any(userTeams.contains) ||
+        (teamName != null && userTeams.contains(teamName));
+    final bool matchCat =
+        eventCategory != null && userCategories.contains(eventCategory);
+
+    return matchTeam || matchCat;
+  }
+
+  Widget _buildEventCard(
+    String docId,
+    Map<String, dynamic> data,
+    String clubId,
+  ) {
     final type = data['title'] ?? data['type'] ?? "Événement";
     final isAllDay = data['startTime'] == null && data['endTime'] == null;
     final time = isAllDay ? "ALL DAY" : (data['startTime'] ?? "--:--");
@@ -208,112 +370,148 @@ class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
     final attendance = data['attendance'] as Map<String, dynamic>? ?? {};
     final myStatus = attendance[_currentUserId] ?? 'none';
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: canceled ? Colors.grey.shade300 : Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.all(16),
-        leading: Container(
-          width: 50,
+    // Récupérer la couleur du club
+    final clubColor = _getClubColor(clubId);
+
+    // Récupérer le nom du club
+    return FutureBuilder<DocumentSnapshot>(
+      future: FirebaseFirestore.instance.collection('clubs').doc(clubId).get(),
+      builder: (context, clubSnap) {
+        final clubData = clubSnap.data?.data() as Map<String, dynamic>?;
+        final clubName = clubData?['name'] as String? ?? "Club";
+
+        return Container(
+          margin: const EdgeInsets.only(bottom: 12),
           decoration: BoxDecoration(
-            color: ViroColors.primary.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(
-                Icons.access_time,
-                size: 16,
-                color: ViroColors.primary,
-              ),
-              Text(
-                time,
-                style: const TextStyle(
-                  color: ViroColors.primary,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 12,
-                ),
+            color: canceled ? Colors.grey.shade300 : Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: canceled ? Colors.grey : clubColor.withOpacity(0.5),
+              width: 2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.03),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
               ),
             ],
           ),
-        ),
-        title: Row(
-          children: [
-            Expanded(
-              child: Text(
-                type.toUpperCase(),
-                style: const TextStyle(
-                  fontWeight: FontWeight.w900,
-                  fontSize: 13,
-                  color: ViroColors.primary,
-                ),
+          child: ListTile(
+            contentPadding: const EdgeInsets.all(16),
+            leading: Container(
+              width: 50,
+              decoration: BoxDecoration(
+                color: clubColor.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.access_time, size: 16, color: clubColor),
+                  Text(
+                    time,
+                    style: TextStyle(
+                      color: clubColor,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
               ),
             ),
-            _buildStatusChip(myStatus),
-          ],
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (canceled)
-              const Text(
-                "ANNULÉ",
-                style: TextStyle(
-                  color: Colors.red,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 12,
-                ),
-              ),
-            const SizedBox(height: 4),
-            Text(
-              teamName,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: Colors.black,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Row(
+            title: Row(
               children: [
-                const Icon(
-                  Icons.location_on_outlined,
-                  size: 14,
-                  color: Colors.grey,
-                ),
-                const SizedBox(width: 4),
                 Expanded(
                   child: Text(
-                    location,
-                    style: const TextStyle(color: Colors.grey, fontSize: 13),
-                    overflow: TextOverflow.ellipsis,
+                    type.toUpperCase(),
+                    style: TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 13,
+                      color: clubColor,
+                    ),
                   ),
+                ),
+                _buildStatusChip(myStatus),
+              ],
+            ),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: clubColor,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      clubName,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: clubColor,
+                      ),
+                    ),
+                  ],
+                ),
+                if (canceled)
+                  const Text(
+                    "ANNULÉ",
+                    style: TextStyle(
+                      color: Colors.red,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                  ),
+                const SizedBox(height: 4),
+                Text(
+                  teamName,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.location_on_outlined,
+                      size: 14,
+                      color: Colors.grey,
+                    ),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        location,
+                        style: const TextStyle(
+                          color: Colors.grey,
+                          fontSize: 13,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
-          ],
-        ),
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) =>
-                  PlayerEventDetailsPage(clubId: widget.clubId, eventId: docId),
-            ),
-          );
-        },
-      ),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) =>
+                      PlayerEventDetailsPage(clubId: clubId, eventId: docId),
+                ),
+              );
+            },
+          ),
+        );
+      },
     );
   }
 
