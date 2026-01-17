@@ -32,7 +32,9 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
   @override
   Widget build(BuildContext context) {
     final bool hasFilters =
-        _selectedCategory != null || _selectedTeam != null || _search.isNotEmpty;
+        _selectedCategory != null ||
+        _selectedTeam != null ||
+        _search.isNotEmpty;
     return Scaffold(
       appBar: AppBar(title: Text("Membres • ${widget.clubName}")),
       body: Column(
@@ -168,7 +170,7 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
                 final allDocs = snapshot.data?.docs ?? [];
                 // Filtrer les utilisateurs qui appartiennent au club
                 final clubMembers = filterUsersByClub(allDocs, widget.clubId);
-                
+
                 final filtered =
                     clubMembers.where((doc) {
                       final data = doc.data() as Map<String, dynamic>?;
@@ -235,7 +237,7 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
                     final rawData = filtered[index].data();
                     final data = rawData as Map<String, dynamic>?;
                     if (data == null) return const SizedBox.shrink();
-                    
+
                     final userId = filtered[index].id;
                     final firstName = data['firstName'] as String? ?? "";
                     final lastName = data['lastName'] as String? ?? "";
@@ -243,11 +245,13 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
                     final role = getUserRoleInClub(data, widget.clubId) ?? "";
                     final name = _formatName(firstName, lastName);
                     final categories =
-                        (data['categories'] as List?)?.whereType<String>().toList() ??
-                            [];
+                        (data['categories'] as List?)
+                            ?.whereType<String>()
+                            .toList() ??
+                        [];
                     final category = categories.isNotEmpty
                         ? categories.join(", ")
-                        : (data['category'] as String? ?? ""); 
+                        : (data['category'] as String? ?? "");
                     final isStaff =
                         role == 'admin_fondateur' || role == 'coach';
                     final roleLabel = role.replaceAll('_', ' ');

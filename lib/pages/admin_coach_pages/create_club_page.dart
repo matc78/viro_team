@@ -47,21 +47,20 @@ class _CreateClubPageState extends State<CreateClubPage> {
       if (user == null) return;
 
       // 1. Création du document Club
-      DocumentReference clubRef = await FirebaseFirestore.instance
-          .collection('clubs')
-          .add({
-            'name': _nameController.text.trim(),
-            'city': _cityController.text.trim(),
-            'address': _addressController.text.trim(),
-            'sport': _selectedSport,
-            'contactEmail': _emailController.text.trim(),
-            'phone': _phoneController.text.trim(),
-            'description': _descriptionController.text.trim(),
-            'adminId': user.uid,
-            'admins': [user.uid], // Ajouter l'admin_fondateur à la liste des admins
-            'createdAt': FieldValue.serverTimestamp(),
-            'memberCount': 1,
-          });
+      DocumentReference
+      clubRef = await FirebaseFirestore.instance.collection('clubs').add({
+        'name': _nameController.text.trim(),
+        'city': _cityController.text.trim(),
+        'address': _addressController.text.trim(),
+        'sport': _selectedSport,
+        'contactEmail': _emailController.text.trim(),
+        'phone': _phoneController.text.trim(),
+        'description': _descriptionController.text.trim(),
+        'adminId': user.uid,
+        'admins': [user.uid], // Ajouter l'admin_fondateur à la liste des admins
+        'createdAt': FieldValue.serverTimestamp(),
+        'memberCount': 1,
+      });
 
       // 2. Mise à jour de l'utilisateur avec la nouvelle structure multi-tenant
       // Récupérer les données existantes pour ne pas écraser
@@ -70,33 +69,30 @@ class _CreateClubPageState extends State<CreateClubPage> {
           .doc(user.uid)
           .get();
       final existingData = userDoc.data() ?? {};
-      final existingRoles = existingData['roles'] as Map<String, dynamic>? ?? {};
-      
+      final existingRoles =
+          existingData['roles'] as Map<String, dynamic>? ?? {};
+
       // Ajouter le clubId à la liste des admins (sans écraser)
-      final existingAdmins = (existingRoles['admin'] as List?)?.whereType<String>().toList() ?? [];
+      final existingAdmins =
+          (existingRoles['admin'] as List?)?.whereType<String>().toList() ?? [];
       if (!existingAdmins.contains(clubRef.id)) {
         existingAdmins.add(clubRef.id);
       }
-      
+
       // Construire la nouvelle structure roles
-      final updatedRoles = {
-        ...existingRoles,
-        'admin': existingAdmins,
-      };
-      
+      final updatedRoles = {...existingRoles, 'admin': existingAdmins};
+
       // Définir activeContext si ce n'est pas déjà défini
-      final activeContext = existingData['activeContext'] as Map<String, dynamic>?;
+      final activeContext =
+          existingData['activeContext'] as Map<String, dynamic>?;
       final Map<String, dynamic> newActiveContext;
       if (activeContext == null || activeContext.isEmpty) {
-        newActiveContext = {
-          'role': 'admin',
-          'clubId': clubRef.id,
-        };
+        newActiveContext = {'role': 'admin', 'clubId': clubRef.id};
       } else {
         // Garder le contexte actuel
         newActiveContext = Map<String, dynamic>.from(activeContext);
       }
-      
+
       // Mettre à jour le document utilisateur avec la nouvelle structure
       await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
         'roles': updatedRoles,

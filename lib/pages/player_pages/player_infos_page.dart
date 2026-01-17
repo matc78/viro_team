@@ -204,9 +204,7 @@ class _ClubDetailsPage extends StatelessWidget {
     final clubDoc = await db.collection('clubs').doc(clubId).get();
 
     // 2. Compteurs (C'est mieux d'avoir des compteurs stockés, mais voici la méthode brute pour l'instant)
-    final usersQuery = await db
-        .collection('users')
-        .get();
+    final usersQuery = await db.collection('users').get();
     final teamsQuery = await db
         .collection('clubs')
         .doc(clubId)
@@ -220,29 +218,33 @@ class _ClubDetailsPage extends StatelessWidget {
 
     // Filtrage simple avec la nouvelle structure
     final playersCount = users
-        .where((u) => getUserRoleInClub(u.data() as Map<String, dynamic>, clubId) == 'player')
+        .where(
+          (u) =>
+              getUserRoleInClub(u.data() as Map<String, dynamic>, clubId) ==
+              'player',
+        )
         .length;
     final coachsCount = users
-        .where((u) => getUserRoleInClub(u.data() as Map<String, dynamic>, clubId) == 'coach')
+        .where(
+          (u) =>
+              getUserRoleInClub(u.data() as Map<String, dynamic>, clubId) ==
+              'coach',
+        )
         .length;
-    final adminsCount = users
-        .where((u) {
-          final role = getUserRoleInClub(u.data() as Map<String, dynamic>, clubId);
-          return role == 'admin' || role == 'admin_fondateur';
-        })
-        .length;
+    final adminsCount = users.where((u) {
+      final role = getUserRoleInClub(u.data() as Map<String, dynamic>, clubId);
+      return role == 'admin' || role == 'admin_fondateur';
+    }).length;
 
     // Trouver le fondateur
     String founderName = "Non défini";
     try {
-      final founder = users.firstWhere(
-        (u) {
-          final data = u.data() as Map<String, dynamic>?;
-          if (data == null) return false;
-          final role = getUserRoleInClub(data, clubId);
-          return role == 'admin_fondateur' || role == 'admin';
-        },
-      );
+      final founder = users.firstWhere((u) {
+        final data = u.data() as Map<String, dynamic>?;
+        if (data == null) return false;
+        final role = getUserRoleInClub(data, clubId);
+        return role == 'admin_fondateur' || role == 'admin';
+      });
       final founderData = founder.data() as Map<String, dynamic>?;
       if (founderData != null) {
         final firstName = founderData['firstName'] as String? ?? "";
@@ -420,9 +422,7 @@ class _StaffListPage extends StatelessWidget {
         backgroundColor: ViroColors.background,
       ),
       body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('users')
-            .snapshots(),
+        stream: FirebaseFirestore.instance.collection('users').snapshots(),
         builder: (context, snapshot) {
           if (!snapshot.hasData) return const Center(child: ViroLoader());
 
@@ -432,7 +432,9 @@ class _StaffListPage extends StatelessWidget {
             final data = doc.data() as Map<String, dynamic>?;
             if (data == null) return false;
             final role = getUserRoleInClub(data, clubId);
-            return role == 'coach' || role == 'admin' || role == 'admin_fondateur';
+            return role == 'coach' ||
+                role == 'admin' ||
+                role == 'admin_fondateur';
           }).toList();
           if (docs.isEmpty)
             return const Center(child: Text("Aucun contact trouvé"));
@@ -444,7 +446,7 @@ class _StaffListPage extends StatelessWidget {
               final rawData = docs[index].data();
               final data = rawData as Map<String, dynamic>?;
               if (data == null) return const SizedBox.shrink();
-              
+
               // Utiliser la nouvelle fonction pour obtenir le rôle dans ce club
               final String role = getUserRoleInClub(data, clubId) ?? 'user';
               final String uid = docs[index].id;

@@ -59,7 +59,7 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
         // Player
         if (roles['player'] is Map) {
           final playerData = roles['player'] as Map;
-          
+
           // Nouvelle structure : liste de clubs
           if (playerData['clubs'] is List) {
             final clubs = (playerData['clubs'] as List).whereType<Map>();
@@ -708,16 +708,16 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
       createdLabel = DateFormat('dd/MM/yyyy').format(createdAt.toDate());
     }
     final club = data['clubName'] as String? ?? "À préciser";
-    
+
     // Récupérer la licence depuis la nouvelle structure roles.player.clubs
     String license = "À préciser";
     final activeContext = data['activeContext'] as Map<String, dynamic>?;
     final activeClubId = activeContext?['clubId'] as String?;
-    
+
     if (activeClubId != null) {
       final roles = data['roles'] as Map<String, dynamic>? ?? {};
       final playerData = roles['player'] as Map<String, dynamic>?;
-      
+
       if (playerData != null) {
         // Nouvelle structure : liste de clubs
         if (playerData['clubs'] is List) {
@@ -734,10 +734,11 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
         }
       }
     }
-    
+
     // Fallback vers les anciens champs
     if (license == "À préciser") {
-      license = data['licenseNumber'] as String? ??
+      license =
+          data['licenseNumber'] as String? ??
           data['license'] as String? ??
           "À préciser";
     }
