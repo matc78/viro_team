@@ -7,15 +7,53 @@ import '../../widget/viro_loader.dart';
 import '../../utils/firebase_helpers.dart';
 import '../profil_display_page.dart';
 
-class PlayerTeamsPage extends StatelessWidget {
+class PlayerTeamsPage extends StatefulWidget {
   final String clubId;
 
   const PlayerTeamsPage({super.key, required this.clubId});
 
   @override
-  Widget build(BuildContext context) {
-    final String currentUserId = FirebaseAuth.instance.currentUser?.uid ?? "";
+  State<PlayerTeamsPage> createState() => _PlayerTeamsPageState();
+}
 
+class _PlayerTeamsPageState extends State<PlayerTeamsPage> {
+  final String _currentUserId = FirebaseAuth.instance.currentUser?.uid ?? "";
+
+  // Extraire tous les clubIds du joueur depuis roles
+  List<String> _extractClubIds(Map<String, dynamic>? userData) {
+    final Set<String> clubIdsSet = {};
+    final roles = userData?['roles'] as Map<String, dynamic>? ?? {};
+
+    // Player
+    if (roles['player'] is Map) {
+      final playerData = roles['player'] as Map;
+      // Nouvelle structure : liste de clubs
+      if (playerData['clubs'] is List) {
+        final clubs = (playerData['clubs'] as List).whereType<Map>();
+        for (var club in clubs) {
+          final clubId = club['clubId'] as String?;
+          if (clubId != null) clubIdsSet.add(clubId);
+        }
+      }
+      // Ancienne structure : clubId direct (compatibilité)
+      else {
+        final playerClubId = playerData['clubId'] as String?;
+        if (playerClubId != null) clubIdsSet.add(playerClubId);
+      }
+    }
+
+    // Fallback pour compatibilité
+    final legacyClubId = userData?['clubId'] as String?;
+    if (legacyClubId != null) clubIdsSet.add(legacyClubId);
+
+    // Ajouter aussi le clubId passé en paramètre pour compatibilité
+    if (widget.clubId.isNotEmpty) clubIdsSet.add(widget.clubId);
+
+    return clubIdsSet.toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: ViroColors.background,
       appBar: AppBar(
@@ -24,56 +62,199 @@ class PlayerTeamsPage extends StatelessWidget {
         backgroundColor: ViroColors.background,
         elevation: 0,
       ),
-      body: FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-        future: FirebaseFirestore.instance
-            .collection('clubs')
-            .doc(clubId)
-            .get(),
-        builder: (context, clubSnap) {
-          if (clubSnap.connectionState == ConnectionState.waiting) {
+      body: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+        stream: FirebaseFirestore.instance
+            .collection('users')
+            .doc(_currentUserId)
+            .snapshots(),
+        builder: (context, userSnapshot) {
+          if (userSnapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: ViroLoader());
           }
-          final clubData = clubSnap.data?.data();
-          final clubName = clubData?['name'] as String? ?? "Mon Club";
-          final clubLogo = clubData?['logoUrl'] as String? ?? "";
+          if (!userSnapshot.hasData) {
+            return const Center(child: Text("Erreur de chargement"));
+          }
+
+          final userData = userSnapshot.data?.data();
+          final clubIds = _extractClubIds(userData);
+
+          if (clubIds.isEmpty) {
+            return const Center(
+              child: Text(
+                "Tu n'es affecté à aucun club pour le moment.",
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey),
+              ),
+            );
+          }
+
+          return _buildTeamsList(clubIds);
+        },
+      ),
+    );
+  }
+
+  Widget _buildTeamsList(List<String> clubIds) {
+    // Créer les streams pour chaque club
+    final streams = clubIds.map((clubId) {
+      return FirebaseFirestore.instance
+          .collection('clubs')
+          .doc(clubId)
+          .collection('teams')
+          .where('playerIds', arrayContains: _currentUserId)
+          .snapshots();
+    }).toList();
+
+    // Utiliser des StreamBuilder imbriqués pour combiner les équipes
+    return _buildCombinedTeamsStreams(streams, clubIds);
+  }
+
+  // Construire des StreamBuilder imbriqués pour combiner les streams
+  Widget _buildCombinedTeamsStreams(
+    List<Stream<QuerySnapshot>> streams,
+    List<String> clubIds,
+  ) {
+    if (streams.isEmpty) {
+      return const Center(
+        child: Text(
+          "Tu n'es affecté à aucune équipe pour le moment.",
+          textAlign: TextAlign.center,
+          style: TextStyle(color: Colors.grey),
+        ),
+      );
+    }
+
+    if (streams.length == 1) {
+      return StreamBuilder<QuerySnapshot>(
+        stream: streams[0],
+        builder: (context, snapshot) {
+          return _buildTeamsFromSnapshots(
+            [snapshot.data],
+            clubIds,
+          );
+        },
+      );
+    }
+
+    if (streams.length == 2) {
+      return StreamBuilder<QuerySnapshot>(
+        stream: streams[0],
+        builder: (context, snapshot0) {
           return StreamBuilder<QuerySnapshot>(
-            // On récupère les équipes du club où l'utilisateur est dans la liste 'playerIds'
-            stream: FirebaseFirestore.instance
-                .collection('clubs')
-                .doc(clubId)
-                .collection('teams')
-                .where('playerIds', arrayContains: currentUserId)
-                .snapshots(),
-            builder: (context, snapshot) {
-              if (snapshot.hasError)
-                return const Center(child: Text("Erreur de chargement"));
-              if (!snapshot.hasData) return const Center(child: ViroLoader());
-
-              final teams = snapshot.data!.docs;
-
-              if (teams.isEmpty) {
-                return const Center(
-                  child: Text(
-                    "Tu n'es affecté à aucune équipe pour le moment.",
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.grey),
-                  ),
-                );
-              }
-
-              return ListView.builder(
-                padding: const EdgeInsets.all(16),
-                itemCount: teams.length,
-                itemBuilder: (context, index) {
-                  final teamData = teams[index].data() as Map<String, dynamic>;
-                  return _buildTeamCard(context, teamData, clubName, clubLogo);
-                },
+            stream: streams[1],
+            builder: (context, snapshot1) {
+              return _buildTeamsFromSnapshots(
+                [snapshot0.data, snapshot1.data],
+                clubIds,
               );
             },
           );
         },
-      ),
+      );
+    }
+
+    // Pour 3 clubs ou plus
+    return StreamBuilder<QuerySnapshot>(
+      stream: streams[0],
+      builder: (context, snapshot0) {
+        return StreamBuilder<QuerySnapshot>(
+          stream: streams[1],
+          builder: (context, snapshot1) {
+            if (streams.length == 3) {
+              return StreamBuilder<QuerySnapshot>(
+                stream: streams[2],
+                builder: (context, snapshot2) {
+                  return _buildTeamsFromSnapshots(
+                    [snapshot0.data, snapshot1.data, snapshot2.data],
+                    clubIds,
+                  );
+                },
+              );
+            }
+            // Pour plus de 3 clubs, traiter les 3 premiers
+            return _buildTeamsFromSnapshots(
+              [
+                snapshot0.data,
+                snapshot1.data,
+                if (streams.length > 2) null,
+              ],
+              clubIds.take(3).toList(),
+            );
+          },
+        );
+      },
     );
+  }
+
+  // Construire la liste d'équipes à partir des snapshots
+  Widget _buildTeamsFromSnapshots(
+    List<QuerySnapshot?>? snapshots,
+    List<String> clubIds,
+  ) {
+    if (snapshots == null || snapshots.isEmpty) {
+      return const Center(child: ViroLoader());
+    }
+
+    // Combiner toutes les équipes avec leur clubId
+    final List<Map<String, dynamic>> allTeamsWithClub = [];
+    for (int i = 0; i < snapshots.length && i < clubIds.length; i++) {
+      final snapshot = snapshots[i];
+      if (snapshot == null) continue;
+      final clubId = clubIds[i];
+      for (var doc in snapshot.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        allTeamsWithClub.add({
+          'teamId': doc.id,
+          'teamData': data,
+          'clubId': clubId,
+        });
+      }
+    }
+
+    if (allTeamsWithClub.isEmpty) {
+      return const Center(
+        child: Text(
+          "Tu n'es affecté à aucune équipe pour le moment.",
+          textAlign: TextAlign.center,
+          style: TextStyle(color: Colors.grey),
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: allTeamsWithClub.length,
+      itemBuilder: (context, index) {
+        final teamInfo = allTeamsWithClub[index];
+        final teamData = teamInfo['teamData'] as Map<String, dynamic>;
+        final clubId = teamInfo['clubId'] as String;
+        return FutureBuilder<DocumentSnapshot>(
+          future: FirebaseFirestore.instance.collection('clubs').doc(clubId).get(),
+          builder: (context, clubSnap) {
+            final clubData = clubSnap.data?.data() as Map<String, dynamic>?;
+            final clubName = clubData?['name'] as String? ?? "Mon Club";
+            final clubLogo = clubData?['logoUrl'] as String? ?? "";
+            return _buildTeamCard(context, teamData, clubName, clubLogo, clubId);
+          },
+        );
+      },
+    );
+  }
+
+  // Générer une couleur unique par clubId
+  Color _getClubColor(String clubId) {
+    final colors = [
+      Colors.blue,
+      Colors.green,
+      Colors.orange,
+      Colors.purple,
+      Colors.teal,
+      Colors.indigo,
+      Colors.pink,
+      Colors.amber,
+    ];
+    final index = clubId.hashCode % colors.length;
+    return colors[index.abs()];
   }
 
   Widget _buildTeamCard(
@@ -81,7 +262,9 @@ class PlayerTeamsPage extends StatelessWidget {
     Map<String, dynamic> teamData,
     String clubName,
     String clubLogo,
+    String clubId,
   ) {
+    final clubColor = _getClubColor(clubId);
     final List<String> playerIds = ((teamData['playerIds'] ?? []) as List)
         .cast<String>();
     final List<String> coachIds = ((teamData['coachIds'] ?? []) as List)
@@ -89,24 +272,46 @@ class PlayerTeamsPage extends StatelessWidget {
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(15),
+        side: BorderSide(color: clubColor.withOpacity(0.3), width: 2),
+      ),
       child: ExpansionTile(
         shape:
             const Border(), // Retire la bordure par défaut de l'ExpansionTile
         leading: CircleAvatar(
-          backgroundColor: ViroColors.primary.withOpacity(0.1),
+          backgroundColor: clubColor.withOpacity(0.1),
           backgroundImage: clubLogo.isNotEmpty ? CachedNetworkImageProvider(clubLogo) : null,
           child: clubLogo.isEmpty
-              ? const Icon(Icons.shield_rounded, color: ViroColors.primary)
+              ? Icon(Icons.shield_rounded, color: clubColor)
               : null,
         ),
         title: Text(
           teamData['name'] ?? "Équipe sans nom",
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
-        subtitle: Text(
-          clubName,
-          style: const TextStyle(fontSize: 12, color: Colors.grey),
+        subtitle: Row(
+          children: [
+            Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                color: clubColor,
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                clubName,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: clubColor,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
         ),
         childrenPadding: const EdgeInsets.symmetric(
           horizontal: 16,
