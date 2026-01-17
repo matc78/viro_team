@@ -146,14 +146,57 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
         elevation: 0,
         automaticallyImplyLeading: false,
         actions: [
-          // Bouton pour changer de profil
-          IconButton(
-            icon: const Icon(Icons.swap_horiz),
-            tooltip: 'Changer de profil',
-            onPressed: () {
-              showDialog(
-                context: context,
-                builder: (_) => const ProfileSwitcherDialog(),
+          StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+            stream: FirebaseFirestore.instance
+                .collection('users')
+                .doc(_currentUserId)
+                .snapshots(),
+            builder: (context, snap) {
+              final avatarUrl = snap.data?.data()?['avatarUrl'] as String?;
+              return GestureDetector(
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const PlayerProfilPage()),
+                ),
+                onLongPress: () {
+                  showDialog(
+                    context: context,
+                    builder: (_) => const ProfileSwitcherDialog(),
+                  );
+                },
+                child: Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: (avatarUrl != null && avatarUrl.isNotEmpty)
+                      ? CachedNetworkImage(
+                          imageUrl: avatarUrl,
+                          imageBuilder: (context, imageProvider) => CircleAvatar(
+                            radius: 18,
+                            backgroundColor: ViroColors.primary.withOpacity(0.1),
+                            backgroundImage: imageProvider,
+                          ),
+                          placeholder: (context, url) => CircleAvatar(
+                            radius: 18,
+                            backgroundColor: ViroColors.primary.withOpacity(0.1),
+                            child: const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          ),
+                          errorWidget: (context, url, error) => CircleAvatar(
+                            radius: 18,
+                            backgroundColor: ViroColors.primary.withOpacity(0.1),
+                            child: const Icon(Icons.person, color: ViroColors.primary),
+                          ),
+                          memCacheWidth: 72,
+                          memCacheHeight: 72,
+                        )
+                      : CircleAvatar(
+                          radius: 18,
+                          backgroundColor: ViroColors.primary.withOpacity(0.1),
+                          child: const Icon(Icons.person, color: ViroColors.primary),
+                        ),
+                ),
               );
             },
           ),
@@ -165,7 +208,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildHeader(name, userData?['avatarUrl'] as String?),
+              _buildHeader(name),
               const SizedBox(height: 25),
 
               _buildAnnouncements(clubId, userData),
@@ -360,38 +403,17 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
     return [fFormatted, lFormatted].where((s) => s.isNotEmpty).join(" ").trim();
   }
 
-  Widget _buildHeader(String name, String? avatarUrl) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  Widget _buildHeader(String name) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              "Salut 👋",
-              style: TextStyle(fontSize: 16, color: Colors.grey),
-            ),
-            Text(
-              name,
-              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-            ),
-          ],
+        const Text(
+          "Salut 👋",
+          style: TextStyle(fontSize: 16, color: Colors.grey),
         ),
-        GestureDetector(
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const PlayerProfilPage()),
-          ),
-          child: CircleAvatar(
-            backgroundColor: ViroColors.primary,
-            radius: 22,
-            backgroundImage: (avatarUrl != null && avatarUrl.isNotEmpty)
-                ? CachedNetworkImageProvider(avatarUrl)
-                : null,
-            child: (avatarUrl == null || avatarUrl.isEmpty)
-                ? const Icon(Icons.person, color: Colors.white)
-                : null,
-          ),
+        Text(
+          name,
+          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
         ),
       ],
     );

@@ -53,17 +53,6 @@ class _AdminHomePageState extends State<AdminHomePage> {
       appBar: AppBar(
         title: const Text("Tableau de bord"),
         actions: [
-          // Bouton pour changer de profil
-          IconButton(
-            icon: const Icon(Icons.swap_horiz),
-            tooltip: 'Changer de profil',
-            onPressed: () {
-              showDialog(
-                context: context,
-                builder: (_) => const ProfileSwitcherDialog(),
-              );
-            },
-          ),
           StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
             stream: user != null
                 ? FirebaseFirestore.instance
@@ -73,22 +62,51 @@ class _AdminHomePageState extends State<AdminHomePage> {
                 : null,
             builder: (context, snap) {
               final avatarUrl = snap.data?.data()?['avatarUrl'] as String?;
-              return IconButton(
-                icon: CircleAvatar(
-                  radius: 16,
-                  backgroundColor: ViroColors.primary.withOpacity(0.1),
-                  backgroundImage: (avatarUrl != null && avatarUrl.isNotEmpty)
-                      ? CachedNetworkImageProvider(avatarUrl)
-                      : null,
-                  child: (avatarUrl == null || avatarUrl.isEmpty)
-                      ? const Icon(Icons.person, color: ViroColors.primary)
-                      : null,
-                ),
-                onPressed: () {
+              return GestureDetector(
+                onTap: () {
                   Navigator.of(context).push(
                     MaterialPageRoute(builder: (_) => const AdminProfilPage()),
                   );
                 },
+                onLongPress: () {
+                  showDialog(
+                    context: context,
+                    builder: (_) => const ProfileSwitcherDialog(),
+                  );
+                },
+                child: Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: (avatarUrl != null && avatarUrl.isNotEmpty)
+                      ? CachedNetworkImage(
+                          imageUrl: avatarUrl,
+                          imageBuilder: (context, imageProvider) => CircleAvatar(
+                            radius: 16,
+                            backgroundColor: ViroColors.primary.withOpacity(0.1),
+                            backgroundImage: imageProvider,
+                          ),
+                          placeholder: (context, url) => CircleAvatar(
+                            radius: 16,
+                            backgroundColor: ViroColors.primary.withOpacity(0.1),
+                            child: const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          ),
+                          errorWidget: (context, url, error) => CircleAvatar(
+                            radius: 16,
+                            backgroundColor: ViroColors.primary.withOpacity(0.1),
+                            child: const Icon(Icons.person, color: ViroColors.primary),
+                          ),
+                          memCacheWidth: 64,
+                          memCacheHeight: 64,
+                        )
+                      : CircleAvatar(
+                          radius: 16,
+                          backgroundColor: ViroColors.primary.withOpacity(0.1),
+                          child: const Icon(Icons.person, color: ViroColors.primary),
+                        ),
+                ),
               );
             },
           ),
