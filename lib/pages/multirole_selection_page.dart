@@ -23,6 +23,29 @@ class _MultiRoleSelectionPageState extends State<MultiRoleSelectionPage> {
 
   bool _isUpdating = false;
 
+  // Controllers pour la création de club (persistants)
+  final GlobalKey<FormState> _createClubFormKey = GlobalKey<FormState>();
+  final TextEditingController _clubNameController = TextEditingController();
+  final TextEditingController _clubCityController = TextEditingController();
+  final TextEditingController _clubAddressController = TextEditingController();
+  final TextEditingController _clubEmailController = TextEditingController();
+  final TextEditingController _clubPhoneController = TextEditingController();
+  final TextEditingController _clubDescriptionController = TextEditingController();
+  String? _selectedSport;
+  bool _isCreating = false;
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _clubNameController.dispose();
+    _clubCityController.dispose();
+    _clubAddressController.dispose();
+    _clubEmailController.dispose();
+    _clubPhoneController.dispose();
+    _clubDescriptionController.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -606,14 +629,6 @@ class _MultiRoleSelectionPageState extends State<MultiRoleSelectionPage> {
   }
 
   Widget _buildCreateClubSection() {
-    final _formKey = GlobalKey<FormState>();
-    final _nameController = TextEditingController();
-    final _cityController = TextEditingController();
-    final _addressController = TextEditingController();
-    final _emailController = TextEditingController();
-    final _phoneController = TextEditingController();
-    final _descriptionController = TextEditingController();
-    String? _selectedSport;
     final List<String> _sports = [
       'Football',
       'Basketball',
@@ -625,10 +640,9 @@ class _MultiRoleSelectionPageState extends State<MultiRoleSelectionPage> {
       'Natation',
       'Autre',
     ];
-    bool _isCreating = false;
 
     Future<void> _createClub() async {
-      if (!_formKey.currentState!.validate()) return;
+      if (!_createClubFormKey.currentState!.validate()) return;
       if (_selectedSport == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("Veuillez sélectionner un sport")),
@@ -646,13 +660,13 @@ class _MultiRoleSelectionPageState extends State<MultiRoleSelectionPage> {
         DocumentReference clubRef = await FirebaseFirestore.instance
             .collection('clubs')
             .add({
-              'name': _nameController.text.trim(),
-              'city': _cityController.text.trim(),
-              'address': _addressController.text.trim(),
+              'name': _clubNameController.text.trim(),
+              'city': _clubCityController.text.trim(),
+              'address': _clubAddressController.text.trim(),
               'sport': _selectedSport,
-              'contactEmail': _emailController.text.trim(),
-              'phone': _phoneController.text.trim(),
-              'description': _descriptionController.text.trim(),
+              'contactEmail': _clubEmailController.text.trim(),
+              'phone': _clubPhoneController.text.trim(),
+              'description': _clubDescriptionController.text.trim(),
               'adminId': user.uid,
               'admins': [user.uid],
               'createdAt': FieldValue.serverTimestamp(),
@@ -692,8 +706,17 @@ class _MultiRoleSelectionPageState extends State<MultiRoleSelectionPage> {
           'roles': updatedRoles,
           'activeContext': newActiveContext,
           'clubId': clubRef.id,
-          'clubName': _nameController.text.trim(),
+          'clubName': _clubNameController.text.trim(),
         }, SetOptions(merge: true));
+
+        // Réinitialiser les champs après création réussie
+        _clubNameController.clear();
+        _clubCityController.clear();
+        _clubAddressController.clear();
+        _clubEmailController.clear();
+        _clubPhoneController.clear();
+        _clubDescriptionController.clear();
+        _selectedSport = null;
 
         if (mounted) {
           Navigator.of(context).pushReplacement(
@@ -751,14 +774,26 @@ class _MultiRoleSelectionPageState extends State<MultiRoleSelectionPage> {
 
     return SingleChildScrollView(
       child: Form(
-        key: _formKey,
+        key: _createClubFormKey,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
                 IconButton(
-                  onPressed: () => setState(() => _activeView = null),
+                  onPressed: () {
+                    setState(() {
+                      _activeView = null;
+                      // Réinitialiser les champs si on quitte la vue
+                      _clubNameController.clear();
+                      _clubCityController.clear();
+                      _clubAddressController.clear();
+                      _clubEmailController.clear();
+                      _clubPhoneController.clear();
+                      _clubDescriptionController.clear();
+                      _selectedSport = null;
+                    });
+                  },
                   icon: const Icon(Icons.arrow_back),
                 ),
                 const Text(
@@ -776,7 +811,7 @@ class _MultiRoleSelectionPageState extends State<MultiRoleSelectionPage> {
             ),
             const SizedBox(height: 15),
             _buildTextField(
-              controller: _nameController,
+              controller: _clubNameController,
               label: "Nom du club",
               hint: "ex: Viroflay FC",
               icon: Icons.business,
@@ -805,13 +840,13 @@ class _MultiRoleSelectionPageState extends State<MultiRoleSelectionPage> {
             ),
             const SizedBox(height: 10),
             _buildTextField(
-              controller: _cityController,
+              controller: _clubCityController,
               label: "Ville",
               hint: "ex: Viroflay",
               icon: Icons.location_city,
             ),
             _buildTextField(
-              controller: _addressController,
+              controller: _clubAddressController,
               label: "Adresse du siège / terrain",
               hint: "12 rue des sports",
               icon: Icons.map,
@@ -825,21 +860,21 @@ class _MultiRoleSelectionPageState extends State<MultiRoleSelectionPage> {
             ),
             const SizedBox(height: 15),
             _buildTextField(
-              controller: _emailController,
+              controller: _clubEmailController,
               label: "Email de contact",
               hint: "contact@club.com",
               icon: Icons.email_outlined,
               keyboardType: TextInputType.emailAddress,
             ),
             _buildTextField(
-              controller: _phoneController,
+              controller: _clubPhoneController,
               label: "Téléphone",
               hint: "06 00 00 00 00",
               icon: Icons.phone_outlined,
               keyboardType: TextInputType.phone,
             ),
             _buildTextField(
-              controller: _descriptionController,
+              controller: _clubDescriptionController,
               label: "Description du club",
               hint: "Parlez-nous de l'histoire du club...",
               icon: Icons.description_outlined,

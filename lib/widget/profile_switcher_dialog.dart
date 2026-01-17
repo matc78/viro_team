@@ -26,8 +26,11 @@ class _ProfileSwitcherDialogState extends State<ProfileSwitcherDialog> {
 
   Future<void> _loadClubNames() async {
     final profiles = _session.getAvailableProfiles();
-    final clubIds = profiles.map((p) => p.clubId).where((id) => id.isNotEmpty).toSet();
-    
+    final clubIds = profiles
+        .map((p) => p.clubId)
+        .where((id) => id.isNotEmpty)
+        .toSet();
+
     final Map<String, String> names = {};
     for (final clubId in clubIds) {
       try {
@@ -42,7 +45,7 @@ class _ProfileSwitcherDialogState extends State<ProfileSwitcherDialog> {
         names[clubId] = clubId;
       }
     }
-    
+
     if (mounted) {
       setState(() {
         _clubNamesCache = names;
@@ -84,12 +87,12 @@ class _ProfileSwitcherDialogState extends State<ProfileSwitcherDialog> {
     setState(() => _isSwitching = true);
 
     final success = await _session.switchContext(role, clubId);
-    
+
     if (!mounted) return;
 
     if (success) {
       Navigator.of(context).pop();
-      
+
       // Rediriger vers la bonne page selon le nouveau rôle
       if (role == 'player') {
         // Rediriger vers PlayerHomePage
@@ -104,7 +107,7 @@ class _ProfileSwitcherDialogState extends State<ProfileSwitcherDialog> {
           (route) => false,
         );
       }
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Profil changé avec succès'),
@@ -141,6 +144,44 @@ class _ProfileSwitcherDialogState extends State<ProfileSwitcherDialog> {
       );
     }
 
+    // Regrouper les profils player
+    final playerProfiles = profiles.where((p) => p.role == 'player').toList();
+    final otherProfiles = profiles.where((p) => p.role != 'player').toList();
+
+    // Créer une liste de profils groupés
+    final List<_GroupedProfile> groupedProfiles = [];
+
+    // Ajouter le profil player groupé s'il y en a
+    if (playerProfiles.isNotEmpty) {
+      final isCurrentPlayer = currentRole == 'player';
+      groupedProfiles.add(
+        _GroupedProfile(
+          role: 'player',
+          displayName: playerProfiles.length > 1 ? 'Joueur' : 'Joueur',
+          clubCount: playerProfiles.length,
+          profiles: playerProfiles,
+          isCurrent: isCurrentPlayer,
+          currentClubId: currentClubId,
+        ),
+      );
+    }
+
+    // Ajouter les autres profils (coach, admin)
+    for (final profile in otherProfiles) {
+      final isCurrent =
+          profile.role == currentRole && profile.clubId == currentClubId;
+      groupedProfiles.add(
+        _GroupedProfile(
+          role: profile.role,
+          displayName: _getRoleDisplayName(profile.role),
+          clubCount: 1,
+          profiles: [profile],
+          isCurrent: isCurrent,
+          currentClubId: currentClubId,
+        ),
+      );
+    }
+
     return AlertDialog(
       title: const Text('Changer de profil'),
       content: SizedBox(
@@ -149,11 +190,62 @@ class _ProfileSwitcherDialogState extends State<ProfileSwitcherDialog> {
             ? const Center(child: CircularProgressIndicator())
             : ListView.builder(
                 shrinkWrap: true,
-                itemCount: profiles.length,
+                itemCount: groupedProfiles.length,
                 itemBuilder: (context, index) {
-                  final profile = profiles[index];
-                  final isCurrent = profile.role == currentRole &&
-                      profile.clubId == currentClubId;
+                  final grouped = groupedProfiles[index];
+
+                  // Si c'est un player avec plusieurs clubs, afficher un widget spécial
+                  if (grouped.role == 'player' && grouped.clubCount > 1) {
+                    final isCurrent = grouped.isCurrent;
+                    // Utiliser le club actuel si on est déjà player, sinon le premier club
+                    final targetClubId = (isCurrent && currentClubId != null)
+                        ? currentClubId
+                        : grouped.profiles.first.clubId;
+
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      color: isCurrent
+                          ? ViroColors.primary.withOpacity(0.1)
+                          : Colors.white,
+                      child: ListTile(
+                        leading: CircleAvatar(
+                          backgroundColor: isCurrent
+                              ? ViroColors.primary
+                              : Colors.grey.shade300,
+                          child: Icon(
+                            _getRoleIcon(grouped.role),
+                            color: isCurrent ? Colors.white : Colors.grey,
+                          ),
+                        ),
+                        title: Text(
+                          grouped.displayName,
+                          style: TextStyle(
+                            fontWeight: isCurrent
+                                ? FontWeight.bold
+                                : FontWeight.normal,
+                          ),
+                        ),
+                        subtitle: Text(
+                          isCurrent && currentClubId != null
+                              ? _getClubName(currentClubId)
+                              : '${grouped.clubCount} clubs',
+                        ),
+                        trailing: isCurrent
+                            ? const Icon(
+                                Icons.check_circle,
+                                color: Colors.green,
+                              )
+                            : null,
+                        onTap: isCurrent
+                            ? null
+                            : () => _switchProfile('player', targetClubId),
+                      ),
+                    );
+                  }
+
+                  // Pour les autres profils (coach, admin) ou player avec 1 seul club
+                  final profile = grouped.profiles.first;
+                  final isCurrent = grouped.isCurrent;
 
                   return Card(
                     margin: const EdgeInsets.only(bottom: 8),
@@ -171,9 +263,11 @@ class _ProfileSwitcherDialogState extends State<ProfileSwitcherDialog> {
                         ),
                       ),
                       title: Text(
-                        _getRoleDisplayName(profile.role),
+                        grouped.displayName,
                         style: TextStyle(
-                          fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
+                          fontWeight: isCurrent
+                              ? FontWeight.bold
+                              : FontWeight.normal,
                         ),
                       ),
                       subtitle: Text(_getClubName(profile.clubId)),
@@ -196,4 +290,23 @@ class _ProfileSwitcherDialogState extends State<ProfileSwitcherDialog> {
       ],
     );
   }
+}
+
+/// Classe helper pour regrouper les profils
+class _GroupedProfile {
+  final String role;
+  final String displayName;
+  final int clubCount;
+  final List<ProfileOption> profiles;
+  final bool isCurrent;
+  final String? currentClubId;
+
+  _GroupedProfile({
+    required this.role,
+    required this.displayName,
+    required this.clubCount,
+    required this.profiles,
+    required this.isCurrent,
+    this.currentClubId,
+  });
 }
