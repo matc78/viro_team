@@ -178,22 +178,7 @@ class ProfilDisplayPage extends StatelessWidget {
                                   ),
                                   // Satellites des clubs
                                   for (int i = 0; i < logos.length; i++)
-                                    Positioned(
-                                      top: -6,
-                                      right: -6.0 - (i * 26),
-                                      child: CircleAvatar(
-                                        radius: 18,
-                                        backgroundColor: Colors.white,
-                                        child: CircleAvatar(
-                                          radius: 15,
-                                          backgroundColor: Colors.white,
-                                          backgroundImage:
-                                              CachedNetworkImageProvider(
-                                                logos[i],
-                                              ),
-                                        ),
-                                      ),
-                                    ),
+                                    _buildSatellitePosition(i, logos[i]),
                                 ],
                               ),
                               const SizedBox(height: 16),
@@ -337,6 +322,62 @@ class ProfilDisplayPage extends StatelessWidget {
             },
           );
         },
+      ),
+    );
+  }
+
+  // Calculer la position d'un satellite autour de l'avatar
+  Widget _buildSatellitePosition(int index, String logoUrl) {
+    double? top;
+    double? bottom;
+    double? left;
+    double? right;
+
+    // Positionner autour de l'avatar : 0 = haut droite, 1 = haut centre, 2 = haut gauche, etc.
+    switch (index % 8) {
+      case 0: // En haut à droite (premier satellite)
+        top = -6;
+        right = -6;
+        break;
+      case 1: // En haut au centre
+        top = -6;
+        break;
+      case 2: // En haut à gauche
+        top = -6;
+        left = -6;
+        break;
+      case 3: // À gauche au centre
+        left = -6;
+        break;
+      case 4: // En bas à gauche
+        bottom = -6;
+        left = -6;
+        break;
+      case 5: // En bas au centre
+        bottom = -6;
+        break;
+      case 6: // En bas à droite
+        bottom = -6;
+        right = -6;
+        break;
+      case 7: // À droite au centre
+        right = -6;
+        break;
+    }
+
+    return Positioned(
+      top: top,
+      bottom: bottom,
+      left: left,
+      right: right,
+      child: CircleAvatar(
+        radius: 18,
+        backgroundColor: Colors.white,
+        child: CircleAvatar(
+          radius: 15,
+          backgroundColor: Colors.white,
+          backgroundImage: CachedNetworkImageProvider(logoUrl),
+        ),
       ),
     );
   }
