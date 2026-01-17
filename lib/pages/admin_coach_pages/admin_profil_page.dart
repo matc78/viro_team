@@ -53,6 +53,9 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
         final String clubId = userData?['clubId'] ?? "";
         final String role = userData?['role'] ?? "admin_fondateur";
 
+        // Extraire tous les clubIds depuis roles
+        final List<String> clubIds = _extractAllClubIds(userData);
+
         return Scaffold(
           backgroundColor: const Color(0xFFF8F9FA),
           appBar: AppBar(title: const Text("Mon Profil")),
@@ -61,23 +64,19 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
             child: Column(
               children: [
                 // --- SECTION ENTÊTE ---
-                FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-                  future: clubId.isNotEmpty
-                      ? FirebaseFirestore.instance
-                            .collection('clubs')
-                            .doc(clubId)
-                            .get()
-                      : null,
-                  builder: (context, snap) {
-                    final logoUrl =
-                        snap.data?.data()?['logoUrl'] as String? ?? "";
+                FutureBuilder<List<String>>(
+                  future: clubIds.isNotEmpty
+                      ? _fetchClubLogos(clubIds)
+                      : Future.value([]),
+                  builder: (context, logosSnap) {
+                    final clubLogos = logosSnap.data ?? [];
                     return _buildProfileHeader(
                       displayFirst,
                       displayLast,
                       role,
                       userData?['avatarUrl'],
                       () => _pickAvatar(user.uid),
-                      logoUrl,
+                      clubLogos,
                     );
                   },
                 ),
@@ -199,7 +198,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
     String role,
     String? avatarUrl,
     Future<void> Function() onAvatarTap,
-    String? clubLogoUrl,
+    List<String> clubLogos,
   ) {
     return Column(
       children: [
@@ -250,17 +249,18 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
                 ),
               ),
             ),
-            if (clubLogoUrl != null && clubLogoUrl.isNotEmpty)
+            // Satellites des clubs
+            for (int i = 0; i < clubLogos.length; i++)
               Positioned(
-                top: -4,
-                right: -4,
+                top: -6,
+                right: -6.0 - (i * 26),
                 child: CircleAvatar(
                   radius: 18,
                   backgroundColor: Colors.white,
                   child: CircleAvatar(
                     radius: 15,
                     backgroundColor: Colors.white,
-                    backgroundImage: CachedNetworkImageProvider(clubLogoUrl),
+                    backgroundImage: CachedNetworkImageProvider(clubLogos[i]),
                   ),
                 ),
               ),
@@ -951,7 +951,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
     );
   }
 
-  void _showInfoDialog(Map<String, dynamic> data, User user) {
+  Future<void> _showInfoDialog(Map<String, dynamic> data, User user) async {
     final first = data['firstName'] as String? ?? "À préciser";
     final last = data['lastName'] as String? ?? "À préciser";
     final email = data['email'] as String? ?? user.email ?? "À préciser";
@@ -961,11 +961,9 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
     if (createdAt is Timestamp) {
       createdLabel = DateFormat('dd/MM/yyyy').format(createdAt.toDate());
     }
-    final club = data['clubName'] as String? ?? "À préciser";
-    final role =
-        data['role'] as String? ??
-        data['activeContext']?['role'] as String? ??
-        "À préciser";
+
+    // Extraire tous les clubs et rôles
+    final clubsWithRoles = await _extractRolesByClubForInfo(data, user.uid);
 
     showDialog(
       context: context,
@@ -981,15 +979,23 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
               _infoLine("Email", email),
               _infoLine("Téléphone", phone),
               _infoLine("Date de création", createdLabel),
-              _infoLine("Club", club),
-              _infoLine(
-                "Rôle",
-                role == 'admin_fondateur'
-                    ? "Fondateur"
-                    : (role == 'admin'
-                          ? "Administrateur"
-                          : (role == 'coach' ? "Coach" : role)),
-              ),
+              const SizedBox(height: 16),
+              if (clubsWithRoles.isNotEmpty) ...[
+                const Divider(),
+                const Text(
+                  "CLUBS & RÔLES",
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                    color: Colors.grey,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ...clubsWithRoles.map((clubInfo) {
+                  return _buildClubInfoInDialog(clubInfo, user.uid);
+                }),
+              ] else
+                _infoLine("Clubs", "Aucun club"),
             ],
           ),
         ),
@@ -1003,27 +1009,325 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
     );
   }
 
-  Widget _infoLine(String label, String value) {
+  Future<List<Map<String, dynamic>>> _extractRolesByClubForInfo(
+    Map<String, dynamic> data,
+    String userId,
+  ) async {
+    final Map<String, Map<String, dynamic>> clubsMap = {};
+    final roles = data['roles'] as Map<String, dynamic>? ?? {};
+
+    // 1. Extraire les rôles ADMIN (liste de clubIds)
+    if (roles['admin'] is List) {
+      for (var clubId in (roles['admin'] as List).whereType<String>()) {
+        clubsMap[clubId] = {'clubId': clubId, 'roles': <String>[]};
+        clubsMap[clubId]!['roles'].add('admin');
+      }
+    }
+
+    // 2. Extraire les rôles PLAYER (structure avec clubs)
+    if (roles['player'] is Map) {
+      final playerData = roles['player'] as Map;
+      if (playerData['clubs'] is List) {
+        for (var clubEntry in (playerData['clubs'] as List).whereType<Map>()) {
+          final clubId = clubEntry['clubId'] as String?;
+          if (clubId == null) continue;
+
+          if (!clubsMap.containsKey(clubId)) {
+            clubsMap[clubId] = {'clubId': clubId, 'roles': <String>[]};
+          }
+          clubsMap[clubId]!['roles'].add('player');
+
+          // Ajouter la licence si disponible pour ce club
+          final license = clubEntry['license'] as String?;
+          if (license != null && license.isNotEmpty) {
+            clubsMap[clubId]!['license'] = license;
+          }
+        }
+      }
+      // Compatibilité avec l'ancienne structure (clubId direct)
+      else {
+        final legacyClubId = playerData['clubId'] as String?;
+        if (legacyClubId != null) {
+          if (!clubsMap.containsKey(legacyClubId)) {
+            clubsMap[legacyClubId] = {
+              'clubId': legacyClubId,
+              'roles': <String>[],
+            };
+          }
+          clubsMap[legacyClubId]!['roles'].add('player');
+        }
+      }
+    }
+
+    // 3. Extraire les rôles COACH
+    if (roles['coach'] is Map) {
+      final coachData = roles['coach'] as Map;
+      if (coachData['clubs'] is List) {
+        for (var clubEntry in (coachData['clubs'] as List).whereType<Map>()) {
+          final clubId = clubEntry['clubId'] as String?;
+          if (clubId == null) continue;
+
+          if (!clubsMap.containsKey(clubId)) {
+            clubsMap[clubId] = {'clubId': clubId, 'roles': <String>[]};
+          }
+          clubsMap[clubId]!['roles'].add('coach');
+        }
+      }
+    } else if (roles['coach'] is List) {
+      // Ancienne structure : liste de clubIds
+      for (var clubId in (roles['coach'] as List).whereType<String>()) {
+        if (!clubsMap.containsKey(clubId)) {
+          clubsMap[clubId] = {'clubId': clubId, 'roles': <String>[]};
+        }
+        clubsMap[clubId]!['roles'].add('coach');
+      }
+    }
+
+    // 4. Compatibilité avec l'ancienne structure (clubId direct)
+    final legacyClubId = data['clubId'] as String?;
+    if (legacyClubId != null && !clubsMap.containsKey(legacyClubId)) {
+      final legacyRole = data['role'] as String?;
+      clubsMap[legacyClubId] = {
+        'clubId': legacyClubId,
+        'roles': legacyRole != null ? [legacyRole] : [],
+      };
+    }
+
+    // 5. Récupérer les infos des clubs (nom, logo) et les équipes
+    final List<Map<String, dynamic>> result = [];
+    for (var entry in clubsMap.entries) {
+      final clubId = entry.key;
+      final clubInfo = entry.value;
+
+      try {
+        final clubDoc = await FirebaseFirestore.instance
+            .collection('clubs')
+            .doc(clubId)
+            .get();
+        final clubData = clubDoc.data();
+        clubInfo['clubName'] = (clubData?['name'] as String?) ?? "Club inconnu";
+
+        // Récupérer les équipes pour ce club
+        final teams = await _fetchTeamsForClub(clubId, userId);
+        clubInfo['teams'] = teams;
+      } catch (e) {
+        clubInfo['clubName'] = "Club inconnu";
+        clubInfo['teams'] = <String>[];
+      }
+
+      result.add(clubInfo);
+    }
+
+    return result;
+  }
+
+  Future<List<String>> _fetchTeamsForClub(String clubId, String userId) async {
+    try {
+      final db = FirebaseFirestore.instance;
+      final playerTeams = await db
+          .collection('clubs')
+          .doc(clubId)
+          .collection('teams')
+          .where('playerIds', arrayContains: userId)
+          .get();
+      final coachTeams = await db
+          .collection('clubs')
+          .doc(clubId)
+          .collection('teams')
+          .where('coachIds', arrayContains: userId)
+          .get();
+
+      final names = <String>{};
+      for (var doc in [...playerTeams.docs, ...coachTeams.docs]) {
+        final teamData = doc.data();
+        final name = teamData['name'] as String?;
+        if (name != null && name.isNotEmpty) names.add(name);
+      }
+      return names.toList();
+    } catch (e) {
+      return [];
+    }
+  }
+
+  Widget _buildClubInfoInDialog(Map<String, dynamic> clubInfo, String userId) {
+    final clubName = clubInfo['clubName'] as String? ?? "Club inconnu";
+    final roles = clubInfo['roles'] as List<String>;
+    final license = clubInfo['license'] as String?;
+    final teams = clubInfo['teams'] as List<String>? ?? [];
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.grey[50],
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey[300]!),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            clubName,
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+          ),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 6,
+            runSpacing: 4,
+            children: roles.map((role) {
+              return Chip(
+                label: Text(
+                  _formatRoleNameForInfo(role),
+                  style: const TextStyle(fontSize: 11),
+                ),
+                backgroundColor: _getRoleColorForInfo(role).withOpacity(0.1),
+                labelStyle: TextStyle(
+                  color: _getRoleColorForInfo(role),
+                  fontWeight: FontWeight.bold,
+                ),
+                padding: EdgeInsets.zero,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              );
+            }).toList(),
+          ),
+          if (license != null && license.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            _infoLine("Licence", license, compact: true),
+          ],
+          if (teams.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            _infoLine("Équipe(s)", teams.join(", "), compact: true),
+          ],
+        ],
+      ),
+    );
+  }
+
+  String _formatRoleNameForInfo(String role) {
+    switch (role.toLowerCase()) {
+      case 'admin':
+        return 'Administrateur';
+      case 'admin_fondateur':
+        return 'Admin Fondateur';
+      case 'coach':
+        return 'Coach';
+      case 'player':
+        return 'Joueur';
+      default:
+        return role;
+    }
+  }
+
+  Color _getRoleColorForInfo(String role) {
+    switch (role.toLowerCase()) {
+      case 'admin':
+      case 'admin_fondateur':
+        return Colors.red;
+      case 'coach':
+        return Colors.orange;
+      case 'player':
+        return ViroColors.primary;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  Widget _infoLine(String label, String value, {bool compact = false}) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8.0),
+      padding: EdgeInsets.only(bottom: compact ? 4.0 : 8.0),
       child: Row(
         children: [
           Expanded(
             flex: 2,
             child: Text(
               label,
-              style: const TextStyle(
+              style: TextStyle(
                 fontWeight: FontWeight.w700,
                 color: Colors.black87,
+                fontSize: compact ? 12 : 14,
               ),
             ),
           ),
           Expanded(
             flex: 3,
-            child: Text(value, style: const TextStyle(color: Colors.black54)),
+            child: Text(
+              value,
+              style: TextStyle(
+                color: Colors.black54,
+                fontSize: compact ? 12 : 14,
+              ),
+            ),
           ),
         ],
       ),
     );
+  }
+
+  // Extraire tous les clubIds depuis roles
+  List<String> _extractAllClubIds(Map<String, dynamic>? userData) {
+    final Set<String> clubIdsSet = {};
+    final roles = userData?['roles'] as Map<String, dynamic>? ?? {};
+
+    // Player
+    if (roles['player'] is Map) {
+      final playerData = roles['player'] as Map;
+      // Nouvelle structure : liste de clubs
+      if (playerData['clubs'] is List) {
+        final clubs = (playerData['clubs'] as List).whereType<Map>();
+        for (var club in clubs) {
+          final clubId = club['clubId'] as String?;
+          if (clubId != null) clubIdsSet.add(clubId);
+        }
+      }
+      // Ancienne structure : clubId direct (compatibilité)
+      else {
+        final playerClubId = playerData['clubId'] as String?;
+        if (playerClubId != null) clubIdsSet.add(playerClubId);
+      }
+    }
+
+    // Coach
+    if (roles['coach'] is Map) {
+      final coachData = roles['coach'] as Map;
+      if (coachData['clubs'] is List) {
+        final clubs = (coachData['clubs'] as List).whereType<Map>();
+        for (var club in clubs) {
+          final clubId = club['clubId'] as String?;
+          if (clubId != null) clubIdsSet.add(clubId);
+        }
+      }
+    } else if (roles['coach'] is List) {
+      // Ancienne structure : liste de clubIds
+      clubIdsSet.addAll((roles['coach'] as List).whereType<String>());
+    }
+
+    // Admin
+    if (roles['admin'] is List) {
+      clubIdsSet.addAll((roles['admin'] as List).whereType<String>());
+    }
+
+    // Fallback pour compatibilité
+    final legacyClubId = userData?['clubId'] as String?;
+    if (legacyClubId != null) clubIdsSet.add(legacyClubId);
+
+    return clubIdsSet.toList();
+  }
+
+  // Récupérer les logos des clubs
+  Future<List<String>> _fetchClubLogos(List<String> clubIds) async {
+    final logos = <String>[];
+    for (final id in clubIds) {
+      try {
+        final doc = await FirebaseFirestore.instance
+            .collection('clubs')
+            .doc(id)
+            .get();
+        final url = doc.data()?['logoUrl'] as String?;
+        if (url != null && url.isNotEmpty) logos.add(url);
+      } catch (e) {
+        // Ignorer les erreurs de récupération
+      }
+    }
+    return logos;
   }
 }
