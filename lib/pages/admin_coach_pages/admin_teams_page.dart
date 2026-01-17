@@ -283,8 +283,11 @@ class _AdminTeamsPageState extends State<AdminTeamsPage> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.group_outlined,
-                            size: 80, color: Colors.grey[300]),
+                        Icon(
+                          Icons.group_outlined,
+                          size: 80,
+                          color: Colors.grey[300],
+                        ),
                         const SizedBox(height: 16),
                         const Text(
                           "Aucune équipe pour le moment",
@@ -302,8 +305,9 @@ class _AdminTeamsPageState extends State<AdminTeamsPage> {
                     final team = teams[index];
                     final data = team.data() as Map<String, dynamic>;
                     final coachIds = List<String>.from(data['coachIds'] ?? []);
-                    final playerIds =
-                        List<String>.from(data['playerIds'] ?? []);
+                    final playerIds = List<String>.from(
+                      data['playerIds'] ?? [],
+                    );
                     final playerCount = playerIds.length;
 
                     return Container(
@@ -322,15 +326,14 @@ class _AdminTeamsPageState extends State<AdminTeamsPage> {
                           backgroundColor: ViroColors.primary.withOpacity(0.1),
                           backgroundImage:
                               (_clubLogoUrl != null && _clubLogoUrl!.isNotEmpty)
-                                  ? CachedNetworkImageProvider(_clubLogoUrl!)
-                                  : null,
-                          child:
-                              (_clubLogoUrl == null || _clubLogoUrl!.isEmpty)
-                                  ? const Icon(
-                                      Icons.groups_rounded,
-                                      color: ViroColors.primary,
-                                    )
-                                  : null,
+                              ? CachedNetworkImageProvider(_clubLogoUrl!)
+                              : null,
+                          child: (_clubLogoUrl == null || _clubLogoUrl!.isEmpty)
+                              ? const Icon(
+                                  Icons.groups_rounded,
+                                  color: ViroColors.primary,
+                                )
+                              : null,
                         ),
                         title: Text(
                           data['name'] ?? "Sans nom",
@@ -404,9 +407,7 @@ class _AdminTeamsPageState extends State<AdminTeamsPage> {
                 child: Container(
                   color: Colors.black.withOpacity(0.05),
                   child: const Center(
-                    child: CircularProgressIndicator(
-                      color: ViroColors.primary,
-                    ),
+                    child: CircularProgressIndicator(color: ViroColors.primary),
                   ),
                 ),
               ),
@@ -476,19 +477,23 @@ class _AdminTeamsPageState extends State<AdminTeamsPage> {
         }
         if (isCoach) {
           update['coachedTeams'] = FieldValue.arrayRemove([
-            {
-              'teamId': teamDoc.id,
-              'teamName': teamName,
-            }
+            {'teamId': teamDoc.id, 'teamName': teamName},
           ]);
         }
-        await _db.collection('users').doc(uid).set(update, SetOptions(merge: true));
+        await _db
+            .collection('users')
+            .doc(uid)
+            .set(update, SetOptions(merge: true));
       }
 
       await teamDoc.reference.delete();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Équipe supprimée : ${teamName.isEmpty ? teamDoc.id : teamName}")),
+          SnackBar(
+            content: Text(
+              "Équipe supprimée : ${teamName.isEmpty ? teamDoc.id : teamName}",
+            ),
+          ),
         );
       }
     } catch (e) {
@@ -504,8 +509,10 @@ class _AdminTeamsPageState extends State<AdminTeamsPage> {
 
   Future<void> _cleanupEvents(String teamName, List<String> memberIds) async {
     if (teamName.isEmpty) return;
-    final eventsRef =
-        _db.collection('clubs').doc(widget.clubId).collection('events');
+    final eventsRef = _db
+        .collection('clubs')
+        .doc(widget.clubId)
+        .collection('events');
     final snaps = await Future.wait([
       eventsRef.where('teamName', isEqualTo: teamName).get(),
       eventsRef.where('teamNames', arrayContains: teamName).get(),
@@ -517,8 +524,9 @@ class _AdminTeamsPageState extends State<AdminTeamsPage> {
         final data = doc.data() as Map<String, dynamic>? ?? {};
         final teamNames =
             (data['teamNames'] as List?)?.whereType<String>().toList() ?? [];
-        final otherTeams =
-            teamNames.where((t) => t != teamName).toList(growable: false);
+        final otherTeams = teamNames
+            .where((t) => t != teamName)
+            .toList(growable: false);
         final bool onlyThisTeam =
             otherTeams.isEmpty &&
             ((teamNames.length == 1 && teamNames.first == teamName) ||

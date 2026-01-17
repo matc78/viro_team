@@ -95,13 +95,15 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
                   icon: Icons.alternate_email,
                   title: "Changer d'adresse email",
                   subtitle: userData?['email'] ?? user.email ?? "",
-                  onTap: () => _changeEmail(userData?['email'] ?? user.email ?? ""),
+                  onTap: () =>
+                      _changeEmail(userData?['email'] ?? user.email ?? ""),
                 ),
                 _buildMenuCard(
                   icon: Icons.phone_outlined,
                   title: "Changer mon téléphone",
                   subtitle: userData?['phone'] as String? ?? "Non renseigné",
-                  onTap: () => _changePhone(userData?['phone'] as String? ?? ""),
+                  onTap: () =>
+                      _changePhone(userData?['phone'] as String? ?? ""),
                 ),
                 _buildMenuCard(
                   icon: Icons.lock_open_outlined,
@@ -706,7 +708,9 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
               } catch (e) {
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text("Impossible de mettre à jour le nom : $e")),
+                    SnackBar(
+                      content: Text("Impossible de mettre à jour le nom : $e"),
+                    ),
                   );
                 }
               } finally {
@@ -764,7 +768,8 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
                       content: Text(
                         e.code == 'requires-recent-login'
                             ? "Reconnectez-vous puis réessayez."
-                            : (e.message ?? "Erreur lors du changement d'email"),
+                            : (e.message ??
+                                  "Erreur lors du changement d'email"),
                       ),
                     ),
                   );
@@ -815,7 +820,9 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
               } catch (e) {
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text("Erreur lors de la mise à jour : $e")),
+                    SnackBar(
+                      content: Text("Erreur lors de la mise à jour : $e"),
+                    ),
                   );
                 }
               } finally {
@@ -955,7 +962,10 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
       createdLabel = DateFormat('dd/MM/yyyy').format(createdAt.toDate());
     }
     final club = data['clubName'] as String? ?? "À préciser";
-    final role = data['role'] as String? ?? data['activeContext']?['role'] as String? ?? "À préciser";
+    final role =
+        data['role'] as String? ??
+        data['activeContext']?['role'] as String? ??
+        "À préciser";
 
     showDialog(
       context: context,
@@ -972,7 +982,14 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
               _infoLine("Téléphone", phone),
               _infoLine("Date de création", createdLabel),
               _infoLine("Club", club),
-              _infoLine("Rôle", role == 'admin_fondateur' ? "Fondateur" : (role == 'admin' ? "Administrateur" : (role == 'coach' ? "Coach" : role))),
+              _infoLine(
+                "Rôle",
+                role == 'admin_fondateur'
+                    ? "Fondateur"
+                    : (role == 'admin'
+                          ? "Administrateur"
+                          : (role == 'coach' ? "Coach" : role)),
+              ),
             ],
           ),
         ),

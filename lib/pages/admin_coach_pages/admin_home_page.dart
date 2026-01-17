@@ -97,9 +97,9 @@ class _AdminHomePageState extends State<AdminHomePage> {
       body: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
         stream: user != null
             ? FirebaseFirestore.instance
-                .collection('users')
-                .doc(user!.uid)
-                .snapshots()
+                  .collection('users')
+                  .doc(user!.uid)
+                  .snapshots()
             : null,
         builder: (context, userSnapshot) {
           if (userSnapshot.connectionState == ConnectionState.waiting) {
@@ -108,8 +108,11 @@ class _AdminHomePageState extends State<AdminHomePage> {
 
           // Extraire le clubId depuis le document utilisateur
           final userData = userSnapshot.data?.data();
-          final activeContext = userData?['activeContext'] as Map<String, dynamic>?;
-          final clubId = activeContext?['clubId'] as String? ?? userData?['clubId'] as String?;
+          final activeContext =
+              userData?['activeContext'] as Map<String, dynamic>?;
+          final clubId =
+              activeContext?['clubId'] as String? ??
+              userData?['clubId'] as String?;
 
           // Si pas de clubId, afficher un message
           if (clubId == null) {
@@ -134,103 +137,107 @@ class _AdminHomePageState extends State<AdminHomePage> {
               final clubName = club['name'] ?? "Mon Club";
 
               return SingleChildScrollView(
-            padding: const EdgeInsets.all(20.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Header Bienvenue
-                Text(
-                  "Salut Coach ! 👋",
-                  style: Theme.of(context).textTheme.headlineSmall,
-                ),
-                Text(
-                  clubName,
-                  style: const TextStyle(
-                    color: ViroColors.primary,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 18,
-                  ),
-                ),
-
-                const SizedBox(height: 30),
-
-                // Grille d'actions
-                GridView.count(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  crossAxisCount: 2,
-                  crossAxisSpacing: 15,
-                  mainAxisSpacing: 15,
+                padding: const EdgeInsets.all(20.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _MembersCountCard(clubId: clubId, clubName: clubName),
-                    _TeamsCountCard(clubId: clubId),
-                    _adminCard(
-                      title: "Planning",
-                      count: DateFormat(
-                        'd MMM',
-                        'fr_FR',
-                      ).format(DateTime.now()),
-                      icon: Icons.calendar_today_rounded,
-                      color: ViroColors.primary,
-                      onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => AdminPlanningPage(clubId: clubId),
-                          ),
-                        );
-                      },
+                    // Header Bienvenue
+                    Text(
+                      "Salut Coach ! 👋",
+                      style: Theme.of(context).textTheme.headlineSmall,
                     ),
-                    _adminCard(
-                      title: "Communiquer",
-                      count: "",
-                      icon: Icons.campaign_rounded,
-                      color: ViroColors.accent,
-                      onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) =>
-                                AdminClubCommunicationPage(clubId: clubId),
-                          ),
-                        );
-                      },
+                    Text(
+                      clubName,
+                      style: const TextStyle(
+                        color: ViroColors.primary,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                      ),
                     ),
-                  ],
-                ),
 
-                const SizedBox(height: 30),
+                    const SizedBox(height: 30),
 
-                const Text(
-                  "À ne pas manquer",
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                ),
-                const SizedBox(height: 10),
-                _buildJoinRequestsSection(clubId, clubName),
-                const SizedBox(height: 24),
-                if ((club['logoUrl'] as String?)?.isNotEmpty ?? false)
-                  Center(
-                    child: Column(
+                    // Grille d'actions
+                    GridView.count(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      crossAxisCount: 2,
+                      crossAxisSpacing: 15,
+                      mainAxisSpacing: 15,
                       children: [
-                        CircleAvatar(
-                          radius: 32,
-                          backgroundImage: CachedNetworkImageProvider(
-                            club['logoUrl'] as String,
-                          ),
-                          backgroundColor: Colors.transparent,
+                        _MembersCountCard(clubId: clubId, clubName: clubName),
+                        _TeamsCountCard(clubId: clubId),
+                        _adminCard(
+                          title: "Planning",
+                          count: DateFormat(
+                            'd MMM',
+                            'fr_FR',
+                          ).format(DateTime.now()),
+                          icon: Icons.calendar_today_rounded,
+                          color: ViroColors.primary,
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    AdminPlanningPage(clubId: clubId),
+                              ),
+                            );
+                          },
                         ),
-                        const SizedBox(height: 8),
-                        Text(
-                          clubName,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.grey,
-                          ),
+                        _adminCard(
+                          title: "Communiquer",
+                          count: "",
+                          icon: Icons.campaign_rounded,
+                          color: ViroColors.accent,
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    AdminClubCommunicationPage(clubId: clubId),
+                              ),
+                            );
+                          },
                         ),
                       ],
                     ),
-                  ),
-              ],
-            ),
-          );
+
+                    const SizedBox(height: 30),
+
+                    const Text(
+                      "À ne pas manquer",
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    _buildJoinRequestsSection(clubId, clubName),
+                    const SizedBox(height: 24),
+                    if ((club['logoUrl'] as String?)?.isNotEmpty ?? false)
+                      Center(
+                        child: Column(
+                          children: [
+                            CircleAvatar(
+                              radius: 32,
+                              backgroundImage: CachedNetworkImageProvider(
+                                club['logoUrl'] as String,
+                              ),
+                              backgroundColor: Colors.transparent,
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              clubName,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              );
             },
           );
         },
@@ -476,18 +483,23 @@ class _AdminHomePageState extends State<AdminHomePage> {
             .get();
         final userData = userDoc.data() ?? {};
         final roles = userData['roles'] as Map<String, dynamic>? ?? {};
-        final activeContext = userData['activeContext'] as Map<String, dynamic>?;
+        final activeContext =
+            userData['activeContext'] as Map<String, dynamic>?;
 
         // Déterminer le rôle réel (normaliser admin_fondateur en admin)
-        final normalizedRole = (role == 'admin_fondateur') ? 'admin' : (role ?? 'player');
+        final normalizedRole = (role == 'admin_fondateur')
+            ? 'admin'
+            : (role ?? 'player');
 
         // Construire la nouvelle structure roles sans écraser
-        final Map<String, dynamic> updatedRoles = Map<String, dynamic>.from(roles);
+        final Map<String, dynamic> updatedRoles = Map<String, dynamic>.from(
+          roles,
+        );
 
         if (normalizedRole == 'player') {
           // Player : ajouter le club à la liste des clubs (peut avoir plusieurs clubs)
           final existingPlayer = roles['player'] as Map<String, dynamic>?;
-          
+
           if (existingPlayer == null) {
             // Premier club : créer la structure avec liste de clubs
             // Récupérer la licence depuis les données de la demande si disponible
@@ -497,39 +509,40 @@ class _AdminHomePageState extends State<AdminHomePage> {
                 .get();
             final requestData = requestDoc.data() ?? {};
             final license = requestData['license'] as String?;
-            
+
             updatedRoles['player'] = {
               'clubs': [
                 {
                   'clubId': clubId,
                   'teamIds': [],
                   if (license != null && license.isNotEmpty) 'license': license,
-                }
+                },
               ],
             };
           } else {
             // Ajouter le club à la liste existante
             List<Map<String, dynamic>> clubsList;
-            
+
             // Vérifier si c'est la nouvelle structure avec "clubs"
             if (existingPlayer['clubs'] is List) {
               clubsList = (existingPlayer['clubs'] as List)
                   .map((e) => e as Map<String, dynamic>)
                   .toList();
-            } 
+            }
             // Migration depuis l'ancienne structure (clubId direct)
             else if (existingPlayer['clubId'] != null) {
               clubsList = [
                 {
                   'clubId': existingPlayer['clubId'],
                   'teamIds': existingPlayer['teamIds'] ?? [],
-                  if (existingPlayer['license'] != null) 'license': existingPlayer['license'],
-                }
+                  if (existingPlayer['license'] != null)
+                    'license': existingPlayer['license'],
+                },
               ];
             } else {
               clubsList = [];
             }
-            
+
             // Vérifier qu'on n'ajoute pas un doublon
             if (!clubsList.any((c) => c['clubId'] == clubId)) {
               // Récupérer la licence depuis les données de la demande si disponible
@@ -539,34 +552,33 @@ class _AdminHomePageState extends State<AdminHomePage> {
                   .get();
               final requestData = requestDoc.data() ?? {};
               final license = requestData['license'] as String?;
-              
+
               clubsList.add({
                 'clubId': clubId,
                 'teamIds': [],
                 if (license != null && license.isNotEmpty) 'license': license,
               });
             }
-            
+
             // Préserver les autres champs (comme license)
-            updatedRoles['player'] = {
-              ...existingPlayer,
-              'clubs': clubsList,
-            };
+            updatedRoles['player'] = {...existingPlayer, 'clubs': clubsList};
           }
         } else if (normalizedRole == 'coach') {
           // Coach : ajouter à la liste
-          final existingCoaches = (roles['coach'] as List?)?.map((e) => e as Map<String, dynamic>).toList() ?? [];
+          final existingCoaches =
+              (roles['coach'] as List?)
+                  ?.map((e) => e as Map<String, dynamic>)
+                  .toList() ??
+              [];
           // Vérifier qu'on n'ajoute pas un doublon
           if (!existingCoaches.any((c) => c['clubId'] == clubId)) {
-            existingCoaches.add({
-              'clubId': clubId,
-              'teams': [],
-            });
+            existingCoaches.add({'clubId': clubId, 'teams': []});
             updatedRoles['coach'] = existingCoaches;
           }
         } else if (normalizedRole == 'admin') {
           // Admin : ajouter à la liste de clubIds
-          final existingAdmins = (roles['admin'] as List?)?.whereType<String>().toList() ?? [];
+          final existingAdmins =
+              (roles['admin'] as List?)?.whereType<String>().toList() ?? [];
           if (!existingAdmins.contains(clubId)) {
             existingAdmins.add(clubId!);
             updatedRoles['admin'] = existingAdmins;
@@ -576,10 +588,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
         // Définir activeContext si c'est le premier profil
         Map<String, dynamic>? newActiveContext;
         if (activeContext == null || activeContext.isEmpty) {
-          newActiveContext = {
-            'role': normalizedRole,
-            'clubId': clubId,
-          };
+          newActiveContext = {'role': normalizedRole, 'clubId': clubId};
         } else {
           // Garder le contexte actuel
           newActiveContext = Map<String, dynamic>.from(activeContext);
@@ -711,17 +720,12 @@ class _MembersCountCard extends StatelessWidget {
   final String clubId;
   final String clubName;
 
-  const _MembersCountCard({
-    required this.clubId,
-    required this.clubName,
-  });
+  const _MembersCountCard({required this.clubId, required this.clubName});
 
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance
-          .collection('users')
-          .snapshots(),
+      stream: FirebaseFirestore.instance.collection('users').snapshots(),
       builder: (context, snap) {
         // Filtrer les membres du club côté client
         final allDocs = snap.data?.docs ?? [];
@@ -735,10 +739,8 @@ class _MembersCountCard extends StatelessWidget {
           onTap: () {
             Navigator.of(context).push(
               MaterialPageRoute(
-                builder: (_) => AdminMembersPage(
-                  clubId: clubId,
-                  clubName: clubName,
-                ),
+                builder: (_) =>
+                    AdminMembersPage(clubId: clubId, clubName: clubName),
               ),
             );
           },
@@ -770,9 +772,7 @@ class _TeamsCountCard extends StatelessWidget {
           color: ViroColors.primary,
           onTap: () {
             Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => AdminTeamsPage(clubId: clubId),
-              ),
+              MaterialPageRoute(builder: (_) => AdminTeamsPage(clubId: clubId)),
             );
           },
         );
