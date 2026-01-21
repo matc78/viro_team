@@ -208,72 +208,30 @@ class _ProfileSwitcherDialogState extends State<ProfileSwitcherDialog> {
                 itemBuilder: (context, index) {
                   final grouped = groupedProfiles[index];
 
-                  // Si c'est un player avec plusieurs clubs, afficher un widget spécial
-                  if (grouped.role == 'player' && grouped.clubCount > 1) {
-                    final isCurrent = grouped.isCurrent;
-
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      color: isCurrent
-                          ? ViroColors.primary.withOpacity(0.1)
-                          : Colors.white,
-                      child: ExpansionTile(
-                        leading: CircleAvatar(
-                          backgroundColor: isCurrent
-                              ? ViroColors.primary
-                              : Colors.grey.shade300,
-                          child: Icon(
-                            _getRoleIcon(grouped.role),
-                            color: isCurrent ? Colors.white : Colors.grey,
-                          ),
-                        ),
-                        title: Text(
-                          grouped.displayName,
-                          style: TextStyle(
-                            fontWeight: isCurrent
-                                ? FontWeight.bold
-                                : FontWeight.normal,
-                          ),
-                        ),
-                        subtitle: Text(
-                          isCurrent && currentClubId != null
-                              ? _getClubName(currentClubId)
-                              : '${grouped.clubCount} clubs - Cliquez pour choisir',
-                        ),
-                            trailing: isCurrent
-                            ? const Icon(
-                                Icons.check_circle,
-                                color: Colors.green,
-                              )
-                            : const Icon(Icons.expand_more),
-                        initiallyExpanded: false,
-                        children: grouped.profiles.map((profile) {
-                          final isThisClubCurrent = isCurrent &&
-                              currentClubId != null &&
-                              profile.clubId == currentClubId;
-
-                          return ListTile(
-                            leading: const SizedBox(width: 40),
-                            title: Text(_getClubName(profile.clubId)),
-                            trailing: isThisClubCurrent
-                                ? const Icon(
-                                    Icons.check_circle,
-                                    color: Colors.green,
-                                    size: 20,
-                                  )
-                                : null,
-                            onTap: isThisClubCurrent
-                                ? null
-                                : () => _switchProfile('player', profile.clubId),
-                          );
-                        }).toList(),
-                      ),
-                    );
+                  // Pour les players, utiliser le premier club disponible (ou le club actuel si déjà en mode player)
+                  // car toutes les données sont mélangées dans les pages player
+                  String targetClubId;
+                  if (grouped.role == 'player') {
+                    // Si déjà en mode player, garder le club actuel, sinon prendre le premier
+                    if (grouped.isCurrent && currentClubId != null) {
+                      targetClubId = currentClubId;
+                    } else {
+                      targetClubId = grouped.profiles.first.clubId;
+                    }
+                  } else {
+                    targetClubId = grouped.profiles.first.clubId;
                   }
 
-                  // Pour les autres profils (coach, admin) ou player avec 1 seul club
                   final profile = grouped.profiles.first;
                   final isCurrent = grouped.isCurrent;
+                  
+                  // Pour les players avec plusieurs clubs, afficher le nombre de clubs
+                  String subtitle;
+                  if (grouped.role == 'player' && grouped.clubCount > 1) {
+                    subtitle = '${grouped.clubCount} clubs';
+                  } else {
+                    subtitle = _getClubName(targetClubId);
+                  }
 
                   return Card(
                     margin: const EdgeInsets.only(bottom: 8),
@@ -298,13 +256,13 @@ class _ProfileSwitcherDialogState extends State<ProfileSwitcherDialog> {
                               : FontWeight.normal,
                         ),
                       ),
-                      subtitle: Text(_getClubName(profile.clubId)),
+                      subtitle: Text(subtitle),
                       trailing: isCurrent
                           ? const Icon(Icons.check_circle, color: Colors.green)
                           : null,
                       onTap: isCurrent
                           ? null
-                          : () => _switchProfile(profile.role, profile.clubId),
+                          : () => _switchProfile(profile.role, targetClubId),
                     ),
                   );
                 },
