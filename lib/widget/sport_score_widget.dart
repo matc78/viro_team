@@ -37,6 +37,9 @@ class _SportScoreWidgetState extends State<SportScoreWidget> {
   // Noms des équipes
   String _team1Name = 'Équipe 1';
   String _team2Name = 'Équipe 2';
+  
+  // État de visibilité
+  bool _isHidden = false;
 
   @override
   void initState() {
@@ -61,6 +64,7 @@ class _SportScoreWidgetState extends State<SportScoreWidget> {
       _team2JudoScore = _prefs.getInt('${key}_t2_judo') ?? 0;
       _team1Name = _prefs.getString('${key}_t1_name') ?? 'Équipe 1';
       _team2Name = _prefs.getString('${key}_t2_name') ?? 'Équipe 2';
+      _isHidden = _prefs.getBool('${key}_hidden') ?? false;
       _isInitialized = true;
     });
   }
@@ -79,6 +83,14 @@ class _SportScoreWidgetState extends State<SportScoreWidget> {
     await _prefs.setInt('${key}_t2_judo', _team2JudoScore);
     await _prefs.setString('${key}_t1_name', _team1Name);
     await _prefs.setString('${key}_t2_name', _team2Name);
+    await _prefs.setBool('${key}_hidden', _isHidden);
+  }
+  
+  void _toggleVisibility() {
+    setState(() {
+      _isHidden = !_isHidden;
+      _saveScore();
+    });
   }
 
   Future<void> _editTeamName(int teamNumber) async {
@@ -292,7 +304,19 @@ class _SportScoreWidgetState extends State<SportScoreWidget> {
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          if (_actionHistory.isNotEmpty)
+                          IconButton(
+                            icon: Icon(
+                              _isHidden ? Icons.visibility : Icons.visibility_off,
+                              size: 16,
+                            ),
+                            onPressed: _toggleVisibility,
+                            tooltip: _isHidden ? 'Afficher le scoreur' : 'Cacher le scoreur',
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                            color: Colors.grey,
+                          ),
+                          if (_actionHistory.isNotEmpty) ...[
+                            const SizedBox(width: 8),
                             IconButton(
                               icon: const Icon(Icons.undo, size: 16),
                               onPressed: _undoLastAction,
@@ -301,6 +325,7 @@ class _SportScoreWidgetState extends State<SportScoreWidget> {
                               constraints: const BoxConstraints(),
                               color: ViroColors.primary,
                             ),
+                          ],
                           const SizedBox(width: 8),
                           IconButton(
                             icon: const Icon(Icons.refresh, size: 16),
@@ -314,9 +339,11 @@ class _SportScoreWidgetState extends State<SportScoreWidget> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
-                  // Scoreur selon le sport
-                  _buildScoreurForSport(sport),
+                  if (!_isHidden) ...[
+                    const SizedBox(height: 8),
+                    // Scoreur selon le sport
+                    _buildScoreurForSport(sport),
+                  ],
                 ],
               ),
             ),

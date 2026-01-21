@@ -179,6 +179,9 @@ class _AdminHomePageState extends State<AdminHomePage> {
               final clubData = clubSnapshot.data?.data() ?? {};
               final club = {...clubData, 'id': clubId};
               final clubName = club['name'] ?? "Mon Club";
+              final clubNameDisplay = clubName.length > 18 
+                  ? '${clubName.substring(0, 18)}...' 
+                  : clubName;
 
               return SingleChildScrollView(
                 padding: const EdgeInsets.all(20.0),
@@ -198,7 +201,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
                                 style: Theme.of(context).textTheme.headlineSmall,
                               ),
                               Text(
-                                clubName,
+                                clubNameDisplay,
                                 style: const TextStyle(
                                   color: ViroColors.primary,
                                   fontWeight: FontWeight.bold,
