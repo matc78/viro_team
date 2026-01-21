@@ -30,7 +30,8 @@ class _MultiRoleSelectionPageState extends State<MultiRoleSelectionPage> {
   final TextEditingController _clubAddressController = TextEditingController();
   final TextEditingController _clubEmailController = TextEditingController();
   final TextEditingController _clubPhoneController = TextEditingController();
-  final TextEditingController _clubDescriptionController = TextEditingController();
+  final TextEditingController _clubDescriptionController =
+      TextEditingController();
   String? _selectedSport;
   bool _isCreating = false;
 
@@ -128,8 +129,9 @@ class _MultiRoleSelectionPageState extends State<MultiRoleSelectionPage> {
           .where('userId', isEqualTo: _uid)
           .snapshots(),
       builder: (context, snapshot) {
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty)
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
           return const SizedBox();
+        }
 
         final pendingRequests = snapshot.data!.docs.where((doc) {
           final data = doc.data() as Map<String, dynamic>;
@@ -212,7 +214,9 @@ class _MultiRoleSelectionPageState extends State<MultiRoleSelectionPage> {
                   margin: const EdgeInsets.only(bottom: 8),
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: isAccepted ? Colors.green.shade50 : Colors.red.shade50,
+                    color: isAccepted
+                        ? Colors.green.shade50
+                        : Colors.red.shade50,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                       color: isAccepted ? Colors.green : Colors.red,
@@ -232,7 +236,9 @@ class _MultiRoleSelectionPageState extends State<MultiRoleSelectionPage> {
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 13,
-                            color: isAccepted ? Colors.green.shade900 : Colors.red.shade900,
+                            color: isAccepted
+                                ? Colors.green.shade900
+                                : Colors.red.shade900,
                           ),
                         ),
                       ),
@@ -285,12 +291,16 @@ class _MultiRoleSelectionPageState extends State<MultiRoleSelectionPage> {
 
   Widget _buildSearchResults() {
     return StreamBuilder<DocumentSnapshot>(
-      stream: FirebaseFirestore.instance.collection('users').doc(_uid).snapshots(),
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .doc(_uid)
+          .snapshots(),
       builder: (context, userSnapshot) {
         if (!userSnapshot.hasData) return const Center(child: ViroLoader());
-        
-        final userData = userSnapshot.data!.data() as Map<String, dynamic>? ?? {};
-        
+
+        final userData =
+            userSnapshot.data!.data() as Map<String, dynamic>? ?? {};
+
         return StreamBuilder<QuerySnapshot>(
           stream: FirebaseFirestore.instance.collection('clubs').snapshots(),
           builder: (context, snapshot) {
@@ -300,17 +310,17 @@ class _MultiRoleSelectionPageState extends State<MultiRoleSelectionPage> {
             final clubs = snapshot.data!.docs.where((doc) {
               final name = doc['name'].toString().toLowerCase();
               final clubId = doc.id;
-              
+
               // Vérifier si le nom correspond à la recherche
               if (!name.contains(_searchTerm)) return false;
-              
+
               // Vérifier si l'utilisateur a déjà le rôle demandé dans ce club
               if (_selectedRole != null) {
                 final currentRole = getUserRoleInClub(userData, clubId);
                 // Exclure le club si l'utilisateur a déjà le rôle demandé
                 if (currentRole == _selectedRole) return false;
               }
-              
+
               return true;
             }).toList();
 
@@ -364,7 +374,10 @@ class _MultiRoleSelectionPageState extends State<MultiRoleSelectionPage> {
                                 _promptMessageAndSubmit(club.id, data['name']),
                             child: const Text(
                               "Postuler",
-                              style: TextStyle(color: Colors.white, fontSize: 12),
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                              ),
                             ),
                           ),
                   ),
@@ -474,21 +487,21 @@ class _MultiRoleSelectionPageState extends State<MultiRoleSelectionPage> {
       if (_selectedRole == 'player') {
         final roles = userData['roles'] as Map<String, dynamic>? ?? {};
         final playerData = roles['player'];
-        
+
         if (playerData != null) {
           // Nouvelle structure : liste de clubs
           if (playerData is Map) {
             // Vérifier si c'est la nouvelle structure avec "clubs" (liste)
             if (playerData['clubs'] is List) {
               final clubs = (playerData['clubs'] as List).whereType<Map>();
-              final isAlreadyInClub = clubs.any((club) => club['clubId'] == clubId);
+              final isAlreadyInClub = clubs.any(
+                (club) => club['clubId'] == clubId,
+              );
               if (isAlreadyInClub) {
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content: Text(
-                        "Vous êtes déjà joueur dans ce club.",
-                      ),
+                      content: Text("Vous êtes déjà joueur dans ce club."),
                       backgroundColor: Colors.orange,
                     ),
                   );
@@ -496,15 +509,13 @@ class _MultiRoleSelectionPageState extends State<MultiRoleSelectionPage> {
                 }
                 return;
               }
-            } 
+            }
             // Ancienne structure : clubId direct
             else if (playerData['clubId'] == clubId) {
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                    content: Text(
-                      "Vous êtes déjà joueur dans ce club.",
-                    ),
+                    content: Text("Vous êtes déjà joueur dans ce club."),
                     backgroundColor: Colors.orange,
                   ),
                 );
@@ -543,7 +554,8 @@ class _MultiRoleSelectionPageState extends State<MultiRoleSelectionPage> {
           'role': _selectedRole,
           'message': message,
           'status': 'pending',
-          if (license.isNotEmpty && _selectedRole == 'player') 'license': license,
+          if (license.isNotEmpty && _selectedRole == 'player')
+            'license': license,
           'createdAt': FieldValue.serverTimestamp(),
         });
       }
@@ -576,7 +588,8 @@ class _MultiRoleSelectionPageState extends State<MultiRoleSelectionPage> {
           'message': message,
           'firstName': firstName,
           'lastName': lastName,
-          if (license.isNotEmpty && _selectedRole == 'player') 'license': license,
+          if (license.isNotEmpty && _selectedRole == 'player')
+            'license': license,
           'createdAt': FieldValue.serverTimestamp(),
         });
       }
@@ -629,7 +642,7 @@ class _MultiRoleSelectionPageState extends State<MultiRoleSelectionPage> {
   }
 
   Widget _buildCreateClubSection() {
-    final List<String> _sports = [
+    final List<String> sports = [
       'Football',
       'Basketball',
       'Tennis',
@@ -641,7 +654,7 @@ class _MultiRoleSelectionPageState extends State<MultiRoleSelectionPage> {
       'Autre',
     ];
 
-    Future<void> _createClub() async {
+    Future<void> createClub() async {
       if (!_createClubFormKey.currentState!.validate()) return;
       if (_selectedSport == null) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -679,29 +692,27 @@ class _MultiRoleSelectionPageState extends State<MultiRoleSelectionPage> {
             .doc(user.uid)
             .get();
         final existingData = userDoc.data() ?? {};
-        final existingRoles = existingData['roles'] as Map<String, dynamic>? ?? {};
-        
-        final existingAdmins = (existingRoles['admin'] as List?)?.whereType<String>().toList() ?? [];
+        final existingRoles =
+            existingData['roles'] as Map<String, dynamic>? ?? {};
+
+        final existingAdmins =
+            (existingRoles['admin'] as List?)?.whereType<String>().toList() ??
+            [];
         if (!existingAdmins.contains(clubRef.id)) {
           existingAdmins.add(clubRef.id);
         }
-        
-        final updatedRoles = {
-          ...existingRoles,
-          'admin': existingAdmins,
-        };
-        
-        final activeContext = existingData['activeContext'] as Map<String, dynamic>?;
+
+        final updatedRoles = {...existingRoles, 'admin': existingAdmins};
+
+        final activeContext =
+            existingData['activeContext'] as Map<String, dynamic>?;
         final Map<String, dynamic> newActiveContext;
         if (activeContext == null || activeContext.isEmpty) {
-          newActiveContext = {
-            'role': 'admin',
-            'clubId': clubRef.id,
-          };
+          newActiveContext = {'role': 'admin', 'clubId': clubRef.id};
         } else {
           newActiveContext = Map<String, dynamic>.from(activeContext);
         }
-        
+
         await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
           'roles': updatedRoles,
           'activeContext': newActiveContext,
@@ -737,7 +748,7 @@ class _MultiRoleSelectionPageState extends State<MultiRoleSelectionPage> {
       }
     }
 
-    Widget _buildTextField({
+    Widget buildTextField({
       required TextEditingController controller,
       required String label,
       required String hint,
@@ -805,22 +816,25 @@ class _MultiRoleSelectionPageState extends State<MultiRoleSelectionPage> {
             const SizedBox(height: 20),
             Text(
               "Informations générales",
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 15),
-            _buildTextField(
+            buildTextField(
               controller: _clubNameController,
               label: "Nom du club",
               hint: "ex: Viroflay FC",
               icon: Icons.business,
             ),
             DropdownButtonFormField<String>(
-              value: _selectedSport,
+              initialValue: _selectedSport,
               decoration: InputDecoration(
                 labelText: "Sport principal",
-                prefixIcon: const Icon(Icons.sports_soccer, color: ViroColors.primary),
+                prefixIcon: const Icon(
+                  Icons.sports_soccer,
+                  color: ViroColors.primary,
+                ),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: const BorderSide(color: ViroColors.borderColor),
@@ -832,20 +846,23 @@ class _MultiRoleSelectionPageState extends State<MultiRoleSelectionPage> {
                 fillColor: Colors.white,
                 filled: true,
               ),
-              items: _sports
-                  .map((sport) => DropdownMenuItem(value: sport, child: Text(sport)))
+              items: sports
+                  .map(
+                    (sport) =>
+                        DropdownMenuItem(value: sport, child: Text(sport)),
+                  )
                   .toList(),
               onChanged: (val) => setState(() => _selectedSport = val),
               validator: (val) => val == null ? "Champ requis" : null,
             ),
             const SizedBox(height: 10),
-            _buildTextField(
+            buildTextField(
               controller: _clubCityController,
               label: "Ville",
               hint: "ex: Viroflay",
               icon: Icons.location_city,
             ),
-            _buildTextField(
+            buildTextField(
               controller: _clubAddressController,
               label: "Adresse du siège / terrain",
               hint: "12 rue des sports",
@@ -854,26 +871,26 @@ class _MultiRoleSelectionPageState extends State<MultiRoleSelectionPage> {
             const Divider(height: 40),
             Text(
               "Contact & Détails",
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 15),
-            _buildTextField(
+            buildTextField(
               controller: _clubEmailController,
               label: "Email de contact",
               hint: "contact@club.com",
               icon: Icons.email_outlined,
               keyboardType: TextInputType.emailAddress,
             ),
-            _buildTextField(
+            buildTextField(
               controller: _clubPhoneController,
               label: "Téléphone",
               hint: "06 00 00 00 00",
               icon: Icons.phone_outlined,
               keyboardType: TextInputType.phone,
             ),
-            _buildTextField(
+            buildTextField(
               controller: _clubDescriptionController,
               label: "Description du club",
               hint: "Parlez-nous de l'histoire du club...",
@@ -882,7 +899,7 @@ class _MultiRoleSelectionPageState extends State<MultiRoleSelectionPage> {
             ),
             const SizedBox(height: 30),
             ElevatedButton(
-              onPressed: _isCreating ? null : _createClub,
+              onPressed: _isCreating ? null : createClub,
               style: ElevatedButton.styleFrom(
                 backgroundColor: ViroColors.primary,
                 padding: const EdgeInsets.symmetric(vertical: 16),

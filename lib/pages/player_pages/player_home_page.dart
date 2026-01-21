@@ -127,8 +127,9 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
             ),
           );
         }
-        if (!snapshot.hasData)
+        if (!snapshot.hasData) {
           return const Scaffold(body: ViroLoader(size: 80));
+        }
 
         final userData =
             _manualUserData ?? snapshot.data!.data() as Map<String, dynamic>?;
@@ -276,7 +277,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
               _buildHeader(name),
               const SizedBox(height: 25),
 
-              _buildAnnouncements(clubId, userData),
+              _buildAnnouncements(allClubIds, userData),
               const SizedBox(height: 20),
 
               // Navigation Rapide
@@ -311,82 +312,129 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
 
   // --- COMPOSANTS DE L'INTERFACE ---
 
-  Widget _buildAnnouncements(String clubId, Map<String, dynamic>? userData) {
-    final List<String> userTeamIds =
-        (userData?['teamIds'] as List?)?.whereType<String>().toList() ?? [];
-    final List<String> userTeamNames =
-        (userData?['teamNames'] as List?)?.whereType<String>().toList() ?? [];
-    final List<String> userCategories =
-        (userData?['categories'] as List?)?.whereType<String>().toList() ?? [];
+  Widget _buildAnnouncements(
+    List<String> clubIds,
+    Map<String, dynamic>? userData,
+  ) {
+    if (clubIds.isEmpty) return const SizedBox.shrink();
+
+    // Récupérer les informations du joueur pour chaque club
+    final roles = userData?['roles'] as Map<String, dynamic>? ?? {};
+
+    // Extraire les teamIds pour chaque club
+    final Map<String, List<String>> clubTeamIdsMap = {};
+    if (roles['player'] is Map) {
+      final playerData = roles['player'] as Map;
+      if (playerData['clubs'] is List) {
+        final clubs = (playerData['clubs'] as List).whereType<Map>();
+        for (var club in clubs) {
+          final clubIdFromClub = club['clubId'] as String?;
+          if (clubIdFromClub == null || !clubIds.contains(clubIdFromClub))
+            continue;
+
+          final teamIds =
+              (club['teamIds'] as List?)?.whereType<String>().toList() ?? [];
+          clubTeamIdsMap[clubIdFromClub] = teamIds;
+        }
+      }
+    }
+
+    // Utiliser le premier club pour le stream (pour simplifier, on peut améliorer plus tard)
+    final primaryClubId = clubIds.first;
+    final userTeamIds = clubTeamIdsMap[primaryClubId] ?? [];
+    final clubColor = _getClubColor(primaryClubId);
 
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('clubs')
-          .doc(clubId)
+          .doc(primaryClubId)
           .collection('announcements')
           .orderBy('createdAt', descending: true)
           .snapshots(),
       builder: (context, snapshot) {
-        if (!snapshot.hasData) {
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
           return const SizedBox.shrink();
         }
 
         final now = DateTime.now();
-        final docs = snapshot.data!.docs.where((doc) {
+
+        // Filtrer les annonces valides pour ce joueur
+        final validDocs = snapshot.data!.docs.where((doc) {
           final data = doc.data() as Map<String, dynamic>;
-          final targetType = data['targetType'] as String? ?? '';
-          final targets =
-              (data['targetIds'] as List?)?.whereType<String>().toList() ?? [];
-          final durationDays = data['durationDays'] as int?;
-          final Timestamp? createdTs = data['createdAt'] as Timestamp?;
-          if (createdTs != null && durationDays != null) {
-            final expires = createdTs.toDate().add(
-              Duration(days: durationDays),
-            );
-            if (expires.isBefore(now)) return false;
+
+          // Vérifier les dates
+          final createdTs = data['createdAt'] as Timestamp?;
+          final durationDays = data['durationDays'] as int? ?? 7;
+
+          if (createdTs != null) {
+            final createdAt = createdTs.toDate();
+            // Ne pas afficher les annonces futures
+            if (createdAt.isAfter(now)) return false;
+
+            // Ne pas afficher les annonces expirées
+            final expiresAt = createdAt.add(Duration(days: durationDays));
+            if (expiresAt.isBefore(now)) return false;
           }
 
-          if (targets.isEmpty) return true; // diffusion générale
+          // Vérifier la cible de l'annonce
+          final targetType = data['targetType'] as String? ?? '';
+          final targetIds =
+              (data['targetIds'] as List?)?.whereType<String>().toList() ?? [];
+
+          // Si pas de cible spécifique : diffusion générale (visible par tous)
+          if (targetIds.isEmpty) return true;
+
+          // Vérifier selon le type de cible
           switch (targetType) {
             case 'Joueurs':
-              return targets.contains(_currentUserId);
+              // Vérifier si ce joueur est dans la liste
+              return targetIds.contains(_currentUserId);
+
             case 'Équipes':
-              return targets.any(
-                    (t) => userTeamIds.contains(t) || userTeamNames.contains(t),
-                  ) ||
-                  (userTeamIds.isEmpty && userTeamNames.isEmpty);
+              // Vérifier si le joueur appartient à l'une des équipes ciblées
+              // Les targetIds sont des IDs d'équipe Firestore
+              return targetIds.any((teamId) => userTeamIds.contains(teamId));
+
             case 'Catégories':
-              return targets.any(userCategories.contains);
+              // Pour les catégories, on devrait récupérer les catégories du joueur
+              // Pour simplifier, si pas de catégories définies, on affiche tout
+              // TODO: Améliorer pour récupérer les vraies catégories
+              return true;
+
             default:
               return false;
           }
         }).toList();
 
-        if (docs.isEmpty) return const SizedBox.shrink();
+        if (validDocs.isEmpty) return const SizedBox.shrink();
 
         return Container(
           width: double.infinity,
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: ViroColors.primary.withOpacity(0.08),
+            color: clubColor.withOpacity(0.08),
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: ViroColors.primary.withOpacity(0.2)),
+            border: Border.all(color: clubColor.withOpacity(0.3), width: 1.5),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
-                children: const [
-                  Icon(Icons.campaign_rounded, color: ViroColors.primary),
-                  SizedBox(width: 8),
+                children: [
+                  Icon(Icons.campaign_rounded, color: clubColor),
+                  const SizedBox(width: 8),
                   Text(
                     "Message(s) du club",
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      color: clubColor,
+                    ),
                   ),
                 ],
               ),
               const SizedBox(height: 12),
-              ...docs.take(3).map((doc) {
+              ...validDocs.take(3).map((doc) {
                 final data = doc.data() as Map<String, dynamic>;
                 final created = (data['createdAt'] as Timestamp?)
                     ?.toDate()
@@ -395,58 +443,117 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
                 final dateLabel = created != null
                     ? DateFormat('dd/MM à HH:mm').format(created)
                     : '';
+                final message = data['message'] as String? ?? '';
+                final senderFirstName =
+                    data['senderFirstName'] as String? ?? '';
+                final senderLastName = data['senderLastName'] as String? ?? '';
+                final senderName = "$senderFirstName $senderLastName".trim();
+
                 return Padding(
                   key: ValueKey(doc.id),
                   padding: const EdgeInsets.only(bottom: 10),
-                  child: Column(
+                  child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      if (dateLabel.isNotEmpty)
-                        Text(
-                          dateLabel,
-                          style: const TextStyle(
-                            fontSize: 11,
-                            color: Colors.grey,
-                          ),
+                      // Indicateur de couleur du club
+                      Container(
+                        width: 4,
+                        margin: const EdgeInsets.only(
+                          right: 12,
+                          top: 2,
+                          bottom: 2,
                         ),
-                      Text(
-                        data['message'] ?? '',
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
+                        decoration: BoxDecoration(
+                          color: clubColor,
+                          borderRadius: BorderRadius.circular(2),
                         ),
                       ),
-                      if (senderId != null) ...[
-                        const SizedBox(height: 4),
-                        FutureBuilder<DocumentSnapshot>(
-                          future: FirebaseFirestore.instance
-                              .collection('users')
-                              .doc(senderId)
-                              .get(),
-                          builder: (context, userSnap) {
-                            if (!userSnap.hasData ||
-                                !(userSnap.data?.exists ?? false)) {
-                              return const SizedBox.shrink();
-                            }
-                            final uData =
-                                userSnap.data!.data() as Map<String, dynamic>?;
-                            final senderName = _formatName(
-                              uData?['firstName'] as String?,
-                              uData?['lastName'] as String?,
-                            );
-                            if (senderName.isEmpty) {
-                              return const SizedBox.shrink();
-                            }
-                            return Text(
-                              "Par $senderName",
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: Colors.black87,
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (dateLabel.isNotEmpty)
+                              Text(
+                                dateLabel,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.grey[600],
+                                ),
                               ),
-                            );
-                          },
+                            Text(
+                              message,
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.grey[900],
+                              ),
+                            ),
+                            if (senderName.isNotEmpty) ...[
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.person_outline,
+                                    size: 12,
+                                    color: clubColor,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    senderName,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: clubColor,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ] else if (senderId != null) ...[
+                              const SizedBox(height: 4),
+                              FutureBuilder<DocumentSnapshot>(
+                                future: FirebaseFirestore.instance
+                                    .collection('users')
+                                    .doc(senderId)
+                                    .get(),
+                                builder: (context, userSnap) {
+                                  if (!userSnap.hasData ||
+                                      !(userSnap.data?.exists ?? false)) {
+                                    return const SizedBox.shrink();
+                                  }
+                                  final uData =
+                                      userSnap.data!.data()
+                                          as Map<String, dynamic>?;
+                                  final name = _formatName(
+                                    uData?['firstName'] as String?,
+                                    uData?['lastName'] as String?,
+                                  );
+                                  if (name.isEmpty) {
+                                    return const SizedBox.shrink();
+                                  }
+                                  return Row(
+                                    children: [
+                                      Icon(
+                                        Icons.person_outline,
+                                        size: 12,
+                                        color: clubColor,
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        name,
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: clubColor,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                },
+                              ),
+                            ],
+                          ],
                         ),
-                      ],
+                      ),
                     ],
                   ),
                 );

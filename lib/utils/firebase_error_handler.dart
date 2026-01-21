@@ -1,4 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
@@ -86,11 +85,7 @@ class FirebaseErrorHandler {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.error_outline,
-              size: 48,
-              color: Colors.redAccent,
-            ),
+            Icon(Icons.error_outline, size: 48, color: Colors.redAccent),
             const SizedBox(height: 16),
             Text(
               getErrorMessage(error),
