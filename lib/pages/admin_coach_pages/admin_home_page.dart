@@ -13,6 +13,7 @@ import '../../theme/viro_theme.dart';
 import '../../utils/firebase_helpers.dart';
 import '../../widget/profile_switcher_dialog.dart';
 import '../../widget/sport_score_widget.dart';
+import '../../widget/sport_timer_widget.dart';
 import '../add_profile_page.dart';
 
 class AdminHomePage extends StatefulWidget {
@@ -184,18 +185,42 @@ class _AdminHomePageState extends State<AdminHomePage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Header Bienvenue
-                    Text(
-                      "Salut Coach ! 👋",
-                      style: Theme.of(context).textTheme.headlineSmall,
-                    ),
-                    Text(
-                      clubName,
-                      style: const TextStyle(
-                        color: ViroColors.primary,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 18,
-                      ),
+                    // Header Bienvenue avec Chronomètre
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                "Salut Coach ! 👋",
+                                style: Theme.of(context).textTheme.headlineSmall,
+                              ),
+                              Text(
+                                clubName,
+                                style: const TextStyle(
+                                  color: ViroColors.primary,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 18,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Flexible(
+                          child: ConstrainedBox(
+                            constraints: BoxConstraints(
+                              maxWidth: MediaQuery.of(context).size.width * 0.5,
+                            ),
+                            child: SportTimerWidget(
+                              sport: club['sport'] as String?,
+                              clubId: clubId,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
 
                     const SizedBox(height: 30),
