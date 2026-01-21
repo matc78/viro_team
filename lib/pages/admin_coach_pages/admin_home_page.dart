@@ -12,6 +12,7 @@ import 'package:intl/intl.dart';
 import '../../theme/viro_theme.dart';
 import '../../utils/firebase_helpers.dart';
 import '../../widget/profile_switcher_dialog.dart';
+import '../../widget/sport_score_widget.dart';
 import '../add_profile_page.dart';
 
 class AdminHomePage extends StatefulWidget {
@@ -198,6 +199,14 @@ class _AdminHomePageState extends State<AdminHomePage> {
                     ),
 
                     const SizedBox(height: 30),
+
+                    // Scoreur adaptatif selon le sport
+                    SportScoreWidget(
+                      sport: club['sport'] as String?,
+                      clubId: clubId,
+                    ),
+
+                    const SizedBox(height: 20),
 
                     // Grille d'actions
                     GridView.count(
