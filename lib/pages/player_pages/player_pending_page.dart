@@ -1,7 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:viro_team/pages/role_selection_page.dart';
+import 'package:viro_team/pages/onboarding_page.dart';
 import '../../theme/viro_theme.dart';
 import '../../widget/viro_loader.dart';
 
@@ -31,7 +31,7 @@ class _PlayerPendingPageState extends State<PlayerPendingPage> {
       });
       if (mounted) {
         Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const RoleSelectionPage()),
+          MaterialPageRoute(builder: (_) => const OnboardingPage()),
           (route) => false,
         );
       }

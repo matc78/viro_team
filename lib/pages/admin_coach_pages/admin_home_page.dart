@@ -12,6 +12,7 @@ import 'package:intl/intl.dart';
 import '../../theme/viro_theme.dart';
 import '../../utils/firebase_helpers.dart';
 import '../../widget/profile_switcher_dialog.dart';
+import '../add_profile_page.dart';
 
 class AdminHomePage extends StatefulWidget {
   const AdminHomePage({super.key});
@@ -53,6 +54,16 @@ class _AdminHomePageState extends State<AdminHomePage> {
       appBar: AppBar(
         title: const Text("Tableau de bord"),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.add_circle_outline),
+            tooltip: "Ajouter un profil",
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AddProfilePage()),
+              );
+            },
+          ),
           StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
             stream: user != null
                 ? FirebaseFirestore.instance

@@ -1,6 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:viro_team/pages/role_selection_page.dart';
+import 'package:viro_team/pages/onboarding_page.dart';
 import '../../theme/viro_theme.dart';
 
 class PlayerNoClubPage extends StatelessWidget {
@@ -45,7 +45,7 @@ class PlayerNoClubPage extends StatelessWidget {
                   onPressed: () {
                     Navigator.of(context).pushAndRemoveUntil(
                       MaterialPageRoute(
-                        builder: (_) => const RoleSelectionPage(),
+                        builder: (_) => const OnboardingPage(),
                       ),
                       (route) => false,
                     );

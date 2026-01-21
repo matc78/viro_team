@@ -39,8 +39,9 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
       builder: (ctx) => StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance.collection('users').snapshots(),
         builder: (context, snapshot) {
-          if (!snapshot.hasData)
+          if (!snapshot.hasData) {
             return const Center(child: ViroLoader(size: 40));
+          }
           final existingIds = role == 'coach' ? coachIds : playerIds;
 
           // Filtrer les utilisateurs du club avec le bon rôle
@@ -178,8 +179,9 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
     return StreamBuilder<DocumentSnapshot>(
       stream: widget.teamDoc.reference.snapshots(),
       builder: (context, snapshot) {
-        if (!snapshot.hasData)
+        if (!snapshot.hasData) {
           return const Scaffold(body: ViroLoader(size: 80));
+        }
 
         final teamData = snapshot.data!.data() as Map<String, dynamic>;
         final List coachIds = teamData['coachIds'] ?? [];

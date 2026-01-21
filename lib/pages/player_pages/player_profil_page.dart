@@ -10,7 +10,7 @@ import 'package:intl/intl.dart';
 import '../../theme/viro_theme.dart';
 import '../../widget/viro_loader.dart';
 import '../auth_page.dart';
-import '../multirole_selection_page.dart';
+import '../add_profile_page.dart';
 
 class PlayerProfilPage extends StatefulWidget {
   const PlayerProfilPage({super.key});
@@ -164,7 +164,7 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
                   () => Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => const MultiRoleSelectionPage(),
+                      builder: (_) => const AddProfilePage(),
                     ),
                   ),
                 ),

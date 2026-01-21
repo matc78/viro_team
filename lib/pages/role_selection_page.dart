@@ -126,13 +126,10 @@ class _RoleSelectionPageState extends State<RoleSelectionPage> {
 
       // 2. Mise à jour du profil utilisateur (marquer la demande en attente)
       // On ne modifie PAS la structure roles ici, c'est l'admin qui le fera lors de l'acceptation
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).set(
-        {
-          'hasPendingRequest': true,
-          'lastClubRequested': _selectedClubName,
-        },
-        SetOptions(merge: true),
-      );
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+        'hasPendingRequest': true,
+        'lastClubRequested': _selectedClubName,
+      }, SetOptions(merge: true));
 
       if (mounted) {
         Navigator.of(context).pushReplacement(
@@ -239,12 +236,13 @@ class _RoleSelectionPageState extends State<RoleSelectionPage> {
                 .map((s) => DropdownMenuItem(value: s, child: Text(s)))
                 .toList(),
             onChanged: (val) {
-              if (val != null)
+              if (val != null) {
                 setState(() {
                   _sportFilter = val;
                   _selectedClubId = null;
                   _selectedClubName = null;
                 });
+              }
             },
           ),
 
@@ -356,8 +354,9 @@ class _RoleSelectionPageState extends State<RoleSelectionPage> {
       stream: query.snapshots(),
       builder: (context, snapshot) {
         if (snapshot.hasError) return const Text("Erreur de chargement");
-        if (snapshot.connectionState == ConnectionState.waiting)
+        if (snapshot.connectionState == ConnectionState.waiting) {
           return const LinearProgressIndicator();
+        }
 
         final docs = snapshot.data!.docs.where((doc) {
           final data = doc.data() as Map<String, dynamic>;

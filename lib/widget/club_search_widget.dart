@@ -1,0 +1,243 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
+import '../theme/viro_theme.dart';
+
+/// Widget réutilisable pour rechercher et sélectionner un club
+class ClubSearchWidget extends StatefulWidget {
+  final String? selectedClubId;
+  final String? selectedClubName;
+  final Function(String clubId, String clubName) onClubSelected;
+  final String? sportFilter;
+  final Function(String?)? onSportFilterChanged;
+  final List<String>? excludedClubIds; // Clubs à exclure (déjà membres)
+
+  const ClubSearchWidget({
+    super.key,
+    this.selectedClubId,
+    this.selectedClubName,
+    required this.onClubSelected,
+    this.sportFilter,
+    this.onSportFilterChanged,
+    this.excludedClubIds,
+  });
+
+  @override
+  State<ClubSearchWidget> createState() => _ClubSearchWidgetState();
+}
+
+class _ClubSearchWidgetState extends State<ClubSearchWidget> {
+  final TextEditingController _searchController = TextEditingController();
+  String _searchTerm = "";
+  String _sportFilter = "Tous";
+
+  static const List<String> _sports = [
+    "Tous",
+    "Football",
+    "Basketball",
+    "Volleyball",
+    "Handball",
+    "Rugby",
+    "Tennis",
+    "Judo",
+    "Natation",
+    "Autre",
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _sportFilter = widget.sportFilter ?? "Tous";
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Text(
+          "Filtrer par sport",
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          value: _sportFilter,
+          decoration: InputDecoration(
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 10,
+            ),
+            filled: true,
+            fillColor: Colors.white,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+          items: _sports
+              .map((s) => DropdownMenuItem(value: s, child: Text(s)))
+              .toList(),
+          onChanged: (val) {
+            if (val != null) {
+              setState(() {
+                _sportFilter = val;
+              });
+              widget.onSportFilterChanged?.call(val);
+            }
+          },
+        ),
+        const SizedBox(height: 20),
+        const Text(
+          "Rechercher votre club",
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _searchController,
+          decoration: InputDecoration(
+            hintText: "Nom du club ou ville...",
+            prefixIcon: const Icon(Icons.search),
+            filled: true,
+            fillColor: Colors.white,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+          onChanged: (val) => setState(() => _searchTerm = val.trim()),
+        ),
+        const SizedBox(height: 12),
+        _buildClubList(),
+        if (widget.selectedClubName != null) ...[
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: ViroColors.primary.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.check_circle,
+                  color: ViroColors.primary,
+                  size: 20,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    "Club sélectionné : ${widget.selectedClubName}",
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: ViroColors.primary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildClubList() {
+    Query query = FirebaseFirestore.instance.collection('clubs');
+    if (_sportFilter != 'Tous') {
+      query = query.where('sport', isEqualTo: _sportFilter);
+    }
+
+    return StreamBuilder<QuerySnapshot>(
+      stream: query.snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return const Padding(
+            padding: EdgeInsets.all(8.0),
+            child: Text(
+              "Erreur de chargement",
+              style: TextStyle(color: Colors.red),
+            ),
+          );
+        }
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const SizedBox(
+            height: 150,
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        final docs = snapshot.data!.docs.where((doc) {
+          final data = doc.data() as Map<String, dynamic>;
+          final name = (data['name'] ?? '').toString().toLowerCase();
+          final city = (data['city'] ?? '').toString().toLowerCase();
+          final searchLower = _searchTerm.toLowerCase();
+          
+          // Filtrer par recherche
+          final matchesSearch = searchLower.isEmpty ||
+              name.contains(searchLower) ||
+              city.contains(searchLower);
+          
+          // Exclure les clubs déjà membres
+          final isExcluded = widget.excludedClubIds?.contains(doc.id) ?? false;
+          
+          return matchesSearch && !isExcluded;
+        }).toList();
+
+        if (docs.isEmpty) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 8.0),
+            child: Text(
+              "Aucun club trouvé.",
+              style: TextStyle(color: Colors.grey, fontSize: 12),
+            ),
+          );
+        }
+
+        return Container(
+          height: 150,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.grey[300]!),
+          ),
+          child: ListView.separated(
+            padding: const EdgeInsets.all(8),
+            itemCount: docs.length,
+            separatorBuilder: (context, index) => const Divider(),
+            itemBuilder: (context, index) {
+              final club = docs[index].data() as Map<String, dynamic>;
+              final clubId = docs[index].id;
+              final isSelected = widget.selectedClubId == clubId;
+              
+              return ListTile(
+                visualDensity: VisualDensity.compact,
+                selected: isSelected,
+                title: Text(
+                  club['name'],
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                    color: isSelected ? ViroColors.primary : Colors.black,
+                  ),
+                ),
+                subtitle: Text(
+                  "${club['city']} - ${club['sport']}",
+                  style: const TextStyle(fontSize: 12),
+                ),
+                trailing: isSelected
+                    ? const Icon(Icons.check_circle, color: ViroColors.primary)
+                    : null,
+                onTap: () {
+                  widget.onClubSelected(clubId, club['name']);
+                },
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+}

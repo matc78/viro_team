@@ -29,20 +29,34 @@ class _ProfileSwitcherDialogState extends State<ProfileSwitcherDialog> {
     final clubIds = profiles
         .map((p) => p.clubId)
         .where((id) => id.isNotEmpty)
-        .toSet();
+        .toSet()
+        .toList();
+
+    if (clubIds.isEmpty) return;
 
     final Map<String, String> names = {};
-    for (final clubId in clubIds) {
+    
+    // Charger par batch de 10 (limite Firestore whereIn)
+    for (var i = 0; i < clubIds.length; i += 10) {
+      final batch = clubIds.sublist(
+        i,
+        i + 10 > clubIds.length ? clubIds.length : i + 10,
+      );
+      
       try {
-        final doc = await FirebaseFirestore.instance
+        final snapshot = await FirebaseFirestore.instance
             .collection('clubs')
-            .doc(clubId)
+            .where(FieldPath.documentId, whereIn: batch)
             .get();
-        if (doc.exists) {
-          names[clubId] = doc.data()?['name'] as String? ?? clubId;
+        
+        for (var doc in snapshot.docs) {
+          names[doc.id] = doc.data()['name'] as String? ?? doc.id;
         }
       } catch (e) {
-        names[clubId] = clubId;
+        // En cas d'erreur, utiliser l'ID comme nom
+        for (var clubId in batch) {
+          names[clubId] = clubId;
+        }
       }
     }
 
@@ -197,17 +211,13 @@ class _ProfileSwitcherDialogState extends State<ProfileSwitcherDialog> {
                   // Si c'est un player avec plusieurs clubs, afficher un widget spécial
                   if (grouped.role == 'player' && grouped.clubCount > 1) {
                     final isCurrent = grouped.isCurrent;
-                    // Utiliser le club actuel si on est déjà player, sinon le premier club
-                    final targetClubId = (isCurrent && currentClubId != null)
-                        ? currentClubId
-                        : grouped.profiles.first.clubId;
 
                     return Card(
                       margin: const EdgeInsets.only(bottom: 8),
                       color: isCurrent
                           ? ViroColors.primary.withOpacity(0.1)
                           : Colors.white,
-                      child: ListTile(
+                      child: ExpansionTile(
                         leading: CircleAvatar(
                           backgroundColor: isCurrent
                               ? ViroColors.primary
@@ -228,17 +238,35 @@ class _ProfileSwitcherDialogState extends State<ProfileSwitcherDialog> {
                         subtitle: Text(
                           isCurrent && currentClubId != null
                               ? _getClubName(currentClubId)
-                              : '${grouped.clubCount} clubs',
+                              : '${grouped.clubCount} clubs - Cliquez pour choisir',
                         ),
-                        trailing: isCurrent
+                            trailing: isCurrent
                             ? const Icon(
                                 Icons.check_circle,
                                 color: Colors.green,
                               )
-                            : null,
-                        onTap: isCurrent
-                            ? null
-                            : () => _switchProfile('player', targetClubId),
+                            : const Icon(Icons.expand_more),
+                        initiallyExpanded: false,
+                        children: grouped.profiles.map((profile) {
+                          final isThisClubCurrent = isCurrent &&
+                              currentClubId != null &&
+                              profile.clubId == currentClubId;
+
+                          return ListTile(
+                            leading: const SizedBox(width: 40),
+                            title: Text(_getClubName(profile.clubId)),
+                            trailing: isThisClubCurrent
+                                ? const Icon(
+                                    Icons.check_circle,
+                                    color: Colors.green,
+                                    size: 20,
+                                  )
+                                : null,
+                            onTap: isThisClubCurrent
+                                ? null
+                                : () => _switchProfile('player', profile.clubId),
+                          );
+                        }).toList(),
                       ),
                     );
                   }

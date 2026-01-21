@@ -130,10 +130,12 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
             final data = doc.data();
             final teamName = data['name'] as String?;
             final category = data['category'] as String?;
-            if (teamName != null && teamName.isNotEmpty)
+            if (teamName != null && teamName.isNotEmpty) {
               teamNames.add(teamName);
-            if (category != null && category.isNotEmpty)
+            }
+            if (category != null && category.isNotEmpty) {
               categories.add(category);
+            }
           }
         }
 

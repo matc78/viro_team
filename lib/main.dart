@@ -6,12 +6,11 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/date_symbol_data_local.dart';
-import 'package:viro_team/pages/role_selection_page.dart';
+import 'package:viro_team/pages/onboarding_page.dart';
 import 'firebase_options.dart';
 import 'pages/auth_page.dart';
 import 'pages/player_pages/player_home_page.dart';
 import 'pages/admin_coach_pages/admin_home_page.dart';
-import 'pages/multirole_selection_page.dart';
 import 'services/user_session.dart';
 import 'theme/viro_theme.dart';
 import 'utils/firebase_error_handler.dart';
@@ -124,28 +123,31 @@ class _MyAppState extends State<MyApp> {
                 final hasAdmin = (roles['admin'] as List?)?.isNotEmpty ?? false;
                 final hasAnyRole = hasPlayer || hasCoach || hasAdmin;
 
-                // Vérifier les demandes en attente (ancien système de compatibilité)
+                // Vérifier les demandes en attente
                 final hasPending = data['hasPendingRequest'] == true;
 
-                // Si pas de rôle actif mais qu'il y a des profils, forcer la sélection
-                if ((activeRole == null || activeClubId == null) && hasAnyRole) {
-                  return const MultiRoleSelectionPage();
+                // 1. Pas de profil du tout
+                if (!hasAnyRole && activeContext == null) {
+                  return const OnboardingPage();
                 }
 
-                // Si pas de club et pas de demande : sélection de rôle initiale
-                if (!hasPending && !hasAnyRole) {
-                  return const RoleSelectionPage();
+                // 2. Demande en attente
+                if (hasPending) {
+                  return const PlayerHomePage(); // PlayerPendingPage sera affichée dans PlayerHomePage
                 }
 
-                // Utilisateur avec contexte actif : rediriger vers la bonne Home
-                if (activeRole == 'admin' || activeRole == 'coach' || activeRole == 'admin_fondateur') {
-                  return const AdminHomePage();
-                } else if (activeRole == 'player') {
-                  return const PlayerHomePage();
+                // 3. Profil actif
+                if (activeContext != null && activeRole != null && activeClubId != null) {
+                  if (activeRole == 'admin' || activeRole == 'coach' || activeRole == 'admin_fondateur') {
+                    return const AdminHomePage();
+                  } else if (activeRole == 'player') {
+                    return const PlayerHomePage();
+                  }
                 }
 
-                // Par défaut : joueur (pour compatibilité)
-                return const PlayerHomePage();
+                // 4. Profils existants mais pas de contexte actif (cas rare)
+                // Forcer la sélection du premier profil disponible ou rediriger vers onboarding
+                return const OnboardingPage();
               },
             );
           }

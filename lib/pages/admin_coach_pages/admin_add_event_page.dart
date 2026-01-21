@@ -258,7 +258,7 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
         final teamData = snapshot.data!.docs.first.data();
         final playerIds =
             (teamData['playerIds'] as List?)?.whereType<String>().toList() ??
-                [];
+            [];
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -295,19 +295,20 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
                   final docs = userSnap.data!;
                   final users = {
                     for (final doc in docs)
-                      doc.id: doc.data() as Map<String, dynamic>
+                      doc.id: doc.data() as Map<String, dynamic>,
                   };
 
                   return Column(
                     children: playerIds.map((id) {
                       final userData = users[id];
                       if (userData == null) return const SizedBox.shrink();
-                      final first =
-                          (userData['firstName'] as String? ?? "").trim();
-                      final last =
-                          (userData['lastName'] as String? ?? "").trim();
+                      final first = (userData['firstName'] as String? ?? "")
+                          .trim();
+                      final last = (userData['lastName'] as String? ?? "")
+                          .trim();
                       final name =
-                          "${first.isNotEmpty ? first[0].toUpperCase() + first.substring(1).toLowerCase() : ''} ${last.toUpperCase()}".trim();
+                          "${first.isNotEmpty ? first[0].toUpperCase() + first.substring(1).toLowerCase() : ''} ${last.toUpperCase()}"
+                              .trim();
                       final avatar = userData['avatarUrl'] as String?;
                       final checked = _selectedPlayersMatch.contains(id);
                       return CheckboxListTile(
@@ -481,8 +482,9 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
   String _defaultLocationForSport(String? sport) {
     if (sport == null) return "Lieu du club";
     final s = sport.toLowerCase();
-    if (s.contains("basket") || s.contains("hand") || s.contains("volley"))
+    if (s.contains("basket") || s.contains("hand") || s.contains("volley")) {
       return "Gymnase du club";
+    }
     if (s.contains("foot") || s.contains("rugby")) return "Stade du club";
     if (s.contains("tennis")) return "Terrain du club";
     return "Lieu du club";
@@ -505,17 +507,17 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
                     label: "Type d'évènement",
                     value: _selectedType,
                     items: ['Entraînement', 'Match', 'Évènement', 'Autre'],
-                          onChanged: (val) => setState(() {
-                            _selectedType = val!;
-                            _allDay = false;
-                            _isRecurring = false;
-                            if (_selectedType != 'Match') {
-                              _summonAllPlayers = true;
-                              _selectedPlayersMatch.clear();
-                            }
-                          if (_selectedType == 'Match') _weeksCount = 1;
-                        }),
-                      ),
+                    onChanged: (val) => setState(() {
+                      _selectedType = val!;
+                      _allDay = false;
+                      _isRecurring = false;
+                      if (_selectedType != 'Match') {
+                        _summonAllPlayers = true;
+                        _selectedPlayersMatch.clear();
+                      }
+                      if (_selectedType == 'Match') _weeksCount = 1;
+                    }),
+                  ),
 
                   if (_selectedType != 'Entraînement' &&
                       _selectedType != 'Match')
@@ -737,8 +739,9 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
       context: context,
       initialTime: isStart ? _startTime : _endTime,
     );
-    if (picked != null)
+    if (picked != null) {
       setState(() => isStart ? _startTime = picked : _endTime = picked);
+    }
   }
 
   Widget _buildDropdown<T>({

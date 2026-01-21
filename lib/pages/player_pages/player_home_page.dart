@@ -17,6 +17,7 @@ import 'player_infos_page.dart';
 import '../../theme/viro_theme.dart';
 import '../../widget/viro_loader.dart';
 import '../../widget/profile_switcher_dialog.dart';
+import '../add_profile_page.dart';
 
 class PlayerHomePage extends StatefulWidget {
   const PlayerHomePage({super.key});
@@ -199,6 +200,16 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
         elevation: 0,
         automaticallyImplyLeading: false,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.add_circle_outline),
+            tooltip: "Ajouter un profil",
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AddProfilePage()),
+              );
+            },
+          ),
           StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
             stream: FirebaseFirestore.instance
                 .collection('users')
