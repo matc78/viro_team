@@ -62,34 +62,59 @@ class _PlayerTeamsPageState extends State<PlayerTeamsPage> {
         backgroundColor: ViroColors.background,
         elevation: 0,
       ),
-      body: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-        stream: FirebaseFirestore.instance
-            .collection('users')
-            .doc(_currentUserId)
-            .snapshots(),
-        builder: (context, userSnapshot) {
-          if (userSnapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: ViroLoader());
-          }
-          if (!userSnapshot.hasData) {
-            return const Center(child: Text("Erreur de chargement"));
-          }
+      body: Stack(
+        children: [
+          StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+            stream: FirebaseFirestore.instance
+                .collection('users')
+                .doc(_currentUserId)
+                .snapshots(),
+            builder: (context, userSnapshot) {
+              if (userSnapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: ViroLoader());
+              }
+              if (!userSnapshot.hasData) {
+                return const Center(child: Text("Erreur de chargement"));
+              }
 
-          final userData = userSnapshot.data?.data();
-          final clubIds = _extractClubIds(userData);
+              final userData = userSnapshot.data?.data();
+              final clubIds = _extractClubIds(userData);
 
-          if (clubIds.isEmpty) {
-            return const Center(
-              child: Text(
-                "Tu n'es affecté à aucun club pour le moment.",
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey),
+              if (clubIds.isEmpty) {
+                return const Center(
+                  child: Text(
+                    "Tu n'es affecté à aucun club pour le moment.",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.grey),
+                  ),
+                );
+              }
+
+              return _buildTeamsList(clubIds);
+            },
+          ),
+          // Logo en footer
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Center(
+                    child: Opacity(
+                      opacity: 0.12,
+                      child: Image.asset(
+                        'assets/logo/logo_long.png',
+                        height: 100,
+                        fit: BoxFit.contain,
+                      ),
+                    ),
+                ),
               ),
-            );
-          }
-
-          return _buildTeamsList(clubIds);
-        },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -222,7 +247,12 @@ class _PlayerTeamsPageState extends State<PlayerTeamsPage> {
     }
 
     return ListView.builder(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.only(
+        left: 16,
+        right: 16,
+        top: 16,
+        bottom: 140,
+      ),
       itemCount: allTeamsWithClub.length,
       itemBuilder: (context, index) {
         final teamInfo = allTeamsWithClub[index];

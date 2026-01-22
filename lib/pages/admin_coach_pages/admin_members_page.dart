@@ -37,8 +37,10 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
         _search.isNotEmpty;
     return Scaffold(
       appBar: AppBar(title: Text("Membres • ${widget.clubName}")),
-      body: Column(
+      body: Stack(
         children: [
+          Column(
+            children: [
           Padding(
             padding: const EdgeInsets.all(12.0),
             child: TextField(
@@ -231,6 +233,7 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
                 }
 
                 return ListView.separated(
+                  padding: const EdgeInsets.only(bottom: 140),
                   itemCount: filtered.length,
                   separatorBuilder: (_, __) => const Divider(height: 1),
                   itemBuilder: (context, index) {
@@ -323,6 +326,29 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
                     ),
                   )
                 : const SizedBox.shrink(),
+          ),
+            ],
+          ),
+          // Logo en footer
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Center(
+                    child: Opacity(
+                      opacity: 0.12,
+                      child: Image.asset(
+                        'assets/logo/logo_long.png',
+                        height: 100,
+                        fit: BoxFit.contain,
+                      ),
+                    ),
+                ),
+              ),
+            ),
           ),
         ],
       ),

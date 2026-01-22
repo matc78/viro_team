@@ -180,141 +180,165 @@ class _AdminHomePageState extends State<AdminHomePage> {
               final club = {...clubData, 'id': clubId};
               final clubName = club['name'] ?? "Mon Club";
 
-              return SingleChildScrollView(
-                padding: const EdgeInsets.all(20.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Header Bienvenue avec Chronomètre
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                "Salut Coach ! 👋",
-                                style: Theme.of(
-                                  context,
-                                ).textTheme.headlineSmall,
-                              ),
-                              Text(
-                                clubName,
-                                style: const TextStyle(
-                                  color: ViroColors.primary,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 18,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Flexible(
-                          child: ConstrainedBox(
-                            constraints: BoxConstraints(
-                              maxWidth: MediaQuery.of(context).size.width * 0.5,
-                            ),
-                            child: SportTimerWidget(
-                              sport: club['sport'] as String?,
-                              clubId: clubId,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    const SizedBox(height: 30),
-
-                    // Scoreur adaptatif selon le sport
-                    SportScoreWidget(
-                      sport: club['sport'] as String?,
-                      clubId: clubId,
-                    ),
-
-                    const SizedBox(height: 20),
-
-                    // Grille d'actions
-                    GridView.count(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      crossAxisCount: 2,
-                      crossAxisSpacing: 15,
-                      mainAxisSpacing: 15,
-                      children: [
-                        _MembersCountCard(clubId: clubId, clubName: clubName),
-                        _TeamsCountCard(clubId: clubId),
-                        _adminCard(
-                          title: "Planning",
-                          count: DateFormat(
-                            'd MMM',
-                            'fr_FR',
-                          ).format(DateTime.now()),
-                          icon: Icons.calendar_today_rounded,
-                          color: ViroColors.primary,
-                          onTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) =>
-                                    AdminPlanningPage(clubId: clubId),
-                              ),
-                            );
-                          },
-                        ),
-                        _adminCard(
-                          title: "Communiquer",
-                          count: "",
-                          icon: Icons.campaign_rounded,
-                          color: ViroColors.accent,
-                          onTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) =>
-                                    AdminClubCommunicationPage(clubId: clubId),
-                              ),
-                            );
-                          },
-                        ),
-                      ],
-                    ),
-
-                    const SizedBox(height: 30),
-
-                    const Text(
-                      "À ne pas manquer",
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
+              return Stack(
+                children: [
+                  // Logo en arrière-plan avec opacité
+                  Positioned(
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    child: Opacity(
+                      opacity: 0.12,
+                      child: Image.asset(
+                        'assets/logo/logo_seul.png',
+                        fit: BoxFit.contain,
+                        alignment: Alignment.bottomCenter,
                       ),
                     ),
-                    const SizedBox(height: 10),
-                    _buildJoinRequestsSection(clubId, clubName),
-                    const SizedBox(height: 24),
-                    if ((club['logoUrl'] as String?)?.isNotEmpty ?? false)
-                      Center(
-                        child: Column(
+                  ),
+                  // Contenu principal
+                  SingleChildScrollView(
+                    padding: const EdgeInsets.all(20.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Header Bienvenue avec Chronomètre
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            CircleAvatar(
-                              radius: 32,
-                              backgroundImage: CachedNetworkImageProvider(
-                                club['logoUrl'] as String,
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    "Salut Coach ! 👋",
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.headlineSmall,
+                                  ),
+                                  Text(
+                                    clubName,
+                                    style: const TextStyle(
+                                      color: ViroColors.primary,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 18,
+                                    ),
+                                  ),
+                                ],
                               ),
-                              backgroundColor: Colors.transparent,
                             ),
-                            const SizedBox(height: 8),
-                            Text(
-                              clubName,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: Colors.grey,
+                            const SizedBox(width: 12),
+                            Flexible(
+                              child: ConstrainedBox(
+                                constraints: BoxConstraints(
+                                  maxWidth:
+                                      MediaQuery.of(context).size.width * 0.5,
+                                ),
+                                child: SportTimerWidget(
+                                  sport: club['sport'] as String?,
+                                  clubId: clubId,
+                                ),
                               ),
                             ),
                           ],
                         ),
-                      ),
-                  ],
-                ),
+
+                        const SizedBox(height: 30),
+
+                        // Scoreur adaptatif selon le sport
+                        SportScoreWidget(
+                          sport: club['sport'] as String?,
+                          clubId: clubId,
+                        ),
+
+                        const SizedBox(height: 20),
+
+                        // Grille d'actions
+                        GridView.count(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          crossAxisCount: 2,
+                          crossAxisSpacing: 15,
+                          mainAxisSpacing: 15,
+                          children: [
+                            _MembersCountCard(
+                              clubId: clubId,
+                              clubName: clubName,
+                            ),
+                            _TeamsCountCard(clubId: clubId),
+                            _adminCard(
+                              title: "Planning",
+                              count: DateFormat(
+                                'd MMM',
+                                'fr_FR',
+                              ).format(DateTime.now()),
+                              icon: Icons.calendar_today_rounded,
+                              color: ViroColors.primary,
+                              onTap: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        AdminPlanningPage(clubId: clubId),
+                                  ),
+                                );
+                              },
+                            ),
+                            _adminCard(
+                              title: "Communiquer",
+                              count: "",
+                              icon: Icons.campaign_rounded,
+                              color: ViroColors.accent,
+                              onTap: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => AdminClubCommunicationPage(
+                                      clubId: clubId,
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ],
+                        ),
+
+                        const SizedBox(height: 30),
+
+                        const Text(
+                          "À ne pas manquer",
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        _buildJoinRequestsSection(clubId, clubName),
+                        const SizedBox(height: 24),
+                        if ((club['logoUrl'] as String?)?.isNotEmpty ?? false)
+                          Center(
+                            child: Column(
+                              children: [
+                                CircleAvatar(
+                                  radius: 32,
+                                  backgroundImage: CachedNetworkImageProvider(
+                                    club['logoUrl'] as String,
+                                  ),
+                                  backgroundColor: Colors.transparent,
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  clubName,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.grey,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
               );
             },
           );

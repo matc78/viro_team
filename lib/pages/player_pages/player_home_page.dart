@@ -280,41 +280,60 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
         ],
       ),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildHeader(name),
-              const SizedBox(height: 25),
-
-              _buildAnnouncements(allClubIds, userData),
-              const SizedBox(height: 20),
-
-              // Navigation Rapide
-              Row(
+        child: Stack(
+          children: [
+            // Logo en arrière-plan avec opacité
+            Positioned(
+              bottom: -150,
+              left: 0,
+              right: 0,
+              child: Opacity(
+                opacity: 0.12,
+                child: Image.asset(
+                  'assets/logo/logo_seul.png',
+                  fit: BoxFit.contain,
+                  alignment: Alignment.bottomCenter,
+                ),
+              ),
+            ),
+            // Contenu principal
+            SingleChildScrollView(
+              padding: const EdgeInsets.all(20.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildMenuCard("Mes Équipes", Icons.group_rounded, () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => PlayerTeamsPage(clubId: clubId),
-                      ),
-                    );
-                  }),
+                  _buildHeader(name),
+                  const SizedBox(height: 25),
+
+                  _buildAnnouncements(allClubIds, userData),
+                  const SizedBox(height: 20),
+
+                  // Navigation Rapide
+                  Row(
+                    children: [
+                      _buildMenuCard("Mes Équipes", Icons.group_rounded, () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => PlayerTeamsPage(clubId: clubId),
+                          ),
+                        );
+                      }),
+                    ],
+                  ),
+                  const SizedBox(height: 30),
+
+                  _buildSectionTitle("À NE PAS MANQUER AUJOURD'HUI"),
+                  _buildTodayEvents(allClubIds, userData),
+
+                  const SizedBox(height: 30),
+
+                  _buildSectionTitle("ACTION REQUISE : PRÉSENCE"),
+                  _buildPendingActions(allClubIds, userData),
                 ],
               ),
-              const SizedBox(height: 30),
-
-              _buildSectionTitle("À NE PAS MANQUER AUJOURD'HUI"),
-              _buildTodayEvents(allClubIds, userData),
-
-              const SizedBox(height: 30),
-
-              _buildSectionTitle("ACTION REQUISE : PRÉSENCE"),
-              _buildPendingActions(allClubIds, userData),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
       bottomNavigationBar: _buildBottomNav(clubId),

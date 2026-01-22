@@ -90,13 +90,20 @@ class _AdminClubCommunicationPageState
         backgroundColor: ViroColors.background,
         elevation: 0,
       ),
-      body: _isSending
-          ? const Center(child: ViroLoader())
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+      body: Stack(
+        children: [
+          _isSending
+              ? const Center(child: ViroLoader())
+              : SingleChildScrollView(
+                  padding: const EdgeInsets.only(
+                    left: 20,
+                    right: 20,
+                    top: 20,
+                    bottom: 140,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                   const Text(
                     "DESTINATAIRES",
                     style: TextStyle(
@@ -208,9 +215,32 @@ class _AdminClubCommunicationPageState
                       ),
                     ),
                   ),
-                ],
+                    ],
+                  ),
+                ),
+          // Logo en footer
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Center(
+                    child: Opacity(
+                      opacity: 0.12,
+                      child: Image.asset(
+                        'assets/logo/logo_long.png',
+                        height: 100,
+                        fit: BoxFit.contain,
+                      ),
+                    ),
+                ),
               ),
             ),
+          ),
+        ],
+      ),
     );
   }
 

@@ -257,6 +257,27 @@ class _AdminTeamsPageState extends State<AdminTeamsPage> {
         absorbing: _deletingTeamId != null,
         child: Stack(
           children: [
+            // Logo en footer
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  child: Center(
+                    child: Opacity(
+                      opacity: 0.12,
+                      child: Image.asset(
+                        'assets/logo/logo_long.png',
+                        height: 100,
+                        fit: BoxFit.contain,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
             StreamBuilder<QuerySnapshot>(
               stream: _db
                   .collection('clubs')
@@ -299,7 +320,12 @@ class _AdminTeamsPageState extends State<AdminTeamsPage> {
                 }
 
                 return ListView.builder(
-                  padding: const EdgeInsets.all(20),
+                  padding: const EdgeInsets.only(
+                    left: 20,
+                    right: 20,
+                    top: 20,
+                    bottom: 140,
+                  ),
                   itemCount: teams.length,
                   itemBuilder: (context, index) {
                     final team = teams[index];
