@@ -52,7 +52,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
+      backgroundColor: const Color.fromARGB(255, 255, 255, 255),
       appBar: AppBar(
         title: const Text("Tableau de bord"),
         actions: [
@@ -179,9 +179,6 @@ class _AdminHomePageState extends State<AdminHomePage> {
               final clubData = clubSnapshot.data?.data() ?? {};
               final club = {...clubData, 'id': clubId};
               final clubName = club['name'] ?? "Mon Club";
-              final clubNameDisplay = clubName.length > 18 
-                  ? '${clubName.substring(0, 18)}...' 
-                  : clubName;
 
               return SingleChildScrollView(
                 padding: const EdgeInsets.all(20.0),
@@ -198,10 +195,12 @@ class _AdminHomePageState extends State<AdminHomePage> {
                             children: [
                               Text(
                                 "Salut Coach ! 👋",
-                                style: Theme.of(context).textTheme.headlineSmall,
+                                style: Theme.of(
+                                  context,
+                                ).textTheme.headlineSmall,
                               ),
                               Text(
-                                clubNameDisplay,
+                                clubName,
                                 style: const TextStyle(
                                   color: ViroColors.primary,
                                   fontWeight: FontWeight.bold,
