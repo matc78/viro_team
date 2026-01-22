@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../theme/viro_theme.dart';
 import '../../widget/viro_loader.dart';
+import '../../utils/firebase_helpers.dart';
 
 class ProfilDisplayPage extends StatelessWidget {
   final String userId;
@@ -41,7 +42,88 @@ class ProfilDisplayPage extends StatelessWidget {
     return {'hasAccess': hasAccess, 'role': finalRole};
   }
 
-  Future<void> _editLicense(BuildContext context, String? currentValue) async {
+  // Vérifie si l'utilisateur actuel peut modifier la licence d'un joueur dans un club
+  Future<bool> _canEditLicense(String clubId) async {
+    final currentUid = FirebaseAuth.instance.currentUser?.uid;
+    if (currentUid == null) return false;
+
+    // Récupérer les données de l'utilisateur actuel
+    final currentUserDoc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(currentUid)
+        .get();
+    final currentUserData = currentUserDoc.data();
+    if (currentUserData == null) return false;
+
+    // Vérifier directement dans la structure des rôles
+    final roles = currentUserData['roles'] as Map<String, dynamic>? ?? {};
+
+    // Vérifier si l'utilisateur est admin de ce club
+    if (roles['admin'] is List) {
+      final adminClubIds = (roles['admin'] as List).whereType<String>();
+      if (adminClubIds.contains(clubId)) {
+        return true; // Admin ou admin_fondateur (tous deux stockés dans roles.admin)
+      }
+    }
+
+    // Vérifier le rôle avec getUserRoleInClub (fallback)
+    final role = getUserRoleInClub(currentUserData, clubId);
+    if (role == 'admin' || role == 'admin_fondateur') {
+      return true;
+    }
+
+    // Vérifier aussi dans activeContext et legacy role
+    final activeContext =
+        currentUserData['activeContext'] as Map<String, dynamic>?;
+    final activeRole = activeContext?['role'] as String?;
+    final activeClubId = activeContext?['clubId'] as String?;
+    if (activeClubId == clubId &&
+        (activeRole == 'admin' || activeRole == 'admin_fondateur')) {
+      return true;
+    }
+
+    final legacyRole = currentUserData['role'] as String?;
+    final legacyClubId = currentUserData['clubId'] as String?;
+    if (legacyClubId == clubId &&
+        (legacyRole == 'admin' || legacyRole == 'admin_fondateur')) {
+      return true;
+    }
+
+    // Si coach, vérifier qu'il est coach d'au moins une équipe contenant ce joueur
+    if (role == 'coach') {
+      try {
+        // Récupérer toutes les équipes où le coach est dans coachIds
+        final teamsSnapshot = await FirebaseFirestore.instance
+            .collection('clubs')
+            .doc(clubId)
+            .collection('teams')
+            .where('coachIds', arrayContains: currentUid)
+            .get();
+
+        // Vérifier si au moins une équipe contient le joueur dans playerIds
+        for (var teamDoc in teamsSnapshot.docs) {
+          final teamData = teamDoc.data();
+          final playerIds =
+              (teamData['playerIds'] as List?)?.whereType<String>().toList() ??
+              [];
+          if (playerIds.contains(userId)) {
+            return true;
+          }
+        }
+      } catch (e) {
+        // En cas d'erreur, retourner false par sécurité
+        return false;
+      }
+    }
+
+    return false;
+  }
+
+  Future<void> _editLicense(
+    BuildContext context,
+    String? currentValue,
+    String clubId,
+  ) async {
     final controller = TextEditingController(text: currentValue ?? "");
     final formKey = GlobalKey<FormState>();
     await showDialog(
@@ -78,12 +160,49 @@ class ProfilDisplayPage extends StatelessWidget {
             onPressed: () async {
               if (!(formKey.currentState?.validate() ?? false)) return;
               final newVal = controller.text.trim();
+
+              // Fermer la boîte de dialogue immédiatement
+              Navigator.pop(ctx);
+
               try {
+                // Récupérer les données actuelles de l'utilisateur
+                final userDoc = await FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(userId)
+                    .get();
+                final userData = userDoc.data() ?? {};
+                final roles = userData['roles'] as Map<String, dynamic>? ?? {};
+                final playerData =
+                    roles['player'] as Map<String, dynamic>? ?? {};
+                final clubs =
+                    (playerData['clubs'] as List?)?.whereType<Map>().toList() ??
+                    [];
+
+                // Trouver et mettre à jour la licence pour ce club
+                bool found = false;
+                for (int i = 0; i < clubs.length; i++) {
+                  if (clubs[i]['clubId'] == clubId) {
+                    clubs[i] = {...clubs[i], 'license': newVal};
+                    found = true;
+                    break;
+                  }
+                }
+
+                // Si le club n'existe pas dans la liste, l'ajouter
+                if (!found) {
+                  clubs.add({'clubId': clubId, 'license': newVal});
+                }
+
+                // Mettre à jour Firestore avec la structure complète
+                // Reconstruire toute la structure roles pour éviter les problèmes de chemins imbriqués
+                final updatedRoles = Map<String, dynamic>.from(roles);
+                updatedRoles['player'] = {...playerData, 'clubs': clubs};
+
                 await FirebaseFirestore.instance
                     .collection('users')
                     .doc(userId)
-                    .update({'licenseNumber': newVal});
-                if (context.mounted) Navigator.pop(ctx);
+                    .update({'roles': updatedRoles});
+
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text("Licence mise à jour")),
@@ -241,37 +360,20 @@ class ProfilDisplayPage extends StatelessWidget {
                     const SizedBox(height: 24),
 
                     // --- SECTION : NUMÉRO DE LICENCE (si applicable) ---
-                    FutureBuilder<Map<String, dynamic>>(
-                      future: viewerInfoFuture,
-                      builder: (context, viewerSnap) {
-                        final viewerRole = viewerSnap.data?['role'] as String?;
-                        final isAdminOrCoach =
-                            viewerRole == 'admin_fondateur' ||
-                            viewerRole == 'admin' ||
-                            viewerRole == 'coach';
-                        final license = data['licenseNumber'] as String?;
-                        if (license == null || license.isEmpty) {
-                          return const SizedBox.shrink();
-                        }
-                        return Column(
-                          children: [
-                            _buildSectionTitle("INFORMATIONS"),
-                            _buildInfoTile(
-                              Icons.credit_card,
-                              "Numéro de licence",
-                              license,
-                              trailing: isAdminOrCoach
-                                  ? IconButton(
-                                      icon: const Icon(Icons.edit),
-                                      onPressed: () =>
-                                          _editLicense(context, license),
-                                    )
-                                  : null,
-                            ),
-                          ],
-                        );
-                      },
-                    ),
+                    // Note: Les licences sont maintenant gérées par club dans la section RÔLES PAR CLUB
+                    // Cette section affiche uniquement l'ancienne licence globale pour compatibilité
+                    if ((data['licenseNumber'] as String?) != null &&
+                        (data['licenseNumber'] as String).isNotEmpty)
+                      Column(
+                        children: [
+                          _buildSectionTitle("INFORMATIONS"),
+                          _buildInfoTile(
+                            Icons.credit_card,
+                            "Numéro de licence",
+                            data['licenseNumber'] as String,
+                          ),
+                        ],
+                      ),
 
                     const SizedBox(height: 24),
 
@@ -540,16 +642,14 @@ class ProfilDisplayPage extends StatelessWidget {
             ),
           ),
           const Divider(height: 1),
-          // Licence si disponible pour ce club
-          if (license != null && license.isNotEmpty)
-            FutureBuilder<Map<String, dynamic>>(
-              future: viewerInfoFuture,
-              builder: (context, viewerSnap) {
-                final viewerRole = viewerSnap.data?['role'] as String?;
-                final isAdminOrCoach =
-                    viewerRole == 'admin_fondateur' ||
-                    viewerRole == 'admin' ||
-                    viewerRole == 'coach';
+          // Licence pour ce club (affichée si l'utilisateur est joueur ou si un admin/coach peut modifier)
+          if (roles.contains('player'))
+            FutureBuilder<bool>(
+              future: _canEditLicense(clubId),
+              builder: (context, canEditSnap) {
+                final canEdit = canEditSnap.data ?? false;
+                final displayLicense = license ?? "";
+                final hasLicense = displayLicense.isNotEmpty;
                 return Padding(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 16,
@@ -575,19 +675,27 @@ class ProfilDisplayPage extends StatelessWidget {
                               ),
                             ),
                             Text(
-                              license,
-                              style: const TextStyle(
+                              hasLicense ? displayLicense : "Non renseigné",
+                              style: TextStyle(
                                 fontWeight: FontWeight.w600,
                                 fontSize: 14,
+                                color: hasLicense ? Colors.black : Colors.grey,
+                                fontStyle: hasLicense
+                                    ? FontStyle.normal
+                                    : FontStyle.italic,
                               ),
                             ),
                           ],
                         ),
                       ),
-                      if (isAdminOrCoach)
+                      if (canEdit)
                         IconButton(
                           icon: const Icon(Icons.edit, size: 18),
-                          onPressed: () => _editLicense(context, license),
+                          onPressed: () => _editLicense(
+                            context,
+                            hasLicense ? displayLicense : null,
+                            clubId,
+                          ),
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints(),
                         ),

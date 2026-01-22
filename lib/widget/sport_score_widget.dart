@@ -37,7 +37,7 @@ class _SportScoreWidgetState extends State<SportScoreWidget> {
   // Noms des équipes
   String _team1Name = 'Équipe 1';
   String _team2Name = 'Équipe 2';
-  
+
   // État de visibilité
   bool _isHidden = false;
 
@@ -85,7 +85,7 @@ class _SportScoreWidgetState extends State<SportScoreWidget> {
     await _prefs.setString('${key}_t2_name', _team2Name);
     await _prefs.setBool('${key}_hidden', _isHidden);
   }
-  
+
   void _toggleVisibility() {
     setState(() {
       _isHidden = !_isHidden;
@@ -306,11 +306,15 @@ class _SportScoreWidgetState extends State<SportScoreWidget> {
                         children: [
                           IconButton(
                             icon: Icon(
-                              _isHidden ? Icons.visibility : Icons.visibility_off,
+                              _isHidden
+                                  ? Icons.visibility
+                                  : Icons.visibility_off,
                               size: 16,
                             ),
                             onPressed: _toggleVisibility,
-                            tooltip: _isHidden ? 'Afficher le scoreur' : 'Cacher le scoreur',
+                            tooltip: _isHidden
+                                ? 'Afficher le scoreur'
+                                : 'Cacher le scoreur',
                             padding: EdgeInsets.zero,
                             constraints: const BoxConstraints(),
                             color: Colors.grey,
