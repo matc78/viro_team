@@ -153,3 +153,66 @@ String? getUserRoleInClub(Map<String, dynamic> userData, String clubId) {
   
   return null;
 }
+
+/// Récupère tous les rôles d'un utilisateur dans un club donné
+/// Retourne une liste de rôles (peut contenir 'player', 'coach', 'admin', etc.)
+List<String> getAllUserRolesInClub(Map<String, dynamic> userData, String clubId) {
+  final result = <String>[];
+  final roles = userData['roles'] as Map<String, dynamic>?;
+  
+  if (roles != null) {
+    // Vérifier player
+    if (roles['player'] is Map) {
+      final playerData = roles['player'] as Map;
+      
+      // Nouvelle structure : liste de clubs
+      if (playerData['clubs'] is List) {
+        final clubs = (playerData['clubs'] as List).whereType<Map>();
+        final isInClub = clubs.any((club) => club['clubId'] == clubId);
+        if (isInClub) result.add('player');
+      }
+      // Ancienne structure : clubId direct (compatibilité)
+      else if (playerData['clubId'] == clubId) {
+        result.add('player');
+      }
+    }
+    
+    // Vérifier coach
+    if (roles['coach'] is List) {
+      for (var coach in (roles['coach'] as List)) {
+        if (coach is Map) {
+          final coachClubId = coach['clubId'] as String?;
+          if (coachClubId == clubId) {
+            result.add('coach');
+            break; // Un seul rôle coach par club
+          }
+        }
+      }
+    }
+    
+    // Vérifier admin
+    if (roles['admin'] is List) {
+      final adminClubIds = (roles['admin'] as List).whereType<String>();
+      if (adminClubIds.contains(clubId)) {
+        // Vérifier si c'est un admin fondateur
+        final adminFondateur = userData['role'] as String?;
+        if (adminFondateur == 'admin_fondateur') {
+          result.add('admin_fondateur');
+        } else {
+          result.add('admin');
+        }
+      }
+    }
+  } else {
+    // Fallback ancienne structure
+    final legacyClubId = userData['clubId'] as String?;
+    if (legacyClubId == clubId) {
+      final legacyRole = userData['role'] as String?;
+      if (legacyRole != null) {
+        result.add(legacyRole);
+      }
+    }
+  }
+  
+  return result;
+}
