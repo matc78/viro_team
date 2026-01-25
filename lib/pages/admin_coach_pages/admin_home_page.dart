@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:viro_team/pages/admin_coach_pages/admin_club_communication_page.dart';
+import 'package:viro_team/pages/admin_coach_pages/admin_equipment_page.dart';
 import 'package:viro_team/pages/admin_coach_pages/admin_planning_page.dart';
 import 'package:viro_team/pages/admin_coach_pages/admin_teams_page.dart';
 import 'package:viro_team/pages/admin_coach_pages/profil_request_page.dart';
@@ -293,6 +294,22 @@ class _AdminHomePageState extends State<AdminHomePage> {
                                   MaterialPageRoute(
                                     builder: (_) => AdminClubCommunicationPage(
                                       clubId: clubId,
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                            _adminCard(
+                              title: "Matériel & équipement",
+                              count: "",
+                              icon: Icons.inventory_2,
+                              color: ViroColors.primary,
+                              onTap: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => AdminEquipmentPage(
+                                      clubId: clubId,
+                                      sport: club['sport'] as String?,
                                     ),
                                   ),
                                 );

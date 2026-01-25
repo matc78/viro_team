@@ -14,4 +14,6 @@ class FirebaseCollections {
   // Sous-collections
   static const String members = 'members';
   static const String attendance = 'attendance';
+  static const String equipment = 'equipment';
+  static const String equipmentLoans = 'equipment_loans';
 }
