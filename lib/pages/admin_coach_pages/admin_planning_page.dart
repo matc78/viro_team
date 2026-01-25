@@ -20,12 +20,19 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
   String _filterCategory = "Choisir une catégorie";
   bool _deleteMode = false;
 
-  // Liste des jours pour le sélecteur horizontal (7 jours glissants)
+  // Liste des jours pour le sélecteur horizontal (4 semaines = 28 jours)
+  // Si un filtre est actif, retourne uniquement les jours avec des événements filtrés
   List<DateTime> _getDays() {
-    return List.generate(
-      14,
+    final allDays = List.generate(
+      28,
       (index) => DateTime.now().add(Duration(days: index)),
     );
+    return allDays;
+  }
+
+  // Vérifie si un filtre est actif
+  bool _hasActiveFilter() {
+    return !_filterTeam.startsWith("Choisir") || !_filterCategory.startsWith("Choisir");
   }
 
   @override
@@ -66,9 +73,178 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
   }
 
   Widget _buildDayPicker() {
+    // Si un filtre est actif, récupérer uniquement les jours avec des événements filtrés
+    if (_hasActiveFilter()) {
+      // Récupérer d'abord la date de fin de saison
+      return FutureBuilder<DocumentSnapshot>(
+        future: FirebaseFirestore.instance
+            .collection('clubs')
+            .doc(widget.clubId)
+            .get(),
+        builder: (context, clubSnap) {
+          DateTime seasonEndDate;
+          if (clubSnap.hasData) {
+            final clubData = clubSnap.data?.data() as Map<String, dynamic>?;
+            final timestamp = clubData?['seasonEndDate'] as Timestamp?;
+            if (timestamp != null) {
+              seasonEndDate = timestamp.toDate();
+            } else {
+              // Valeur par défaut si non définie
+              final now = DateTime.now();
+              seasonEndDate = DateTime(now.year, 7, 31, 23, 59);
+            }
+          } else {
+            final now = DateTime.now();
+            seasonEndDate = DateTime(now.year, 7, 31, 23, 59);
+          }
+
+          // Utiliser la date de fin de saison comme limite supérieure
+          return StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('clubs')
+                .doc(widget.clubId)
+                .collection('events')
+                .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(DateTime.now()))
+                .where('date', isLessThanOrEqualTo: Timestamp.fromDate(seasonEndDate))
+                .snapshots(),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData) {
+                return Container(
+                  height: 100,
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  child: const Center(child: CircularProgressIndicator()),
+                );
+              }
+
+              // Filtrer les événements selon les filtres actifs
+              final filteredEvents = snapshot.data!.docs.where((doc) {
+                final data = doc.data() as Map<String, dynamic>;
+                final bool placeholderTeam = _filterTeam.startsWith("Choisir");
+                final bool placeholderCat = _filterCategory.startsWith("Choisir");
+                final teamNames =
+                    (data['teamNames'] as List?)?.whereType<String>().toList() ?? [];
+                final lcFilterTeam = _normalize(_filterTeam);
+                bool matchTeam =
+                    placeholderTeam ||
+                    _normalize(data['teamName'] ?? '') == lcFilterTeam ||
+                    teamNames.any((name) => _normalize(name).contains(lcFilterTeam));
+                final eventCategory = (data['category'] as String?) ?? "";
+                final lcFilterCat = _normalize(_filterCategory);
+                bool matchCat =
+                    placeholderCat ||
+                    _normalize(eventCategory) == lcFilterCat ||
+                    teamNames.any((name) => _normalize(name).contains(lcFilterCat));
+                return matchTeam && matchCat;
+              }).toList();
+
+              // Extraire les dates uniques
+              final Set<String> dateIds = {};
+              for (var doc in filteredEvents) {
+                final data = doc.data() as Map<String, dynamic>;
+                final dateId = data['dateId'] as String?;
+                if (dateId != null) {
+                  dateIds.add(dateId);
+                }
+              }
+
+              // Convertir les dateIds en DateTime
+              final filteredDays = dateIds.map((dateId) {
+                try {
+                  final year = int.parse(dateId.substring(0, 4));
+                  final month = int.parse(dateId.substring(4, 6));
+                  final day = int.parse(dateId.substring(6, 8));
+                  return DateTime(year, month, day);
+                } catch (e) {
+                  return null;
+                }
+              }).whereType<DateTime>().toList()
+                ..sort();
+
+              if (filteredDays.isEmpty) {
+                return Container(
+                  height: 100,
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  child: const Center(
+                    child: Text(
+                      "Aucun événement ne correspond aux filtres",
+                      style: TextStyle(color: Colors.grey),
+                    ),
+                  ),
+                );
+              }
+
+              // Vérifier si la date sélectionnée est dans les jours filtrés
+              // Si non, sélectionner le premier jour disponible
+              if (!filteredDays.any((day) => DateUtils.isSameDay(day, _selectedDate))) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted && filteredDays.isNotEmpty) {
+                    setState(() => _selectedDate = filteredDays.first);
+                  }
+                });
+              }
+
+              return Container(
+                height: 100,
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  itemCount: filteredDays.length,
+                  itemBuilder: (context, index) {
+                    final date = filteredDays[index];
+                    final isSelected = DateUtils.isSameDay(date, _selectedDate);
+                    return GestureDetector(
+                      onTap: () => setState(() => _selectedDate = date),
+                      child: Container(
+                        width: 60,
+                        margin: const EdgeInsets.only(right: 10),
+                        decoration: BoxDecoration(
+                          color: isSelected ? ViroColors.primary : Colors.white,
+                          borderRadius: BorderRadius.circular(15),
+                          border: Border.all(color: ViroColors.borderColor),
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              DateFormat('E', 'fr_FR').format(date).toUpperCase(),
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: isSelected ? Colors.white70 : Colors.grey,
+                              ),
+                            ),
+                            Text(
+                              date.day.toString(),
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: isSelected ? Colors.white : Colors.black,
+                              ),
+                            ),
+                            Text(
+                              DateFormat('MMM', 'fr_FR').format(date).toUpperCase(),
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: isSelected ? Colors.white70 : Colors.grey,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              );
+            },
+          );
+        },
+      );
+    }
+
+    // Pas de filtre actif, afficher tous les jours
     final days = _getDays();
     return Container(
-      height: 90,
+      height: 100,
       padding: const EdgeInsets.symmetric(vertical: 10),
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
@@ -103,6 +279,13 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
                       color: isSelected ? Colors.white : Colors.black,
+                    ),
+                  ),
+                  Text(
+                    DateFormat('MMM', 'fr_FR').format(date).toUpperCase(),
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: isSelected ? Colors.white70 : Colors.grey,
                     ),
                   ),
                 ],
@@ -222,73 +405,112 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
         if (!snapshot.hasData) return const Center(child: ViroLoader(size: 40));
 
         var docs = snapshot.data!.docs;
+        
+        // Récupérer la date de fin de saison du club
+        return FutureBuilder<DocumentSnapshot>(
+          future: FirebaseFirestore.instance
+              .collection('clubs')
+              .doc(widget.clubId)
+              .get(),
+          builder: (context, clubSnap) {
+            DateTime? seasonEndDate;
+            if (clubSnap.hasData) {
+              final clubData = clubSnap.data?.data() as Map<String, dynamic>?;
+              final timestamp = clubData?['seasonEndDate'] as Timestamp?;
+              if (timestamp != null) {
+                seasonEndDate = timestamp.toDate();
+              } else {
+                // Valeur par défaut si non définie
+                final now = DateTime.now();
+                seasonEndDate = DateTime(now.year, 7, 31, 23, 59);
+              }
+            } else {
+              final now = DateTime.now();
+              seasonEndDate = DateTime(now.year, 7, 31, 23, 59);
+            }
 
-        // Filtrage manuel (plus simple pour les filtres multiples combinés)
-        var filteredDocs = docs.where((doc) {
-          final data = doc.data() as Map<String, dynamic>;
-          final bool placeholderTeam = _filterTeam.startsWith(
-            "Choisir",
-          ); // pas de filtre
-          final bool placeholderCat = _filterCategory.startsWith(
-            "Choisir",
-          ); // pas de filtre
-          final teamNames =
-              (data['teamNames'] as List?)?.whereType<String>().toList() ?? [];
-          final lcFilterTeam = _normalize(_filterTeam);
-          bool matchTeam =
-              placeholderTeam ||
-              _normalize(data['teamName'] ?? '') == lcFilterTeam ||
-              teamNames.any((name) => _normalize(name).contains(lcFilterTeam));
-          final eventCategory = (data['category'] as String?) ?? "";
-          final lcFilterCat = _normalize(_filterCategory);
-          bool matchCat =
-              placeholderCat ||
-              _normalize(eventCategory) == lcFilterCat ||
-              teamNames.any((name) => _normalize(name).contains(lcFilterCat));
-          return matchTeam && matchCat;
-        }).toList();
+            // Filtrage manuel (plus simple pour les filtres multiples combinés)
+            var filteredDocs = docs.where((doc) {
+              final data = doc.data() as Map<String, dynamic>;
+              final bool placeholderTeam = _filterTeam.startsWith(
+                "Choisir",
+              ); // pas de filtre
+              final bool placeholderCat = _filterCategory.startsWith(
+                "Choisir",
+              ); // pas de filtre
+              final teamNames =
+                  (data['teamNames'] as List?)?.whereType<String>().toList() ?? [];
+              final lcFilterTeam = _normalize(_filterTeam);
+              bool matchTeam =
+                  placeholderTeam ||
+                  _normalize(data['teamName'] ?? '') == lcFilterTeam ||
+                  teamNames.any((name) => _normalize(name).contains(lcFilterTeam));
+              final eventCategory = (data['category'] as String?) ?? "";
+              final lcFilterCat = _normalize(_filterCategory);
+              bool matchCat =
+                  placeholderCat ||
+                  _normalize(eventCategory) == lcFilterCat ||
+                  teamNames.any((name) => _normalize(name).contains(lcFilterCat));
+              return matchTeam && matchCat;
+            }).toList();
 
-        filteredDocs.sort((a, b) {
-          final da = a.data() as Map<String, dynamic>;
-          final db = b.data() as Map<String, dynamic>;
-          final bool aAllDay = da['startTime'] == null && da['endTime'] == null;
-          final bool bAllDay = db['startTime'] == null && db['endTime'] == null;
-          if (aAllDay && !bAllDay) return -1;
-          if (!aAllDay && bAllDay) return 1;
-          return _timeToMinutes(
-            da['startTime'],
-          ).compareTo(_timeToMinutes(db['startTime']));
-        });
+            filteredDocs.sort((a, b) {
+              final da = a.data() as Map<String, dynamic>;
+              final db = b.data() as Map<String, dynamic>;
+              final bool aAllDay = da['startTime'] == null && da['endTime'] == null;
+              final bool bAllDay = db['startTime'] == null && db['endTime'] == null;
+              if (aAllDay && !bAllDay) return -1;
+              if (!aAllDay && bAllDay) return 1;
+              return _timeToMinutes(
+                da['startTime'],
+              ).compareTo(_timeToMinutes(db['startTime']));
+            });
 
-        if (filteredDocs.isEmpty) {
-          return const Center(child: Text("Aucun événement prévu ce jour."));
-        }
+            if (filteredDocs.isEmpty) {
+              return const Center(child: Text("Aucun événement prévu ce jour."));
+            }
 
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: filteredDocs.length,
-          itemBuilder: (context, index) {
-            final data = filteredDocs[index].data() as Map<String, dynamic>;
-            final docId = filteredDocs[index].id;
-            return GestureDetector(
-              onTap: () => _deleteMode ? _onEventTap(docId, data) : null,
-              child: InkWell(
-                onTap: () {
-                  if (_deleteMode) {
-                    _onEventTap(docId, data);
-                  } else {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => AdminEventDetailsPage(
-                          clubId: widget.clubId,
-                          eventId: docId,
-                        ),
-                      ),
-                    );
+            return ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: filteredDocs.length,
+              itemBuilder: (context, index) {
+                final data = filteredDocs[index].data() as Map<String, dynamic>;
+                final docId = filteredDocs[index].id;
+                
+                // Vérifier si l'événement est terminé (après la fin de saison)
+                bool isSeasonCompleted = false;
+                if (seasonEndDate != null && data['type'] == 'Entraînement') {
+                  final eventDate = (data['date'] as Timestamp?)?.toDate();
+                  if (eventDate != null && eventDate.isAfter(seasonEndDate)) {
+                    isSeasonCompleted = true;
                   }
-                },
-                child: _buildEventCard(data, editing: _deleteMode),
-              ),
+                }
+                
+                return GestureDetector(
+                  onTap: () => _deleteMode ? _onEventTap(docId, data) : null,
+                  child: InkWell(
+                    onTap: () {
+                      if (_deleteMode) {
+                        _onEventTap(docId, data);
+                      } else {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => AdminEventDetailsPage(
+                              clubId: widget.clubId,
+                              eventId: docId,
+                            ),
+                          ),
+                        );
+                      }
+                    },
+                    child: _buildEventCard(
+                      data,
+                      editing: _deleteMode,
+                      isSeasonCompleted: isSeasonCompleted,
+                    ),
+                  ),
+                );
+              },
             );
           },
         );
@@ -296,7 +518,11 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
     );
   }
 
-  Widget _buildEventCard(Map<String, dynamic> data, {bool editing = false}) {
+  Widget _buildEventCard(
+    Map<String, dynamic> data, {
+    bool editing = false,
+    bool isSeasonCompleted = false,
+  }) {
     final bool canceled = data['canceled'] == true;
     final bool isMatch = data['type'] == 'Match';
     Color typeColor = _getTypeColor(data['type']);
@@ -319,9 +545,15 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: canceled ? Colors.grey.shade300 : Colors.white,
+        color: canceled
+            ? Colors.grey.shade300
+            : (isSeasonCompleted ? Colors.grey.shade100 : Colors.white),
         borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: ViroColors.borderColor),
+        border: Border.all(
+          color: isSeasonCompleted
+              ? Colors.grey.shade400
+              : ViroColors.borderColor,
+        ),
       ),
       child: Row(
         children: [
@@ -378,6 +610,15 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
                     style: TextStyle(
                       color: Colors.redAccent,
                       fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                if (isSeasonCompleted && !canceled)
+                  const Text(
+                    "SAISON TERMINÉE",
+                    style: TextStyle(
+                      color: Colors.orange,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 11,
                     ),
                   ),
                 Text(

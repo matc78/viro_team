@@ -138,6 +138,41 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
                   subtitle: "Ajouter ou mettre à jour",
                   onTap: () => _pickClubLogo(clubId),
                 ),
+                if (getAllUserRolesInClub(userData ?? {}, clubId)
+                    .contains('admin_fondateur'))
+                  StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                    stream: _firestore
+                        .collection('clubs')
+                        .doc(clubId)
+                        .snapshots(),
+                    builder: (context, clubSnap) {
+                      DateTime? seasonEndDate;
+                      if (clubSnap.hasData) {
+                        final clubData = clubSnap.data?.data();
+                        final timestamp = clubData?['seasonEndDate'] as Timestamp?;
+                        if (timestamp != null) {
+                          seasonEndDate = timestamp.toDate();
+                        } else {
+                          // Valeur par défaut si non définie
+                          final now = DateTime.now();
+                          seasonEndDate = DateTime(now.year, 7, 31, 23, 59);
+                        }
+                      } else {
+                        final now = DateTime.now();
+                        seasonEndDate = DateTime(now.year, 7, 31, 23, 59);
+                      }
+
+                      final dateStr = DateFormat('dd MMMM yyyy à HH:mm', 'fr_FR')
+                          .format(seasonEndDate);
+
+                      return _buildMenuCard(
+                        icon: Icons.calendar_today_outlined,
+                        title: "Date de fin de saison",
+                        subtitle: dateStr,
+                        onTap: () => _showEditSeasonEndDate(clubId, seasonEndDate),
+                      );
+                    },
+                  ),
                 _buildMenuCard(
                   icon: Icons.admin_panel_settings_outlined,
                   title: "Gérer les privilèges",
@@ -1240,6 +1275,250 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Erreur lors du changement de logo : $e")),
       );
+    }
+  }
+
+  Future<void> _showEditSeasonEndDate(
+    String clubId,
+    DateTime? currentDate,
+  ) async {
+    // Valeur par défaut si non définie
+    final now = DateTime.now();
+    final initialDate = currentDate ?? DateTime(now.year, 7, 31, 23, 59);
+    DateTime selectedDate = initialDate;
+    TimeOfDay selectedTime = TimeOfDay(
+      hour: initialDate.hour,
+      minute: initialDate.minute,
+    );
+
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            title: const Text("Modifier la date de fin de saison"),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    "Sélectionnez la date et l'heure de fin de saison :",
+                    style: TextStyle(fontSize: 14, color: Colors.grey),
+                  ),
+                  const SizedBox(height: 16),
+                  GestureDetector(
+                    onTap: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: selectedDate,
+                        firstDate: DateTime.now(),
+                        lastDate: DateTime(2100),
+                      );
+                      if (picked != null) {
+                        setDialogState(() {
+                          selectedDate = picked;
+                        });
+                      }
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: ViroColors.borderColor),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.calendar_today, size: 20),
+                          const SizedBox(width: 12),
+                          Text(
+                            DateFormat('dd MMMM yyyy', 'fr_FR')
+                                .format(selectedDate),
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  GestureDetector(
+                    onTap: () async {
+                      final picked = await showTimePicker(
+                        context: context,
+                        initialTime: selectedTime,
+                      );
+                      if (picked != null) {
+                        setDialogState(() {
+                          selectedTime = picked;
+                        });
+                      }
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: ViroColors.borderColor),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.access_time, size: 20),
+                          const SizedBox(width: 12),
+                          Text(
+                            selectedTime.format(context),
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text("Annuler", style: TextStyle(color: Colors.grey)),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  final finalDateTime = DateTime(
+                    selectedDate.year,
+                    selectedDate.month,
+                    selectedDate.day,
+                    selectedTime.hour,
+                    selectedTime.minute,
+                  );
+                  Navigator.pop(ctx, {
+                    'date': finalDateTime,
+                  });
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: ViroColors.primary,
+                ),
+                child: const Text("Enregistrer", style: TextStyle(color: Colors.white)),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    if (result != null && result['date'] != null) {
+      final newDate = result['date'] as DateTime;
+      
+      // Vérifier combien d'événements sont après la nouvelle date
+      try {
+        final eventsQuery = await _firestore
+            .collection('clubs')
+            .doc(clubId)
+            .collection('events')
+            .where('date', isGreaterThan: Timestamp.fromDate(newDate))
+            .get();
+        
+        final eventsToDelete = eventsQuery.docs;
+        final eventsCount = eventsToDelete.length;
+        
+        // Afficher un dialog de confirmation si des événements seront supprimés
+        if (eventsCount > 0) {
+          final confirmDelete = await showDialog<bool>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+              title: const Text("Confirmation de suppression"),
+              content: Text(
+                "$eventsCount événement${eventsCount > 1 ? 's' : ''} ${eventsCount > 1 ? 'seront' : 'sera'} supprimé${eventsCount > 1 ? 's' : ''} car ${eventsCount > 1 ? 'ils sont' : 'il est'} après la nouvelle date de fin de saison.\n\n"
+                "Souhaitez-vous continuer ?",
+                style: const TextStyle(fontSize: 14),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text("Annuler", style: TextStyle(color: Colors.grey)),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.redAccent,
+                  ),
+                  child: const Text("Supprimer et continuer", style: TextStyle(color: Colors.white)),
+                ),
+              ],
+            ),
+          );
+          
+          if (confirmDelete != true) {
+            return; // L'utilisateur a annulé
+          }
+        }
+        
+        // Supprimer les événements après la nouvelle date
+        if (eventsCount > 0) {
+          final batch = _firestore.batch();
+          for (var doc in eventsToDelete) {
+            batch.delete(doc.reference);
+          }
+          await batch.commit();
+          
+          AppLogger.instance.info(
+            'Événements supprimés après modification de la date de fin de saison',
+            {
+              'clubId': clubId,
+              'eventsCount': eventsCount,
+              'newSeasonEndDate': newDate.toIso8601String(),
+              'userId': _auth.currentUser?.uid,
+            },
+          );
+        }
+        
+        // Sauvegarder la nouvelle date de fin de saison
+        await _firestore.collection('clubs').doc(clubId).set({
+          'seasonEndDate': Timestamp.fromDate(newDate),
+        }, SetOptions(merge: true));
+
+        AppLogger.instance.info(
+          'Date de fin de saison modifiée',
+          {
+            'clubId': clubId,
+            'newDate': newDate.toIso8601String(),
+            'eventsDeleted': eventsCount,
+            'userId': _auth.currentUser?.uid,
+          },
+        );
+
+        if (mounted) {
+          final message = eventsCount > 0
+              ? "Date de fin de saison mise à jour. $eventsCount événement${eventsCount > 1 ? 's supprimé' : ' supprimé'}."
+              : "Date de fin de saison mise à jour avec succès !";
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(message)),
+          );
+        }
+      } catch (e) {
+        AppLogger.instance.error(
+          'Erreur lors de la modification de la date de fin de saison',
+          error: e,
+          context: {
+            'clubId': clubId,
+            'userId': _auth.currentUser?.uid,
+          },
+        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("Erreur : $e")),
+          );
+        }
+      }
     }
   }
 

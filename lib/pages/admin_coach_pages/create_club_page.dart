@@ -60,6 +60,9 @@ class _CreateClubPageState extends State<CreateClubPage> {
     if (user == null) return;
 
     try {
+      // Calcul de la date de fin de saison par défaut (31 juillet 23h59 de l'année en cours)
+      final now = DateTime.now();
+      final defaultSeasonEnd = DateTime(now.year, 7, 31, 23, 59);
 
       // 1. Création du document Club
       DocumentReference
@@ -76,6 +79,7 @@ class _CreateClubPageState extends State<CreateClubPage> {
         'admins': [user.uid], // Ajouter l'admin_fondateur à la liste des admins
         'createdAt': FieldValue.serverTimestamp(),
         'memberCount': 1,
+        'seasonEndDate': Timestamp.fromDate(defaultSeasonEnd),
       });
 
       // 2. Mise à jour de l'utilisateur avec la nouvelle structure multi-tenant

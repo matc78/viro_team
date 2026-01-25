@@ -21,10 +21,10 @@ class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
   final String _currentUserId = FirebaseAuth.instance.currentUser?.uid ?? "";
   Map<String, dynamic>? _userData;
 
-  // Liste des jours pour le sélecteur horizontal (14 jours glissants)
+  // Liste des jours pour le sélecteur horizontal (4 semaines = 28 jours)
   List<DateTime> _getDays() {
     return List.generate(
-      14,
+      28,
       (index) => DateTime.now().add(Duration(days: index)),
     );
   }
@@ -111,7 +111,7 @@ class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
   Widget _buildDaySelector() {
     final days = _getDays();
     return Container(
-      height: 100,
+      height: 110,
       padding: const EdgeInsets.symmetric(vertical: 12),
       color: Colors.white,
       child: ListView.builder(
@@ -153,6 +153,13 @@ class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
                       color: isSelected ? Colors.white : Colors.black,
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Text(
+                    DateFormat('MMM', 'fr_FR').format(day).toUpperCase(),
+                    style: TextStyle(
+                      color: isSelected ? Colors.white70 : Colors.grey,
+                      fontSize: 10,
                     ),
                   ),
                 ],
@@ -273,51 +280,117 @@ class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
       return const Center(child: ViroLoader(size: 50));
     }
 
-    // Combiner tous les événements avec leur clubId
-    final List<Map<String, dynamic>> allEventsWithClub = [];
-    for (int i = 0; i < snapshots.length && i < clubIds.length; i++) {
-      final snapshot = snapshots[i];
-      if (snapshot == null) continue;
-      final clubId = clubIds[i];
-      for (var doc in snapshot.docs) {
-        final data = doc.data() as Map<String, dynamic>;
-        // Vérifier si le joueur est concerné par cet événement
-        if (_isEventRelevantForPlayer(data)) {
-          allEventsWithClub.add({
-            'eventId': doc.id,
-            'eventData': data,
-            'clubId': clubId,
-          });
+    // Récupérer les dates de fin de saison pour tous les clubs
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _getSeasonEndDates(clubIds),
+      builder: (context, seasonEndSnap) {
+        final seasonEndDates = seasonEndSnap.data ?? [];
+        final seasonEndMap = <String, DateTime?>{};
+        for (var entry in seasonEndDates) {
+          final clubId = entry['clubId'] as String;
+          final date = entry['date'] as DateTime?;
+          seasonEndMap[clubId] = date;
         }
-      }
-    }
 
-    // Trier par date
-    allEventsWithClub.sort((a, b) {
-      final eventDataA = a['eventData'] as Map<String, dynamic>;
-      final eventDataB = b['eventData'] as Map<String, dynamic>;
-      final dateA =
-          (eventDataA['date'] as Timestamp?)?.toDate() ?? DateTime.now();
-      final dateB =
-          (eventDataB['date'] as Timestamp?)?.toDate() ?? DateTime.now();
-      return dateA.compareTo(dateB);
-    });
+        // Combiner tous les événements avec leur clubId
+        final List<Map<String, dynamic>> allEventsWithClub = [];
+        for (int i = 0; i < snapshots.length && i < clubIds.length; i++) {
+          final snapshot = snapshots[i];
+          if (snapshot == null) continue;
+          final clubId = clubIds[i];
+          final seasonEndDate = seasonEndMap[clubId];
+          for (var doc in snapshot.docs) {
+            final data = doc.data() as Map<String, dynamic>;
+            // Vérifier si le joueur est concerné par cet événement
+            if (_isEventRelevantForPlayer(data)) {
+              // Vérifier si l'événement est terminé
+              bool isSeasonCompleted = false;
+              if (seasonEndDate != null && data['type'] == 'Entraînement') {
+                final eventDate = (data['date'] as Timestamp?)?.toDate();
+                if (eventDate != null && eventDate.isAfter(seasonEndDate)) {
+                  isSeasonCompleted = true;
+                }
+              }
+              
+              allEventsWithClub.add({
+                'eventId': doc.id,
+                'eventData': data,
+                'clubId': clubId,
+                'isSeasonCompleted': isSeasonCompleted,
+              });
+            }
+          }
+        }
 
-    if (allEventsWithClub.isEmpty) {
-      return _buildEmptyState();
-    }
+        // Trier par date
+        allEventsWithClub.sort((a, b) {
+          final eventDataA = a['eventData'] as Map<String, dynamic>;
+          final eventDataB = b['eventData'] as Map<String, dynamic>;
+          final dateA =
+              (eventDataA['date'] as Timestamp?)?.toDate() ?? DateTime.now();
+          final dateB =
+              (eventDataB['date'] as Timestamp?)?.toDate() ?? DateTime.now();
+          return dateA.compareTo(dateB);
+        });
 
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: allEventsWithClub.length,
-      itemBuilder: (context, index) {
-        final eventInfo = allEventsWithClub[index];
-        final eventId = eventInfo['eventId'] as String;
-        final eventData = eventInfo['eventData'] as Map<String, dynamic>;
-        final clubId = eventInfo['clubId'] as String;
-        return _buildEventCard(eventId, eventData, clubId);
+        if (allEventsWithClub.isEmpty) {
+          return _buildEmptyState();
+        }
+
+        return ListView.builder(
+          padding: const EdgeInsets.all(16),
+          itemCount: allEventsWithClub.length,
+          itemBuilder: (context, index) {
+            final eventInfo = allEventsWithClub[index];
+            final eventId = eventInfo['eventId'] as String;
+            final eventData = eventInfo['eventData'] as Map<String, dynamic>;
+            final clubId = eventInfo['clubId'] as String;
+            final isSeasonCompleted =
+                eventInfo['isSeasonCompleted'] as bool? ?? false;
+            return _buildEventCard(
+              eventId,
+              eventData,
+              clubId,
+              isSeasonCompleted: isSeasonCompleted,
+            );
+          },
+        );
       },
     );
+  }
+
+  // Récupérer les dates de fin de saison pour plusieurs clubs
+  Future<List<Map<String, dynamic>>> _getSeasonEndDates(
+    List<String> clubIds,
+  ) async {
+    final List<Map<String, dynamic>> results = [];
+    for (final clubId in clubIds) {
+      try {
+        final doc = await FirebaseFirestore.instance
+            .collection('clubs')
+            .doc(clubId)
+            .get();
+        final data = doc.data();
+        final timestamp = data?['seasonEndDate'] as Timestamp?;
+        DateTime? seasonEndDate;
+        if (timestamp != null) {
+          seasonEndDate = timestamp.toDate();
+        } else {
+          // Valeur par défaut si non définie
+          final now = DateTime.now();
+          seasonEndDate = DateTime(now.year, 7, 31, 23, 59);
+        }
+        results.add({'clubId': clubId, 'date': seasonEndDate});
+      } catch (e) {
+        // En cas d'erreur, utiliser la valeur par défaut
+        final now = DateTime.now();
+        results.add({
+          'clubId': clubId,
+          'date': DateTime(now.year, 7, 31, 23, 59),
+        });
+      }
+    }
+    return results;
   }
 
   // Vérifier si un événement concerne le joueur
@@ -357,8 +430,9 @@ class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
   Widget _buildEventCard(
     String docId,
     Map<String, dynamic> data,
-    String clubId,
-  ) {
+    String clubId, {
+    bool isSeasonCompleted = false,
+  }) {
     final type = data['title'] ?? data['type'] ?? "Événement";
     final isAllDay = data['startTime'] == null && data['endTime'] == null;
     final time = isAllDay ? "ALL DAY" : (data['startTime'] ?? "--:--");
@@ -383,10 +457,16 @@ class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
         return Container(
           margin: const EdgeInsets.only(bottom: 12),
           decoration: BoxDecoration(
-            color: canceled ? Colors.grey.shade300 : Colors.white,
+            color: canceled
+                ? Colors.grey.shade300
+                : (isSeasonCompleted ? Colors.grey.shade100 : Colors.white),
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: canceled ? Colors.grey : clubColor.withOpacity(0.5),
+              color: canceled
+                  ? Colors.grey
+                  : (isSeasonCompleted
+                      ? Colors.grey.shade400
+                      : clubColor.withOpacity(0.5)),
               width: 2,
             ),
             boxShadow: [
@@ -466,6 +546,15 @@ class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
                       color: Colors.red,
                       fontWeight: FontWeight.bold,
                       fontSize: 12,
+                    ),
+                  ),
+                if (isSeasonCompleted && !canceled)
+                  const Text(
+                    "SAISON TERMINÉE",
+                    style: TextStyle(
+                      color: Colors.orange,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 11,
                     ),
                   ),
                 const SizedBox(height: 4),

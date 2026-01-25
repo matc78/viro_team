@@ -39,6 +39,8 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
 
   bool _isRecurring = false;
   int _weeksCount = 4;
+  String _recurrenceMode = 'weeks'; // 'weeks' ou 'season_end'
+  DateTime? _seasonEndDate;
 
   @override
   void initState() {
@@ -123,9 +125,24 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
       };
 
       final batch = FirebaseFirestore.instance.batch();
-      int iterations = (_selectedType == 'Entraînement' && _isRecurring)
-          ? _weeksCount
-          : 1;
+      int iterations = 1;
+      if (_selectedType == 'Entraînement' && _isRecurring) {
+        if (_recurrenceMode == 'season_end' && _seasonEndDate != null) {
+          // Calculer le nombre de semaines jusqu'à la fin de saison
+          final daysDifference = _seasonEndDate!.difference(_date).inDays;
+          if (daysDifference < 0) {
+            _showError("La date de début ne peut pas être après la fin de saison");
+            setState(() => _isLoading = false);
+            return;
+          }
+          iterations = (daysDifference / 7).ceil();
+          // Limiter à 52 semaines pour sécurité
+          if (iterations > 52) iterations = 52;
+          if (iterations < 1) iterations = 1;
+        } else {
+          iterations = _weeksCount;
+        }
+      }
 
       // 3. Boucle de création (gestion récurrence)
       for (int i = 0; i < iterations; i++) {
@@ -490,6 +507,21 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
     final data = doc.data();
     final sport = data?['sport'] as String?;
     final clubAddress = data?['address'] as String?;
+    
+    // Charger la date de fin de saison
+    final seasonEndTimestamp = data?['seasonEndDate'] as Timestamp?;
+    if (seasonEndTimestamp != null) {
+      if (mounted) {
+        setState(() => _seasonEndDate = seasonEndTimestamp.toDate());
+      }
+    } else {
+      // Valeur par défaut si non définie
+      final now = DateTime.now();
+      if (mounted) {
+        setState(() => _seasonEndDate = DateTime(now.year, 7, 31, 23, 59));
+      }
+    }
+    
     if (_locationController.text == "Stade du club") {
       if (clubAddress != null && clubAddress.isNotEmpty) {
         if (mounted) {
@@ -713,15 +745,81 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
                         style: TextStyle(fontWeight: FontWeight.bold),
                       ),
                       value: _isRecurring,
-                      onChanged: (val) => setState(() => _isRecurring = val),
+                      onChanged: (val) => setState(() {
+                        _isRecurring = val;
+                        if (!val) {
+                          _recurrenceMode = 'weeks';
+                        }
+                      }),
                     ),
-                    if (_isRecurring)
-                      _buildDropdown<int>(
-                        label: "Nombre de semaines",
-                        value: _weeksCount,
-                        items: [2, 4, 8, 12],
-                        onChanged: (val) => setState(() => _weeksCount = val!),
+                    if (_isRecurring) ...[
+                      const SizedBox(height: 8),
+                      RadioListTile<String>(
+                        title: const Text("Nombre de semaines"),
+                        value: 'weeks',
+                        groupValue: _recurrenceMode,
+                        onChanged: (val) => setState(() {
+                          _recurrenceMode = val!;
+                        }),
                       ),
+                      RadioListTile<String>(
+                        title: Text(
+                          _seasonEndDate != null
+                              ? "Jusqu'à la fin de saison (${DateFormat('dd/MM/yyyy', 'fr_FR').format(_seasonEndDate!)})"
+                              : "Jusqu'à la fin de saison",
+                        ),
+                        value: 'season_end',
+                        groupValue: _recurrenceMode,
+                        onChanged: (val) => setState(() {
+                          _recurrenceMode = val!;
+                        }),
+                      ),
+                      if (_recurrenceMode == 'weeks')
+                        Padding(
+                          padding: const EdgeInsets.only(left: 16),
+                          child: _buildDropdown<int>(
+                            label: "Nombre de semaines",
+                            value: _weeksCount,
+                            items: [2, 4, 8, 12],
+                            onChanged: (val) => setState(() => _weeksCount = val!),
+                          ),
+                        ),
+                      if (_recurrenceMode == 'season_end' && _seasonEndDate != null) ...[
+                        Padding(
+                          padding: const EdgeInsets.only(left: 16, top: 8),
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: ViroColors.primary.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: ViroColors.primary.withOpacity(0.3),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.info_outline,
+                                  color: ViroColors.primary,
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    "Les entraînements seront créés jusqu'au ${DateFormat('dd MMMM yyyy', 'fr_FR').format(_seasonEndDate!)}",
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: ViroColors.primary,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
                   ],
 
                   const SizedBox(height: 30),
