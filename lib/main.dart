@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:ui';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -25,6 +27,17 @@ void main() async {
 
   // 2. Initialiser Firebase avec les options générées
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  // 3. Configurer Firebase Crashlytics
+  // Passer les erreurs Flutter à Crashlytics
+  FlutterError.onError = (errorDetails) {
+    FirebaseCrashlytics.instance.recordFlutterFatalError(errorDetails);
+  };
+  // Passer les erreurs asynchrones non capturées à Crashlytics
+  PlatformDispatcher.instance.onError = (error, stack) {
+    FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+    return true;
+  };
 
   // 3. Initialiser le formatage de date en arrière-plan pour ne pas bloquer le démarrage
   // La première utilisation attendra que l'initialisation soit terminée

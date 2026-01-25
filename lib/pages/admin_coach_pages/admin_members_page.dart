@@ -186,7 +186,7 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
                     final entries = <Map<String, dynamic>>[];
 
                     for (final doc in clubMembers) {
-                      final data = doc.data() as Map<String, dynamic>?;
+                      final data = doc.data();
                       if (data == null) continue;
 
                       // Obtenir tous les rôles de cet utilisateur dans ce club
@@ -383,9 +383,11 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
                                   roleLabel,
                                   style: const TextStyle(color: Colors.grey),
                                 )
-                              : const Text(
-                                  "Licencié",
-                                  style: TextStyle(color: Colors.grey),
+                              : Text(
+                                  playerHasLicense(data, widget.clubId)
+                                      ? "Licencié"
+                                      : "Membre",
+                                  style: const TextStyle(color: Colors.grey),
                                 ),
                           onTap: () {
                             Navigator.of(context).push(

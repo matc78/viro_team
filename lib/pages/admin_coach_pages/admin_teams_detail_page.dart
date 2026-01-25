@@ -71,7 +71,7 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
                 padding: const EdgeInsets.all(16.0),
                 child: Text(
                   role == 'player'
-                      ? "Ajouter un Licencié"
+                      ? "Ajouter un Membre"
                       : "Ajouter un Coach / Admin",
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
@@ -224,7 +224,7 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
                     ),
                     const Divider(height: 1, color: ViroColors.borderColor),
                     _buildMemberSection(
-                      "Effectif (Licenciés)",
+                      "Effectif (Membres)",
                       playerIds,
                       'player',
                       teamName,

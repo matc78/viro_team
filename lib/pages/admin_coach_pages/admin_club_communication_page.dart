@@ -354,11 +354,13 @@ class _AdminClubCommunicationPageState
     }
 
     // Joueurs
-    return StreamBuilder<QuerySnapshot>(
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
       stream: FirebaseFirestore.instance.collection('users').snapshots(),
       builder: (context, snapshot) {
         if (!snapshot.hasData) return const LinearProgressIndicator();
-        final allDocs = snapshot.data!.docs;
+        final allDocs = snapshot.data!.docs
+            .cast<DocumentSnapshot<Map<String, dynamic>>>()
+            .toList();
         // Filtrer les utilisateurs du club
         final clubDocs = filterUsersByClub(allDocs, widget.clubId);
 

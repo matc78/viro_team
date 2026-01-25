@@ -31,7 +31,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
   String _formatName(
     dynamic firstName,
     dynamic lastName, {
-    String fallback = "Licencié",
+    String fallback = "Membre",
   }) {
     final fn = (firstName as String?)?.trim();
     final ln = (lastName as String?)?.trim();
@@ -412,7 +412,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
                 final requester = _formatName(
                   data['firstName'],
                   data['lastName'],
-                  fallback: data['userId'] ?? "Licencié",
+                  fallback: data['userId'] ?? "Membre",
                 );
                 final role = data['roleRequested'] ?? "player";
                 final message = data['message'] ?? "";
@@ -462,7 +462,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
                               ),
                             ),
                             Text(
-                              role == 'coach' ? "Entraîneur" : "Licencié",
+                              role == 'coach' ? "Entraîneur" : "Membre",
                               style: const TextStyle(color: Colors.grey),
                             ),
                           ],

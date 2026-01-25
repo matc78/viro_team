@@ -216,3 +216,31 @@ List<String> getAllUserRolesInClub(Map<String, dynamic> userData, String clubId)
   
   return result;
 }
+
+/// Vérifie si un joueur a un numéro de licence dans un club donné
+/// Retourne true si la licence existe et n'est pas vide, false sinon
+bool playerHasLicense(Map<String, dynamic> userData, String clubId) {
+  final roles = userData['roles'] as Map<String, dynamic>?;
+  
+  if (roles != null && roles['player'] is Map) {
+    final playerData = roles['player'] as Map;
+    
+    // Nouvelle structure : liste de clubs
+    if (playerData['clubs'] is List) {
+      final clubs = (playerData['clubs'] as List).whereType<Map>();
+      final club = clubs.firstWhere(
+        (c) => c['clubId'] == clubId,
+        orElse: () => <String, dynamic>{},
+      );
+      final license = club['license'] as String?;
+      return license != null && license.trim().isNotEmpty;
+    }
+    // Ancienne structure : clubId direct (compatibilité)
+    else if (playerData['clubId'] == clubId) {
+      final license = playerData['license'] as String?;
+      return license != null && license.trim().isNotEmpty;
+    }
+  }
+  
+  return false;
+}

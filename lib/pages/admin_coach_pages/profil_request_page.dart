@@ -36,7 +36,7 @@ class _ProfilRequestPageState extends State<ProfilRequestPage> {
     final name = _formatName(
       widget.firstName,
       widget.lastName,
-      fallback: widget.userId ?? "Licencié",
+      fallback: widget.userId ?? "Membre",
     );
     return Scaffold(
       appBar: AppBar(title: const Text("Demande d'adhésion")),
@@ -69,7 +69,7 @@ class _ProfilRequestPageState extends State<ProfilRequestPage> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  role == 'coach' ? "Entraîneur" : "Licencié",
+                  role == 'coach' ? "Entraîneur" : "Membre",
                   style: const TextStyle(color: Colors.grey),
                 ),
                 const SizedBox(height: 16),
@@ -202,7 +202,7 @@ class _ProfilRequestPageState extends State<ProfilRequestPage> {
   String _formatName(
     dynamic firstName,
     dynamic lastName, {
-    String fallback = "Licencié",
+    String fallback = "Membre",
   }) {
     final fn = (firstName as String?)?.trim();
     final ln = (lastName as String?)?.trim();

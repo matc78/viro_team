@@ -26,11 +26,11 @@ class NameFormatter {
   /// - format(firstName: "jean", lastName: "DUPONT") -> "Jean DUPONT"
   /// - format(firstName: null, lastName: "DUPONT") -> "DUPONT"
   /// - format(firstName: "jean", lastName: null) -> "Jean"
-  /// - format(firstName: null, lastName: null, fallback: "Licencié") -> "Licencié"
+  /// - format(firstName: null, lastName: null, fallback: "Membre") -> "Membre"
   static String format({
     String? firstName,
     String? lastName,
-    String fallback = "Licencié",
+    String fallback = "Membre",
   }) {
     final fn = formatFirst(firstName);
     final ln = formatLast(lastName);
@@ -47,7 +47,7 @@ class NameFormatter {
   static String formatFromData(
     dynamic firstName,
     dynamic lastName, {
-    String fallback = "Licencié",
+    String fallback = "Membre",
   }) {
     final fn = (firstName as String?)?.trim();
     final ln = (lastName as String?)?.trim();

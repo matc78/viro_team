@@ -29,10 +29,7 @@ class _PlayerInfosPageState extends State<PlayerInfosPage> {
     if (clubIds.isEmpty) return;
     final Map<String, String> names = {};
     for (var i = 0; i < clubIds.length; i += 10) {
-      final batch = clubIds.sublist(
-        i,
-        math.min(i + 10, clubIds.length),
-      );
+      final batch = clubIds.sublist(i, math.min(i + 10, clubIds.length));
       try {
         final snapshot = await FirebaseFirestore.instance
             .collection('clubs')
@@ -123,9 +120,7 @@ class _PlayerInfosPageState extends State<PlayerInfosPage> {
   void _showStaffList(BuildContext context, String selectedClubId) {
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => _StaffListPage(clubId: selectedClubId),
-      ),
+      MaterialPageRoute(builder: (_) => _StaffListPage(clubId: selectedClubId)),
     );
   }
 
@@ -237,22 +232,25 @@ class _PlayerInfosPageState extends State<PlayerInfosPage> {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
       child: DropdownButtonFormField<String>(
-        value: selectedClubId,
+        initialValue: selectedClubId,
         decoration: InputDecoration(
           labelText: "Club",
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 12,
           ),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         ),
         items: allClubIds
-            .map((id) => DropdownMenuItem(
-                  value: id,
-                  child: Text(
-                    _clubNamesCache[id] ?? id,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ))
+            .map(
+              (id) => DropdownMenuItem(
+                value: id,
+                child: Text(
+                  _clubNamesCache[id] ?? id,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            )
             .toList(),
         onChanged: (id) {
           if (id != null) setState(() => _selectedClubId = id);
@@ -350,12 +348,12 @@ class _ClubDetailsPage extends StatelessWidget {
     String founderName = "Non défini";
     try {
       final founder = users.firstWhere((u) {
-        final data = u.data() as Map<String, dynamic>?;
+        final data = u.data();
         if (data == null) return false;
         final role = getUserRoleInClub(data, clubId);
         return role == 'admin_fondateur' || role == 'admin';
       });
-      final founderData = founder.data() as Map<String, dynamic>?;
+      final founderData = founder.data();
       if (founderData != null) {
         final firstName = founderData['firstName'] as String? ?? "";
         final lastName = founderData['lastName'] as String? ?? "";

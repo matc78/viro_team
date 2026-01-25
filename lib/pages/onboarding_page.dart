@@ -25,12 +25,12 @@ class _OnboardingPageState extends State<OnboardingPage> {
 
   // Contrôleurs
   final _messageController = TextEditingController();
-  final _licenseController = TextEditingController();
+  final _phoneController = TextEditingController();
 
   @override
   void dispose() {
     _messageController.dispose();
-    _licenseController.dispose();
+    _phoneController.dispose();
     super.dispose();
   }
 
@@ -80,8 +80,8 @@ class _OnboardingPageState extends State<OnboardingPage> {
         'status': 'pending',
         'firstName': firstName,
         'lastName': lastName,
-        if (_licenseController.text.trim().isNotEmpty && _selectedRole == 'player')
-          'license': _licenseController.text.trim(),
+        if (_phoneController.text.trim().isNotEmpty)
+          'phone': _phoneController.text.trim(),
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       };
@@ -104,12 +104,16 @@ class _OnboardingPageState extends State<OnboardingPage> {
         await requestsRef.add(requestData);
       }
 
-      // Marquer la demande en attente
+      // Marquer la demande en attente et ajouter le téléphone au profil si saisi
+      final userUpdateData = {
+        'hasPendingRequest': true,
+        'lastClubRequested': _selectedClubName,
+      };
+      if (_phoneController.text.trim().isNotEmpty) {
+        userUpdateData['phone'] = _phoneController.text.trim();
+      }
       await FirebaseFirestore.instance.collection('users').doc(user.uid).set(
-        {
-          'hasPendingRequest': true,
-          'lastClubRequested': _selectedClubName,
-        },
+        userUpdateData,
         SetOptions(merge: true),
       );
 
@@ -241,14 +245,15 @@ class _OnboardingPageState extends State<OnboardingPage> {
           if (_selectedRole == 'player') ...[
             const SizedBox(height: 16),
             const Text(
-              "Numéro de licence (optionnel)",
+              "Numéro de téléphone (optionnel)",
               style: TextStyle(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 10),
             TextField(
-              controller: _licenseController,
+              controller: _phoneController,
+              keyboardType: TextInputType.phone,
               decoration: InputDecoration(
-                hintText: "Ex: 123456",
+                hintText: "Ex: 06 12 34 56 78",
                 filled: true,
                 fillColor: Colors.white,
                 border: OutlineInputBorder(
@@ -300,7 +305,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
             _selectedClubId = null;
             _selectedClubName = null;
             _messageController.clear();
-            _licenseController.clear();
+            _phoneController.clear();
           }),
         ),
         if (isSelected) _buildJoinForm(),
