@@ -104,117 +104,117 @@ class _AdminClubCommunicationPageState
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                  const Text(
-                    "DESTINATAIRES",
-                    style: TextStyle(
-                      fontWeight: FontWeight.w900,
-                      fontSize: 11,
-                      color: Colors.grey,
-                      letterSpacing: 1.1,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  _buildTargetToggle(),
-                  const SizedBox(height: 20),
-
-                  const Text(
-                    "SÉLECTIONNER",
-                    style: TextStyle(
-                      fontWeight: FontWeight.w900,
-                      fontSize: 11,
-                      color: Colors.grey,
-                      letterSpacing: 1.1,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  _buildPickerList(),
-                  const SizedBox(height: 30),
-
-                  const Text(
-                    "DURÉE DE VISIBILITÉ",
-                    style: TextStyle(
-                      fontWeight: FontWeight.w900,
-                      fontSize: 11,
-                      color: Colors.grey,
-                      letterSpacing: 1.1,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Slider(
-                          value: _durationDays.toDouble(),
-                          min: 1,
-                          max: 30,
-                          divisions: 29,
-                          label: "$_durationDays jours",
-                          onChanged: (v) {
-                            setState(() {
-                              _durationDays = v.round();
-                            });
-                          },
+                      const Text(
+                        "DESTINATAIRES",
+                        style: TextStyle(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 11,
+                          color: Colors.grey,
+                          letterSpacing: 1.1,
                         ),
                       ),
+                      const SizedBox(height: 12),
+                      _buildTargetToggle(),
+                      const SizedBox(height: 20),
+
+                      const Text(
+                        "SÉLECTIONNER",
+                        style: TextStyle(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 11,
+                          color: Colors.grey,
+                          letterSpacing: 1.1,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      _buildPickerList(),
+                      const SizedBox(height: 30),
+
+                      const Text(
+                        "DURÉE DE VISIBILITÉ",
+                        style: TextStyle(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 11,
+                          color: Colors.grey,
+                          letterSpacing: 1.1,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Slider(
+                              value: _durationDays.toDouble(),
+                              min: 1,
+                              max: 30,
+                              divisions: 29,
+                              label: "$_durationDays jours",
+                              onChanged: (v) {
+                                setState(() {
+                                  _durationDays = v.round();
+                                });
+                              },
+                            ),
+                          ),
+                          SizedBox(
+                            width: 70,
+                            child: Text(
+                              "$_durationDays j",
+                              textAlign: TextAlign.right,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: ViroColors.primary,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 30),
+
+                      const Text(
+                        "MESSAGE",
+                        style: TextStyle(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 11,
+                          color: Colors.grey,
+                          letterSpacing: 1.1,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _messageController,
+                        maxLines: 6,
+                        decoration: InputDecoration(
+                          hintText: "Écrivez votre message important ici...",
+                          fillColor: Colors.white,
+                          filled: true,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(15),
+                            borderSide: BorderSide.none,
+                          ),
+                          contentPadding: const EdgeInsets.all(16),
+                        ),
+                      ),
+                      const SizedBox(height: 30),
+
                       SizedBox(
-                        width: 70,
-                        child: Text(
-                          "$_durationDays j",
-                          textAlign: TextAlign.right,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: ViroColors.primary,
+                        width: double.infinity,
+                        height: 55,
+                        child: ElevatedButton.icon(
+                          onPressed: _sendMessage,
+                          icon: const Icon(Icons.campaign_rounded),
+                          label: const Text(
+                            "DIFFUSER L'ANNONCE",
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: ViroColors.primary,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(15),
+                            ),
                           ),
                         ),
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 30),
-
-                  const Text(
-                    "MESSAGE",
-                    style: TextStyle(
-                      fontWeight: FontWeight.w900,
-                      fontSize: 11,
-                      color: Colors.grey,
-                      letterSpacing: 1.1,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _messageController,
-                    maxLines: 6,
-                    decoration: InputDecoration(
-                      hintText: "Écrivez votre message important ici...",
-                      fillColor: Colors.white,
-                      filled: true,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(15),
-                        borderSide: BorderSide.none,
-                      ),
-                      contentPadding: const EdgeInsets.all(16),
-                    ),
-                  ),
-                  const SizedBox(height: 30),
-
-                  SizedBox(
-                    width: double.infinity,
-                    height: 55,
-                    child: ElevatedButton.icon(
-                      onPressed: _sendMessage,
-                      icon: const Icon(Icons.campaign_rounded),
-                      label: const Text(
-                        "DIFFUSER L'ANNONCE",
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: ViroColors.primary,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(15),
-                        ),
-                      ),
-                    ),
-                  ),
                     ],
                   ),
                 ),
@@ -227,14 +227,14 @@ class _AdminClubCommunicationPageState
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 child: Center(
-                    child: Opacity(
-                      opacity: 0.12,
-                      child: Image.asset(
-                        'assets/logo/logo_long.png',
-                        height: 100,
-                        fit: BoxFit.contain,
-                      ),
+                  child: Opacity(
+                    opacity: 0.12,
+                    child: Image.asset(
+                      'assets/logo/logo_long.png',
+                      height: 100,
+                      fit: BoxFit.contain,
                     ),
+                  ),
                 ),
               ),
             ),
@@ -355,15 +355,13 @@ class _AdminClubCommunicationPageState
 
     // Joueurs
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('users')
-          .snapshots(),
+      stream: FirebaseFirestore.instance.collection('users').snapshots(),
       builder: (context, snapshot) {
         if (!snapshot.hasData) return const LinearProgressIndicator();
         final allDocs = snapshot.data!.docs;
         // Filtrer les utilisateurs du club
         final clubDocs = filterUsersByClub(allDocs, widget.clubId);
-        
+
         final users = clubDocs.map((doc) {
           final data = doc.data() as Map<String, dynamic>;
           final first = (data['firstName'] as String? ?? "").trim();

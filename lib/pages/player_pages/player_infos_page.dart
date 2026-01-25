@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -9,11 +11,54 @@ import 'player_planning_page.dart';
 import 'player_home_page.dart';
 import 'player_profil_page.dart';
 
-class PlayerInfosPage extends StatelessWidget {
+class PlayerInfosPage extends StatefulWidget {
   final String clubId;
 
   const PlayerInfosPage({super.key, required this.clubId});
-  Widget _buildBottomNav(BuildContext context) {
+
+  @override
+  State<PlayerInfosPage> createState() => _PlayerInfosPageState();
+}
+
+class _PlayerInfosPageState extends State<PlayerInfosPage> {
+  String? _selectedClubId;
+  bool _initialized = false;
+  Map<String, String> _clubNamesCache = {};
+
+  Future<void> _loadClubNames(List<String> clubIds) async {
+    if (clubIds.isEmpty) return;
+    final Map<String, String> names = {};
+    for (var i = 0; i < clubIds.length; i += 10) {
+      final batch = clubIds.sublist(
+        i,
+        math.min(i + 10, clubIds.length),
+      );
+      try {
+        final snapshot = await FirebaseFirestore.instance
+            .collection('clubs')
+            .where(FieldPath.documentId, whereIn: batch)
+            .get();
+        for (var doc in snapshot.docs) {
+          names[doc.id] = doc.data()['name'] as String? ?? doc.id;
+        }
+      } catch (_) {
+        for (var id in batch) names[id] = id;
+      }
+    }
+    if (mounted) setState(() => _clubNamesCache = names);
+  }
+
+  void _ensureInitialized(List<String> allClubIds) {
+    if (_initialized || allClubIds.isEmpty) return;
+    _initialized = true;
+    final sel = allClubIds.contains(widget.clubId)
+        ? widget.clubId
+        : allClubIds.first;
+    setState(() => _selectedClubId = sel);
+    _loadClubNames(allClubIds);
+  }
+
+  Widget _buildBottomNav(BuildContext context, String selectedClubId) {
     return BottomNavigationBar(
       elevation: 0,
       backgroundColor: ViroColors.background,
@@ -33,13 +78,11 @@ class PlayerInfosPage extends StatelessWidget {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => PlayerPlanningPage(clubId: clubId),
+              builder: (_) => PlayerPlanningPage(clubId: selectedClubId),
             ),
           );
         }
-        if (index == 2) {
-          // déjà sur Infos
-        }
+        if (index == 2) {}
         if (index == 3) {
           Navigator.push(
             context,
@@ -68,19 +111,21 @@ class PlayerInfosPage extends StatelessWidget {
     );
   }
 
-  // --- LOGIQUE D'AFFICHAGE DES SOUS-PAGES ---
-
-  void _showClubInfos(BuildContext context) {
+  void _showClubInfos(BuildContext context, String selectedClubId) {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => _ClubDetailsPage(clubId: clubId)),
+      MaterialPageRoute(
+        builder: (_) => _ClubDetailsPage(clubId: selectedClubId),
+      ),
     );
   }
 
-  void _showStaffList(BuildContext context) {
+  void _showStaffList(BuildContext context, String selectedClubId) {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => _StaffListPage(clubId: clubId)),
+      MaterialPageRoute(
+        builder: (_) => _StaffListPage(clubId: selectedClubId),
+      ),
     );
   }
 
@@ -95,8 +140,7 @@ class PlayerInfosPage extends StatelessWidget {
         centerTitle: true,
         backgroundColor: ViroColors.background,
         elevation: 0,
-        automaticallyImplyLeading:
-            false, // On gère nous même si besoin, ou via la BottomNav
+        automaticallyImplyLeading: false,
       ),
       body: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
         stream: FirebaseFirestore.instance
@@ -113,11 +157,9 @@ class PlayerInfosPage extends StatelessWidget {
             return const Center(child: Text("Erreur de chargement"));
           }
 
-          // Extraire tous les clubIds du joueur
           final Set<String> clubIdsSet = {};
           final roles = userData['roles'] as Map<String, dynamic>? ?? {};
 
-          // Player clubs
           if (roles['player'] is Map) {
             final playerData = roles['player'] as Map;
             if (playerData['clubs'] is List) {
@@ -129,18 +171,28 @@ class PlayerInfosPage extends StatelessWidget {
             }
           }
 
-          // Fallback pour compatibilité
           final legacyClubId = userData['clubId'] as String?;
           if (legacyClubId != null) clubIdsSet.add(legacyClubId);
-
-          // Ajouter le clubId passé en paramètre si pas déjà présent
-          clubIdsSet.add(clubId);
+          clubIdsSet.add(widget.clubId);
 
           final allClubIds = clubIdsSet.toList();
 
+          if (allClubIds.isEmpty) {
+            return const Center(child: Text("Aucun club trouvé"));
+          }
+
+          if (!_initialized) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              _ensureInitialized(allClubIds);
+            });
+          }
+
+          final selectedClubId = _selectedClubId ?? allClubIds.first;
+          final showFilter = allClubIds.length > 1;
+
           return Column(
             children: [
-              // --- HEADER BOUTONS ---
+              if (showFilter) _buildClubFilter(allClubIds, selectedClubId),
               Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Row(
@@ -149,7 +201,7 @@ class PlayerInfosPage extends StatelessWidget {
                       child: _HeaderButton(
                         icon: Icons.info_outline_rounded,
                         label: "Infos Club",
-                        onTap: () => _showClubInfos(context),
+                        onTap: () => _showClubInfos(context, selectedClubId),
                       ),
                     ),
                     const SizedBox(width: 16),
@@ -157,19 +209,16 @@ class PlayerInfosPage extends StatelessWidget {
                       child: _HeaderButton(
                         icon: Icons.people_alt_rounded,
                         label: "Contacts / Staff",
-                        onTap: () => _showStaffList(context),
+                        onTap: () => _showStaffList(context, selectedClubId),
                       ),
                     ),
                   ],
                 ),
               ),
-
               const Divider(height: 1),
-
-              // --- ZONE DE NOTIFICATIONS / MESSAGES ---
               Expanded(
                 child: _ClubAnnouncementsList(
-                  clubIds: allClubIds,
+                  clubIds: [selectedClubId],
                   userId: userId,
                 ),
               ),
@@ -177,7 +226,38 @@ class PlayerInfosPage extends StatelessWidget {
           );
         },
       ),
-      bottomNavigationBar: _buildBottomNav(context),
+      bottomNavigationBar: _buildBottomNav(
+        context,
+        _selectedClubId ?? widget.clubId,
+      ),
+    );
+  }
+
+  Widget _buildClubFilter(List<String> allClubIds, String selectedClubId) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      child: DropdownButtonFormField<String>(
+        value: selectedClubId,
+        decoration: InputDecoration(
+          labelText: "Club",
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        ),
+        items: allClubIds
+            .map((id) => DropdownMenuItem(
+                  value: id,
+                  child: Text(
+                    _clubNamesCache[id] ?? id,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ))
+            .toList(),
+        onChanged: (id) {
+          if (id != null) setState(() => _selectedClubId = id);
+        },
+      ),
     );
   }
 }

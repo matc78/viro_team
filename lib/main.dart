@@ -9,11 +9,13 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:viro_team/pages/onboarding_page.dart';
 import 'firebase_options.dart';
 import 'pages/auth_page.dart';
+import 'pages/no_internet_page.dart';
 import 'pages/player_pages/player_home_page.dart';
 import 'pages/admin_coach_pages/admin_home_page.dart';
 import 'pages/splash_page.dart';
 import 'services/user_session.dart';
 import 'theme/viro_theme.dart';
+import 'utils/connectivity_checker.dart';
 import 'utils/firebase_error_handler.dart';
 import 'widget/viro_loader.dart';
 
@@ -38,12 +40,64 @@ class MyApp extends StatefulWidget {
   State<MyApp> createState() => _MyAppState();
 }
 
-class _MyAppState extends State<MyApp> {
+class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   String? _currentUserId;
   final UserSession _session = UserSession();
+  bool _hasInternet = true;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _checkConnection();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    // Quand l'app revient au premier plan, vérifier la connexion
+    if (state == AppLifecycleState.resumed) {
+      _checkConnection();
+    }
+  }
+
+  Future<void> _checkConnection() async {
+    final hasConnection = await ConnectivityChecker.hasInternetConnection();
+    if (mounted && _hasInternet != hasConnection) {
+      setState(() {
+        _hasInternet = hasConnection;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    // Si pas de connexion, afficher la page "pas de connexion"
+    if (!_hasInternet) {
+      return MaterialApp(
+        title: 'ViroTeam',
+        theme: ViroTheme.lightTheme,
+        debugShowCheckedModeBanner: false,
+        locale: const Locale('fr'),
+        supportedLocales: const [Locale('fr'), Locale('en')],
+        localizationsDelegates: const [
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        home: NoInternetPage(
+          onConnectionRestored: () {
+            _checkConnection();
+          },
+        ),
+      );
+    }
     return MaterialApp(
       title: 'ViroTeam',
       theme: ViroTheme.lightTheme, // Ton thème bleu et blanc

@@ -6,6 +6,7 @@ import '../widget/viro_loader.dart';
 import '../widget/club_search_widget.dart';
 import '../widget/pending_requests_widget.dart';
 import '../utils/firebase_helpers.dart';
+import '../utils/firebase_error_handler.dart';
 import 'admin_coach_pages/create_club_page.dart';
 
 /// Page pour ajouter un nouveau profil (pour utilisateurs qui en ont déjà)
@@ -25,14 +26,11 @@ class _AddProfilePageState extends State<AddProfilePage> {
   String? _selectedClubName;
   String? _sportFilter;
 
-  // Contrôleurs
   final _messageController = TextEditingController();
-  final _licenseController = TextEditingController();
 
   @override
   void dispose() {
     _messageController.dispose();
-    _licenseController.dispose();
     super.dispose();
   }
 
@@ -93,8 +91,6 @@ class _AddProfilePageState extends State<AddProfilePage> {
         'status': 'pending',
         'firstName': firstName,
         'lastName': lastName,
-        if (_licenseController.text.trim().isNotEmpty && _selectedRole == 'player')
-          'license': _licenseController.text.trim(),
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       };
@@ -135,14 +131,11 @@ class _AddProfilePageState extends State<AddProfilePage> {
           _selectedClubId = null;
           _selectedClubName = null;
           _messageController.clear();
-          _licenseController.clear();
         });
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Erreur : $e")),
-        );
+        FirebaseErrorHandler.showErrorSnackBar(context, e);
       }
     } finally {
       if (mounted) setState(() => _isUpdating = false);
@@ -197,6 +190,21 @@ class _AddProfilePageState extends State<AddProfilePage> {
             .doc(_uid)
             .snapshots(),
         builder: (context, userSnapshot) {
+          if (userSnapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: ViroLoader());
+          }
+          
+          if (userSnapshot.hasError) {
+            return FirebaseErrorHandler.buildErrorWidget(
+              context,
+              userSnapshot.error,
+              onRetry: () {
+                // Le StreamBuilder se reconnectera automatiquement
+                setState(() {});
+              },
+            );
+          }
+          
           if (!userSnapshot.hasData) {
             return const Center(child: ViroLoader());
           }
@@ -315,26 +323,6 @@ class _AddProfilePageState extends State<AddProfilePage> {
             ),
           ),
 
-          if (_selectedRole == 'player') ...[
-            const SizedBox(height: 16),
-            const Text(
-              "Numéro de licence (optionnel)",
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _licenseController,
-              decoration: InputDecoration(
-                hintText: "Ex: 123456",
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-            ),
-          ],
-
           const SizedBox(height: 20),
           ElevatedButton(
             onPressed: _sendJoinRequest,
@@ -378,7 +366,6 @@ class _AddProfilePageState extends State<AddProfilePage> {
             _selectedClubId = null;
             _selectedClubName = null;
             _messageController.clear();
-            _licenseController.clear();
           }),
         ),
         if (isSelected) _buildJoinForm(excludedClubIds: excludedClubIds),

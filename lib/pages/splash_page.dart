@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../pages/no_internet_page.dart';
+import '../utils/connectivity_checker.dart';
 import '../widget/viro_loader.dart';
 
 class SplashPage extends StatefulWidget {
@@ -15,21 +17,50 @@ class SplashPage extends StatefulWidget {
 }
 
 class _SplashPageState extends State<SplashPage> {
+  bool _hasCheckedConnection = false;
+  bool _hasInternet = false;
+
   @override
   void initState() {
     super.initState();
-    // Attendre 2 secondes avant de naviguer vers l'écran principal
-    Timer(const Duration(seconds: 2), () {
-      if (mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => widget.child),
-        );
+    _checkConnection();
+  }
+
+  Future<void> _checkConnection() async {
+    final hasConnection = await ConnectivityChecker.hasInternetConnection();
+    
+    if (mounted) {
+      setState(() {
+        _hasCheckedConnection = true;
+        _hasInternet = hasConnection;
+      });
+
+      if (hasConnection) {
+        // Attendre 2 secondes avant de naviguer vers l'écran principal
+        Timer(const Duration(seconds: 2), () {
+          if (mounted) {
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(builder: (_) => widget.child),
+            );
+          }
+        });
       }
-    });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    // Si pas de connexion, afficher la page "pas de connexion"
+    if (_hasCheckedConnection && !_hasInternet) {
+      return NoInternetPage(
+        onConnectionRestored: () {
+          // Quand la connexion est restaurée, on revient au splash et on continue
+          _checkConnection();
+        },
+      );
+    }
+
+    // Sinon, afficher le splash screen normal
     return Scaffold(
       backgroundColor: Colors.white,
       body: Center(

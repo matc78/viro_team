@@ -3,7 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:viro_team/pages/player_pages/players_teams_page.dart';
+import 'package:viro_team/pages/player_pages/player_teams_page.dart';
 import '../../utils/firebase_error_handler.dart';
 
 // Import de tes nouvelles pages

@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../theme/viro_theme.dart';
+import '../utils/firebase_error_handler.dart';
 
 /// Widget réutilisable pour rechercher et sélectionner un club
 class ClubSearchWidget extends StatefulWidget {
@@ -154,11 +155,32 @@ class _ClubSearchWidgetState extends State<ClubSearchWidget> {
       stream: query.snapshots(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
-          return const Padding(
-            padding: EdgeInsets.all(8.0),
-            child: Text(
-              "Erreur de chargement",
-              style: TextStyle(color: Colors.red),
+          return Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.error_outline, color: Colors.redAccent, size: 32),
+                const SizedBox(height: 8),
+                Text(
+                  FirebaseErrorHandler.getErrorMessage(snapshot.error),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.redAccent, fontSize: 12),
+                ),
+                const SizedBox(height: 8),
+                ElevatedButton.icon(
+                  onPressed: () {
+                    // Le StreamBuilder se reconnectera automatiquement
+                    setState(() {});
+                  },
+                  icon: const Icon(Icons.refresh, size: 16),
+                  label: const Text('Réessayer'),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    textStyle: const TextStyle(fontSize: 12),
+                  ),
+                ),
+              ],
             ),
           );
         }
