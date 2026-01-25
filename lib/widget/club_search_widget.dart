@@ -67,7 +67,7 @@ class _ClubSearchWidgetState extends State<ClubSearchWidget> {
         ),
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
-          value: _sportFilter,
+          initialValue: _sportFilter,
           decoration: InputDecoration(
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 12,
@@ -75,9 +75,7 @@ class _ClubSearchWidgetState extends State<ClubSearchWidget> {
             ),
             filled: true,
             fillColor: Colors.white,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
           ),
           items: _sports
               .map((s) => DropdownMenuItem(value: s, child: Text(s)))
@@ -104,9 +102,7 @@ class _ClubSearchWidgetState extends State<ClubSearchWidget> {
             prefixIcon: const Icon(Icons.search),
             filled: true,
             fillColor: Colors.white,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
           ),
           onChanged: (val) => setState(() => _searchTerm = val.trim()),
         ),
@@ -176,7 +172,10 @@ class _ClubSearchWidgetState extends State<ClubSearchWidget> {
                   icon: const Icon(Icons.refresh, size: 16),
                   label: const Text('Réessayer'),
                   style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
                     textStyle: const TextStyle(fontSize: 12),
                   ),
                 ),
@@ -196,15 +195,16 @@ class _ClubSearchWidgetState extends State<ClubSearchWidget> {
           final name = (data['name'] ?? '').toString().toLowerCase();
           final city = (data['city'] ?? '').toString().toLowerCase();
           final searchLower = _searchTerm.toLowerCase();
-          
+
           // Filtrer par recherche
-          final matchesSearch = searchLower.isEmpty ||
+          final matchesSearch =
+              searchLower.isEmpty ||
               name.contains(searchLower) ||
               city.contains(searchLower);
-          
+
           // Exclure les clubs déjà membres
           final isExcluded = widget.excludedClubIds?.contains(doc.id) ?? false;
-          
+
           return matchesSearch && !isExcluded;
         }).toList();
 
@@ -233,7 +233,7 @@ class _ClubSearchWidgetState extends State<ClubSearchWidget> {
               final club = docs[index].data() as Map<String, dynamic>;
               final clubId = docs[index].id;
               final isSelected = widget.selectedClubId == clubId;
-              
+
               return ListTile(
                 visualDensity: VisualDensity.compact,
                 selected: isSelected,

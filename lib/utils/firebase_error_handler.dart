@@ -10,16 +10,16 @@ class FirebaseErrorHandler {
     if (error is SocketException) {
       return 'Problème de connexion internet. Vérifiez votre connexion réseau et réessayez.';
     }
-    
+
     // Convertir l'erreur en string pour vérifier les patterns réseau
     final errorString = error.toString().toLowerCase();
-    
+
     // Vérifier les erreurs de timeout via le message d'erreur
-    if (errorString.contains('timeoutexception') || 
+    if (errorString.contains('timeoutexception') ||
         errorString.contains('timeout exception')) {
       return 'La connexion a pris trop de temps. Vérifiez votre connexion internet et réessayez.';
     }
-    
+
     // Gestion des erreurs Firebase
     if (error is FirebaseException) {
       switch (error.code) {
@@ -52,7 +52,7 @@ class FirebaseErrorHandler {
         default:
           // Vérifier si le message d'erreur contient des indices de problème réseau
           final errorMessage = error.message?.toLowerCase() ?? '';
-          if (errorMessage.contains('network') || 
+          if (errorMessage.contains('network') ||
               errorMessage.contains('connection') ||
               errorMessage.contains('socket') ||
               errorMessage.contains('timeout') ||
@@ -89,9 +89,9 @@ class FirebaseErrorHandler {
           return error.message ?? 'Erreur d\'authentification : ${error.code}';
       }
     }
-    
+
     // Vérifier si l'erreur générique contient des indices de problème réseau
-    if (errorString.contains('network') || 
+    if (errorString.contains('network') ||
         errorString.contains('connection') ||
         errorString.contains('socket') ||
         errorString.contains('timeout') ||
@@ -103,7 +103,7 @@ class FirebaseErrorHandler {
         errorString.contains('unknownhostexception')) {
       return 'Problème de connexion internet. Vérifiez votre connexion réseau et réessayez.';
     }
-    
+
     return 'Une erreur inattendue est survenue.';
   }
 

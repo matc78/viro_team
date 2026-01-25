@@ -71,7 +71,9 @@ class _AddProfilePageState extends State<AddProfilePage> {
         return;
       }
 
-      final requestsRef = FirebaseFirestore.instance.collection('join_requests');
+      final requestsRef = FirebaseFirestore.instance.collection(
+        'join_requests',
+      );
 
       // Vérifier s'il existe déjà une demande en attente pour ce club/rôle
       final existing = await requestsRef
@@ -114,12 +116,9 @@ class _AddProfilePageState extends State<AddProfilePage> {
       }
 
       // Marquer la demande en attente
-      await FirebaseFirestore.instance.collection('users').doc(_uid).set(
-        {
-          'hasPendingRequest': true,
-        },
-        SetOptions(merge: true),
-      );
+      await FirebaseFirestore.instance.collection('users').doc(_uid).set({
+        'hasPendingRequest': true,
+      }, SetOptions(merge: true));
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -153,7 +152,9 @@ class _AddProfilePageState extends State<AddProfilePage> {
       if (playerData['clubs'] is List) {
         final clubs = (playerData['clubs'] as List).whereType<Map>();
         excluded.addAll(
-          clubs.map((c) => c['clubId'] as String? ?? '').where((id) => id.isNotEmpty),
+          clubs
+              .map((c) => c['clubId'] as String? ?? '')
+              .where((id) => id.isNotEmpty),
         );
       }
     }
@@ -162,7 +163,9 @@ class _AddProfilePageState extends State<AddProfilePage> {
     if (roles['coach'] is List) {
       final coaches = (roles['coach'] as List).whereType<Map>();
       excluded.addAll(
-        coaches.map((c) => c['clubId'] as String? ?? '').where((id) => id.isNotEmpty),
+        coaches
+            .map((c) => c['clubId'] as String? ?? '')
+            .where((id) => id.isNotEmpty),
       );
     }
 
@@ -180,10 +183,7 @@ class _AddProfilePageState extends State<AddProfilePage> {
 
     return Scaffold(
       backgroundColor: ViroColors.background,
-      appBar: AppBar(
-        title: const Text("Ajouter un profil"),
-        elevation: 0,
-      ),
+      appBar: AppBar(title: const Text("Ajouter un profil"), elevation: 0),
       body: StreamBuilder<DocumentSnapshot>(
         stream: FirebaseFirestore.instance
             .collection('users')
@@ -193,7 +193,7 @@ class _AddProfilePageState extends State<AddProfilePage> {
           if (userSnapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: ViroLoader());
           }
-          
+
           if (userSnapshot.hasError) {
             return FirebaseErrorHandler.buildErrorWidget(
               context,
@@ -204,12 +204,14 @@ class _AddProfilePageState extends State<AddProfilePage> {
               },
             );
           }
-          
+
           if (!userSnapshot.hasData) {
             return const Center(child: ViroLoader());
           }
 
-          final userData = (userSnapshot.data!.data() as Map<String, dynamic>?) ?? <String, dynamic>{};
+          final userData =
+              (userSnapshot.data!.data() as Map<String, dynamic>?) ??
+              <String, dynamic>{};
           final excludedClubIds = _getExcludedClubIds(userData);
 
           return SingleChildScrollView(
