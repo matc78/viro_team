@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../theme/viro_theme.dart';
+import '../../utils/app_logger.dart';
 import '../../utils/firebase_helpers.dart';
 
 class AdminAddEventPage extends StatefulWidget {
@@ -182,8 +183,28 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
       }
 
       await batch.commit();
+      AppLogger.instance.info(
+        iterations > 1 ? 'Événements récurrents créés' : 'Événement créé',
+        {
+          'clubId': widget.clubId,
+          'eventType': _selectedType,
+          'iterations': iterations,
+          'date': _date.toIso8601String(),
+          'teamName': _selectedTeamName ?? 'N/A',
+          'creatorId': FirebaseAuth.instance.currentUser?.uid,
+        },
+      );
       if (mounted) Navigator.pop(context);
     } catch (e) {
+      AppLogger.instance.error(
+        'Erreur lors de la création d\'événement',
+        error: e,
+        context: {
+          'clubId': widget.clubId,
+          'eventType': _selectedType,
+          'creatorId': FirebaseAuth.instance.currentUser?.uid,
+        },
+      );
       _showError("Erreur lors de l'enregistrement : $e");
     } finally {
       if (mounted) setState(() => _isLoading = false);

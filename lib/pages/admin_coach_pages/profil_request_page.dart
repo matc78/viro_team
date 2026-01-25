@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../../theme/viro_theme.dart';
+import '../../utils/app_logger.dart';
 
 class ProfilRequestPage extends StatefulWidget {
   final String requestId;
@@ -188,8 +189,27 @@ class _ProfilRequestPageState extends State<ProfilRequestPage> {
       }
 
       await requestRef.delete();
+      AppLogger.instance.info(
+        accept ? 'Demande de profil acceptée' : 'Demande de profil refusée',
+        {
+          'requestId': widget.requestId,
+          'userId': widget.userId,
+          'clubId': widget.clubId,
+          'roleRequested': widget.roleRequested,
+        },
+      );
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
+      AppLogger.instance.error(
+        'Erreur lors du traitement de la demande de profil',
+        error: e,
+        context: {
+          'requestId': widget.requestId,
+          'userId': widget.userId,
+          'clubId': widget.clubId,
+          'action': accept ? 'accept' : 'refuse',
+        },
+      );
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,

@@ -45,14 +45,17 @@ dependencies:
   go_router: ^17.0.1
   image_picker: ^1.2.1
   intl: ^0.20.2
+  logger: ^2.0.2+1
   shared_preferences: ^2.3.3
   table_calendar: ^3.2.0
 
 dev_dependencies:
+  fake_cloud_firestore: ^4.0.1
   flutter_lints: ^5.0.0
   flutter_test:
     sdk: flutter
   flutter_launcher_icons: ^0.14.4
+  mockito: ^5.4.4
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

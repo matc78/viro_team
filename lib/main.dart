@@ -17,6 +17,7 @@ import 'pages/admin_coach_pages/admin_home_page.dart';
 import 'pages/splash_page.dart';
 import 'services/user_session.dart';
 import 'theme/viro_theme.dart';
+import 'utils/app_logger.dart';
 import 'utils/connectivity_checker.dart';
 import 'utils/firebase_error_handler.dart';
 import 'widget/fatal_error_app.dart';
@@ -33,6 +34,9 @@ void main() {
       await Firebase.initializeApp(
         options: DefaultFirebaseOptions.currentPlatform,
       );
+
+      // 2.5. Initialiser le logger
+      AppLogger.instance.init();
 
       // 3. Configurer Firebase Crashlytics
       // Passer les erreurs Flutter à Crashlytics
@@ -74,9 +78,11 @@ void main() {
       FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
     } catch (_) {
       // Si Crashlytics n'est pas disponible, on log quand même l'erreur
-      // En mode debug, on peut aussi l'afficher dans la console
-      debugPrint('Erreur asynchrone non capturée: $error');
-      debugPrint('StackTrace: $stack');
+      AppLogger.instance.error(
+        'Erreur asynchrone non capturée',
+        error: error,
+        stackTrace: stack,
+      );
     }
   });
 }

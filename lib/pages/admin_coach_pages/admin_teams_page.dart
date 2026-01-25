@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../../theme/viro_theme.dart';
+import '../../utils/app_logger.dart';
 import '../../utils/firebase_error_handler.dart';
 import '../../widget/viro_loader.dart';
 import 'admin_teams_detail_page.dart';
@@ -87,18 +88,38 @@ class _AdminTeamsPageState extends State<AdminTeamsPage> {
             ),
             onPressed: () async {
               if (nameController.text.isNotEmpty) {
-                await _db
-                    .collection('clubs')
-                    .doc(widget.clubId)
-                    .collection('teams')
-                    .add({
-                      'name': nameController.text.trim(),
+                try {
+                  final teamRef = await _db
+                      .collection('clubs')
+                      .doc(widget.clubId)
+                      .collection('teams')
+                      .add({
+                        'name': nameController.text.trim(),
+                        'category': category,
+                        'playerIds': [],
+                        'coachIds': [],
+                        'createdAt': FieldValue.serverTimestamp(),
+                      });
+                  AppLogger.instance.info(
+                    'Équipe créée',
+                    {
+                      'teamId': teamRef.id,
+                      'teamName': nameController.text.trim(),
                       'category': category,
-                      'playerIds': [],
-                      'coachIds': [],
-                      'createdAt': FieldValue.serverTimestamp(),
-                    });
-                if (mounted) Navigator.pop(ctx);
+                      'clubId': widget.clubId,
+                    },
+                  );
+                  if (mounted) Navigator.pop(ctx);
+                } catch (e) {
+                  AppLogger.instance.error(
+                    'Erreur lors de la création de l\'équipe',
+                    error: e,
+                    context: {
+                      'clubId': widget.clubId,
+                      'teamName': nameController.text.trim(),
+                    },
+                  );
+                }
               }
             },
             child: const Text("CRÉER", style: TextStyle(color: Colors.white)),
@@ -513,6 +534,16 @@ class _AdminTeamsPageState extends State<AdminTeamsPage> {
       }
 
       await teamDoc.reference.delete();
+      AppLogger.instance.warning(
+        'Équipe supprimée',
+        {
+          'teamId': teamDoc.id,
+          'teamName': teamName,
+          'clubId': widget.clubId,
+          'category': teamCategory,
+          'memberCount': memberIds.length,
+        },
+      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -523,6 +554,15 @@ class _AdminTeamsPageState extends State<AdminTeamsPage> {
         );
       }
     } catch (e) {
+      AppLogger.instance.error(
+        'Erreur lors de la suppression de l\'équipe',
+        error: e,
+        context: {
+          'teamId': teamDoc.id,
+          'teamName': teamName,
+          'clubId': widget.clubId,
+        },
+      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text("Erreur lors de la suppression : $e")),

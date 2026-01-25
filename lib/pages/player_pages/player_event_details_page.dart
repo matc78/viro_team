@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../theme/viro_theme.dart';
 import '../../widget/viro_loader.dart';
+import '../../utils/app_logger.dart';
 import '../../utils/firebase_helpers.dart';
 import '../../utils/firebase_error_handler.dart';
 
@@ -198,13 +199,12 @@ class PlayerEventDetailsPage extends StatelessWidget {
   ) async {
     final String uid = FirebaseAuth.instance.currentUser?.uid ?? "";
     if (uid.isEmpty) {
-      debugPrint("[Attendance] Pas d'utilisateur connecté.");
+      AppLogger.instance.warning(
+        'Tentative de mise à jour de présence sans utilisateur connecté',
+        {'clubId': clubId, 'eventId': eventId},
+      );
       return;
     }
-
-    debugPrint(
-      "[Attendance] club=$clubId event=$eventId user=$uid -> $newStatus",
-    );
 
     try {
       await FirebaseFirestore.instance
@@ -213,8 +213,26 @@ class PlayerEventDetailsPage extends StatelessWidget {
           .collection('events')
           .doc(eventId)
           .update({'attendance.$uid': newStatus});
-      debugPrint("[Attendance] Mise à jour réussie.");
+      AppLogger.instance.info(
+        'Mise à jour de présence',
+        {
+          'userId': uid,
+          'clubId': clubId,
+          'eventId': eventId,
+          'status': newStatus,
+        },
+      );
     } catch (e) {
+      AppLogger.instance.error(
+        'Erreur lors de la mise à jour de présence',
+        error: e,
+        context: {
+          'userId': uid,
+          'clubId': clubId,
+          'eventId': eventId,
+          'status': newStatus,
+        },
+      );
       FirebaseErrorHandler.showErrorSnackBar(context, e);
     }
   }

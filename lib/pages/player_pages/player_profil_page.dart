@@ -9,6 +9,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import '../../theme/viro_theme.dart';
 import '../../widget/viro_loader.dart';
+import '../../utils/app_logger.dart';
 import '../auth_page.dart';
 import '../add_profile_page.dart';
 
@@ -586,9 +587,21 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
                 );
                 await user.reauthenticateWithCredential(credential);
                 await user.updatePassword(newPass);
+                AppLogger.instance.info(
+                  'Mot de passe modifié',
+                  {'userId': user.uid},
+                );
                 if (mounted) Navigator.pop(context);
                 _showSnack("Mot de passe mis à jour");
               } on FirebaseAuthException catch (e) {
+                AppLogger.instance.error(
+                  'Erreur lors du changement de mot de passe',
+                  error: e,
+                  context: {
+                    'userId': user.uid,
+                    'errorCode': e.code,
+                  },
+                );
                 _showSnack(
                   e.code == 'wrong-password'
                       ? "Mot de passe actuel incorrect."
@@ -621,7 +634,12 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
           ),
           ElevatedButton(
             onPressed: () async {
+              final userId = FirebaseAuth.instance.currentUser?.uid;
               await FirebaseAuth.instance.signOut();
+              AppLogger.instance.info(
+                'Déconnexion',
+                {'userId': userId},
+              );
               if (!context.mounted) return;
               Navigator.pop(context); // close dialog
               _goToAuth(context);

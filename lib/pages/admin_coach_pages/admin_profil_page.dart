@@ -10,6 +10,7 @@ import 'package:intl/intl.dart';
 import 'package:viro_team/pages/add_profile_page.dart';
 import '../../theme/viro_theme.dart';
 import '../../widget/viro_loader.dart';
+import '../../utils/app_logger.dart';
 import '../auth_page.dart';
 
 class AdminProfilPage extends StatefulWidget {
@@ -511,6 +512,16 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
                     .doc(_auth.currentUser?.uid)
                     .update({'clubName': newNameInput});
 
+                AppLogger.instance.info(
+                  'Nom du club modifié',
+                  {
+                    'clubId': clubId,
+                    'oldName': currentName,
+                    'newName': newNameInput,
+                    'userId': _auth.currentUser?.uid,
+                  },
+                );
+
                 if (mounted) Navigator.pop(ctx);
 
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -519,6 +530,15 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
                   ),
                 );
               } catch (e) {
+                AppLogger.instance.error(
+                  'Erreur lors de la modification du nom du club',
+                  error: e,
+                  context: {
+                    'clubId': clubId,
+                    'userId': _auth.currentUser?.uid,
+                    'newName': newNameInput,
+                  },
+                );
                 ScaffoldMessenger.of(
                   context,
                 ).showSnackBar(SnackBar(content: Text("Erreur : $e")));

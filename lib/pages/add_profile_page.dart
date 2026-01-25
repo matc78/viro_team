@@ -5,6 +5,7 @@ import '../theme/viro_theme.dart';
 import '../widget/viro_loader.dart';
 import '../widget/club_search_widget.dart';
 import '../widget/pending_requests_widget.dart';
+import '../utils/app_logger.dart';
 import '../utils/firebase_helpers.dart';
 import '../utils/firebase_error_handler.dart';
 import 'admin_coach_pages/create_club_page.dart';
@@ -97,6 +98,7 @@ class _AddProfilePageState extends State<AddProfilePage> {
         'updatedAt': FieldValue.serverTimestamp(),
       };
 
+      String? requestId;
       if (existing.docs.isNotEmpty) {
         // Mettre à jour la demande existante
         final oldData = existing.docs.first.data();
@@ -106,13 +108,34 @@ class _AddProfilePageState extends State<AddProfilePage> {
             ? newMessage
             : "$oldMessage\n\n[Relance] : $newMessage";
 
+        requestId = existing.docs.first.id;
         await existing.docs.first.reference.update({
           ...requestData,
           'message': combinedMessage,
         });
+        AppLogger.instance.info(
+          'Demande de profil relancée',
+          {
+            'requestId': requestId,
+            'userId': _uid,
+            'clubId': _selectedClubId,
+            'roleRequested': _selectedRole,
+          },
+        );
       } else {
         // Créer une nouvelle demande
-        await requestsRef.add(requestData);
+        final ref = await requestsRef.add(requestData);
+        requestId = ref.id;
+        AppLogger.instance.info(
+          'Demande de profil créée',
+          {
+            'requestId': requestId,
+            'userId': _uid,
+            'clubId': _selectedClubId,
+            'clubName': _selectedClubName,
+            'roleRequested': _selectedRole,
+          },
+        );
       }
 
       // Marquer la demande en attente
@@ -133,6 +156,15 @@ class _AddProfilePageState extends State<AddProfilePage> {
         });
       }
     } catch (e) {
+      AppLogger.instance.error(
+        'Erreur lors de la création de la demande de profil',
+        error: e,
+        context: {
+          'userId': _uid,
+          'clubId': _selectedClubId,
+          'roleRequested': _selectedRole,
+        },
+      );
       if (mounted) {
         FirebaseErrorHandler.showErrorSnackBar(context, e);
       }

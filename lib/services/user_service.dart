@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../constants/firebase_collections.dart';
 import '../models/user_model.dart';
+import '../utils/app_logger.dart';
 import '../utils/firebase_helpers.dart';
 
 /// Service pour gérer les opérations liées aux utilisateurs
@@ -58,8 +59,25 @@ class UserService {
           'clubId': clubId,
         },
       });
+      AppLogger.instance.info(
+        'Contexte actif mis à jour',
+        {
+          'userId': userId,
+          'role': role,
+          'clubId': clubId,
+        },
+      );
       return true;
     } catch (e) {
+      AppLogger.instance.error(
+        'Erreur lors de la mise à jour du contexte actif',
+        error: e,
+        context: {
+          'userId': userId,
+          'role': role,
+          'clubId': clubId,
+        },
+      );
       return false;
     }
   }

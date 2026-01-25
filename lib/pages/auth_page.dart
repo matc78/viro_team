@@ -5,6 +5,7 @@ import 'package:viro_team/pages/onboarding_page.dart';
 import 'player_pages/player_home_page.dart';
 import '../theme/viro_theme.dart';
 import '../widget/viro_loader.dart';
+import '../utils/app_logger.dart';
 import '../utils/firebase_error_handler.dart';
 
 class AuthPage extends StatefulWidget {
@@ -76,6 +77,11 @@ class _AuthPageState extends State<AuthPage> {
           email: _emailController.text.trim(),
           password: _passwordController.text.trim(),
         );
+        final user = FirebaseAuth.instance.currentUser;
+        AppLogger.instance.info(
+          'Connexion réussie',
+          {'userId': user?.uid, 'email': _emailController.text.trim()},
+        );
       } else {
         final cred = await FirebaseAuth.instance.createUserWithEmailAndPassword(
           email: _emailController.text.trim(),
@@ -91,7 +97,21 @@ class _AuthPageState extends State<AuthPage> {
               'createdAt': FieldValue.serverTimestamp(),
               // On ne met pas de clubId ici, il sera ajouté lors de l'acceptation
             }, SetOptions(merge: true));
+            AppLogger.instance.info(
+              'Compte créé avec succès',
+              {
+                'userId': user.uid,
+                'email': user.email,
+                'firstName': _firstNameController.text.trim(),
+                'lastName': _lastNameController.text.trim(),
+              },
+            );
           } catch (e) {
+            AppLogger.instance.error(
+              'Erreur lors de la création du document utilisateur',
+              error: e,
+              context: {'userId': user.uid, 'email': user.email},
+            );
             FirebaseErrorHandler.showErrorSnackBar(context, e);
             // Déconnecter l'utilisateur si la création du document échoue
             await FirebaseAuth.instance.signOut();
@@ -101,8 +121,21 @@ class _AuthPageState extends State<AuthPage> {
       }
       authSuccess = true;
     } on FirebaseAuthException catch (e) {
+      AppLogger.instance.error(
+        _isLogin ? 'Erreur de connexion' : 'Erreur de création de compte',
+        error: e,
+        context: {
+          'email': _emailController.text.trim(),
+          'errorCode': e.code,
+        },
+      );
       FirebaseErrorHandler.showErrorSnackBar(context, e);
     } catch (e) {
+      AppLogger.instance.error(
+        _isLogin ? 'Erreur inattendue lors de la connexion' : 'Erreur inattendue lors de la création de compte',
+        error: e,
+        context: {'email': _emailController.text.trim()},
+      );
       FirebaseErrorHandler.showErrorSnackBar(context, e);
     }
 

@@ -23,6 +23,17 @@ class RetryService {
       return true;
     }
 
+    // Erreurs d'authentification récupérables (vérifier avant FirebaseException,
+    // car FirebaseAuthException étend FirebaseException)
+    if (error is FirebaseAuthException) {
+      switch (error.code) {
+        case 'network-request-failed':
+          return true;
+        default:
+          return false;
+      }
+    }
+
     // Erreurs Firebase récupérables
     if (error is FirebaseException) {
       switch (error.code) {
@@ -30,16 +41,6 @@ class RetryService {
         case 'deadline-exceeded':
         case 'resource-exhausted':
         case 'internal':
-          return true;
-        default:
-          return false;
-      }
-    }
-
-    // Erreurs d'authentification récupérables
-    if (error is FirebaseAuthException) {
-      switch (error.code) {
-        case 'network-request-failed':
           return true;
         default:
           return false;

@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../../theme/viro_theme.dart';
+import '../../utils/app_logger.dart';
 import '../../utils/firebase_helpers.dart';
 import '../../widget/viro_loader.dart';
 import '../profil_display_page.dart';
@@ -108,11 +109,11 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
                       onTap: () async {
                         if (_isProcessing) return;
                         setState(() => _isProcessing = true);
+                        final userId = users[i].id;
                         try {
                           String field = (role == 'player')
                               ? 'playerIds'
                               : 'coachIds';
-                          final userId = users[i].id;
                           await widget.teamDoc.reference.update({
                             field: FieldValue.arrayUnion([userId]),
                           });
@@ -150,8 +151,28 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
                               add: true,
                             );
                           }
+                          AppLogger.instance.info(
+                            'Membre ajouté à l\'équipe',
+                            {
+                              'userId': userId,
+                              'teamId': widget.teamDoc.id,
+                              'teamName': teamName,
+                              'role': role,
+                              'clubId': widget.clubId,
+                            },
+                          );
                           if (mounted) Navigator.pop(ctx);
                         } catch (e) {
+                          AppLogger.instance.error(
+                            'Erreur lors de l\'ajout d\'un membre à l\'équipe',
+                            error: e,
+                            context: {
+                              'userId': userId,
+                              'teamId': widget.teamDoc.id,
+                              'role': role,
+                              'clubId': widget.clubId,
+                            },
+                          );
                           if (mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
@@ -403,6 +424,16 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
                                     add: false,
                                   );
                                 }
+                                AppLogger.instance.info(
+                                  'Membre retiré de l\'équipe',
+                                  {
+                                    'userId': userId,
+                                    'teamId': widget.teamDoc.id,
+                                    'teamName': teamName,
+                                    'role': role,
+                                    'clubId': widget.clubId,
+                                  },
+                                );
                               },
                             )
                           : null,

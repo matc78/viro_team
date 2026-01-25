@@ -2,17 +2,45 @@ import 'dart:io';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/material.dart';
+import 'app_logger.dart';
 
 /// Gère les erreurs Firebase et retourne un message utilisateur approprié
 class FirebaseErrorHandler {
   /// Retourne un message d'erreur utilisateur-friendly basé sur l'erreur Firebase
   static String getErrorMessage(Object? error, [StackTrace? stackTrace]) {
+    // Logger l'erreur avec contexte
+    Map<String, dynamic> errorContext = {};
+    if (error is FirebaseException) {
+      errorContext = {
+        'errorCode': error.code,
+        'errorMessage': error.message,
+      };
+    } else if (error is FirebaseAuthException) {
+      errorContext = {
+        'errorCode': error.code,
+        'errorMessage': error.message,
+      };
+    } else if (error is SocketException) {
+      errorContext = {
+        'errorType': 'SocketException',
+        'message': error.message,
+      };
+    }
+
+    AppLogger.instance.error(
+      'Erreur Firebase',
+      error: error,
+      stackTrace: stackTrace,
+      context: errorContext,
+    );
+
     // Enregistrer l'erreur dans Crashlytics (non-fatal)
     FirebaseCrashlytics.instance.recordError(
       error,
       stackTrace ?? StackTrace.current,
       fatal: false,
     );
+
     // Gestion des erreurs réseau (connexion internet)
     if (error is SocketException) {
       return 'Problème de connexion internet. Vérifiez votre connexion réseau et réessayez.';

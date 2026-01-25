@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../constants/firebase_collections.dart';
+import '../utils/app_logger.dart';
 
 /// Service pour gérer les opérations liées aux événements
 class EventService {
@@ -88,8 +89,27 @@ class EventService {
           .update({
         'attendance.$userId': status,
       });
+      AppLogger.instance.info(
+        'Présence mise à jour',
+        {
+          'clubId': clubId,
+          'eventId': eventId,
+          'userId': userId,
+          'status': status,
+        },
+      );
       return true;
     } catch (e) {
+      AppLogger.instance.error(
+        'Erreur lors de la mise à jour de présence',
+        error: e,
+        context: {
+          'clubId': clubId,
+          'eventId': eventId,
+          'userId': userId,
+          'status': status,
+        },
+      );
       return false;
     }
   }

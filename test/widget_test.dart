@@ -1,30 +1,44 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:viro_team/pages/auth_page.dart';
+import 'package:viro_team/theme/viro_theme.dart';
+import 'package:viro_team/widget/viro_loader.dart';
 
-import 'package:viro_team/main.dart';
-
+/// Tests widget basiques (sans Firebase).
+/// MyApp dépend de Firebase et ne peut pas être testé en unitaire sans mocks.
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  group('Widgets basiques', () {
+    testWidgets('ViroLoader s\'affiche correctement', (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(body: ViroLoader(size: 40)),
+        ),
+      );
+      expect(find.byType(ViroLoader), findsOneWidget);
+    });
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    testWidgets('AuthPage se construit sans erreur', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ViroTheme.lightTheme,
+          home: const AuthPage(),
+        ),
+      );
+      expect(find.byType(AuthPage), findsOneWidget);
+    });
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
-
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    testWidgets('MaterialApp avec ViroTheme a un thème cohérent', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ViroTheme.lightTheme,
+          home: const Scaffold(
+            body: Center(child: Text('Test')),
+          ),
+        ),
+      );
+      final materialApp = tester.widget<MaterialApp>(find.byType(MaterialApp));
+      expect(materialApp.theme, isNotNull);
+      expect(materialApp.theme!.useMaterial3, isTrue);
+    });
   });
 }

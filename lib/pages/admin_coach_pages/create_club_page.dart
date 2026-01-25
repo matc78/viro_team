@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../../theme/viro_theme.dart';
 import '../../widget/viro_loader.dart';
+import '../../utils/app_logger.dart';
 import 'admin_home_page.dart';
 
 class CreateClubPage extends StatefulWidget {
@@ -42,9 +43,10 @@ class _CreateClubPageState extends State<CreateClubPage> {
 
     setState(() => _isLoading = true);
 
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
     try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) return;
 
       // 1. Création du document Club
       DocumentReference
@@ -102,6 +104,17 @@ class _CreateClubPageState extends State<CreateClubPage> {
         'clubName': _nameController.text.trim(),
       }, SetOptions(merge: true));
 
+      AppLogger.instance.info(
+        'Club créé',
+        {
+          'clubId': clubRef.id,
+          'clubName': _nameController.text.trim(),
+          'adminId': user.uid,
+          'sport': _selectedSport,
+          'city': _cityController.text.trim(),
+        },
+      );
+
       if (mounted) {
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (_) => const AdminHomePage()),
@@ -109,6 +122,14 @@ class _CreateClubPageState extends State<CreateClubPage> {
         );
       }
     } catch (e) {
+      AppLogger.instance.error(
+        'Erreur lors de la création du club',
+        error: e,
+        context: {
+          'adminId': user.uid,
+          'clubName': _nameController.text.trim(),
+        },
+      );
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Erreur lors de la création : $e")),
       );

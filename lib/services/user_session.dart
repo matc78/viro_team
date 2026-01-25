@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import '../models/user_model.dart';
-import '../utils/firebase_error_handler.dart';
+import '../utils/app_logger.dart';
 
 /// Service de gestion de la session utilisateur
 /// Gère le contexte actif et les changements de profil
@@ -16,13 +16,13 @@ class UserSession extends ChangeNotifier {
 
   UserModel? get currentUser => _currentUser;
   bool get isLoading => _isLoading;
-  
+
   /// Rôle actuel basé sur activeContext
   String? get currentRole => _currentUser?.activeContext?.role;
-  
+
   /// Club actuel basé sur activeContext
   String? get currentClubId => _currentUser?.activeContext?.clubId;
-  
+
   /// Vérifie si le contexte actif est valide
   bool get hasValidContext => _currentUser?.activeContext?.isValid ?? false;
 
@@ -43,7 +43,11 @@ class UserSession extends ChangeNotifier {
         _currentUser = null;
       }
     } catch (e) {
-      debugPrint('Erreur lors du chargement de l\'utilisateur: ${FirebaseErrorHandler.getErrorMessage(e)}');
+      AppLogger.instance.error(
+        'Erreur lors du chargement de l\'utilisateur',
+        error: e,
+        context: {'userId': uid},
+      );
       _currentUser = null;
     } finally {
       _isLoading = false;
@@ -64,19 +68,26 @@ class UserSession extends ChangeNotifier {
         .collection('users')
         .doc(uid)
         .snapshots()
-        .listen((doc) {
-      if (doc.exists) {
-        _currentUser = UserModel.fromFirestore(doc);
-      } else {
-        _currentUser = null;
-      }
-      _isLoading = false;
-      notifyListeners();
-    }, onError: (error) {
-      debugPrint('Erreur lors de l\'écoute utilisateur: ${FirebaseErrorHandler.getErrorMessage(error)}');
-      _isLoading = false;
-      notifyListeners();
-    });
+        .listen(
+          (doc) {
+            if (doc.exists) {
+              _currentUser = UserModel.fromFirestore(doc);
+            } else {
+              _currentUser = null;
+            }
+            _isLoading = false;
+            notifyListeners();
+          },
+          onError: (error) {
+            AppLogger.instance.error(
+              'Erreur lors de l\'écoute utilisateur',
+              error: error,
+              context: {'userId': uid},
+            );
+            _isLoading = false;
+            notifyListeners();
+          },
+        );
   }
 
   /// Arrête l'écoute
@@ -97,16 +108,22 @@ class UserSession extends ChangeNotifier {
           .collection('users')
           .doc(_currentUser!.uid)
           .update({
-        'activeContext': {
-          'role': role,
-          'clubId': clubId,
-        },
-      });
+            'activeContext': {'role': role, 'clubId': clubId},
+          });
 
       // Le listener mettra à jour _currentUser automatiquement
+      AppLogger.instance.info('Changement de contexte actif', {
+        'userId': _currentUser!.uid,
+        'role': role,
+        'clubId': clubId,
+      });
       return true;
     } catch (e) {
-      debugPrint('Erreur lors du changement de contexte: ${FirebaseErrorHandler.getErrorMessage(e)}');
+      AppLogger.instance.error(
+        'Erreur lors du changement de contexte',
+        error: e,
+        context: {'userId': _currentUser!.uid, 'role': role, 'clubId': clubId},
+      );
       return false;
     }
   }
@@ -126,33 +143,39 @@ class UserSession extends ChangeNotifier {
     // Profil Player (peut avoir plusieurs clubs)
     if (_currentUser!.roles.player != null) {
       for (var club in _currentUser!.roles.player!.clubs) {
-        profiles.add(ProfileOption(
-          role: 'player',
-          clubId: club.clubId ?? '',
-          clubName: null, // Sera chargé depuis Firestore si nécessaire
-          displayName: 'Joueur',
-        ));
+        profiles.add(
+          ProfileOption(
+            role: 'player',
+            clubId: club.clubId ?? '',
+            clubName: null, // Sera chargé depuis Firestore si nécessaire
+            displayName: 'Joueur',
+          ),
+        );
       }
     }
 
     // Profils Coach
     for (var coach in _currentUser!.roles.coach) {
-      profiles.add(ProfileOption(
-        role: 'coach',
-        clubId: coach.clubId ?? '',
-        clubName: null,
-        displayName: 'Coach',
-      ));
+      profiles.add(
+        ProfileOption(
+          role: 'coach',
+          clubId: coach.clubId ?? '',
+          clubName: null,
+          displayName: 'Coach',
+        ),
+      );
     }
 
     // Profils Admin
     for (var clubId in _currentUser!.roles.admin) {
-      profiles.add(ProfileOption(
-        role: 'admin',
-        clubId: clubId,
-        clubName: null,
-        displayName: 'Administrateur',
-      ));
+      profiles.add(
+        ProfileOption(
+          role: 'admin',
+          clubId: clubId,
+          clubName: null,
+          displayName: 'Administrateur',
+        ),
+      );
     }
 
     return profiles;
