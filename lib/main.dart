@@ -19,31 +19,66 @@ import 'services/user_session.dart';
 import 'theme/viro_theme.dart';
 import 'utils/connectivity_checker.dart';
 import 'utils/firebase_error_handler.dart';
+import 'widget/fatal_error_app.dart';
 import 'widget/viro_loader.dart';
 
-void main() async {
-  // 1. Toujours ajouter cette ligne pour Firebase
-  WidgetsFlutterBinding.ensureInitialized();
+void main() {
+  // Wrapper avec runZonedGuarded pour capturer toutes les erreurs asynchrones
+  runZonedGuarded(() async {
+    // 1. Toujours ajouter cette ligne pour Firebase
+    WidgetsFlutterBinding.ensureInitialized();
 
-  // 2. Initialiser Firebase avec les options générées
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+    try {
+      // 2. Initialiser Firebase avec les options générées
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
 
-  // 3. Configurer Firebase Crashlytics
-  // Passer les erreurs Flutter à Crashlytics
-  FlutterError.onError = (errorDetails) {
-    FirebaseCrashlytics.instance.recordFlutterFatalError(errorDetails);
-  };
-  // Passer les erreurs asynchrones non capturées à Crashlytics
-  PlatformDispatcher.instance.onError = (error, stack) {
-    FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
-    return true;
-  };
+      // 3. Configurer Firebase Crashlytics
+      // Passer les erreurs Flutter à Crashlytics
+      FlutterError.onError = (errorDetails) {
+        FirebaseCrashlytics.instance.recordFlutterFatalError(errorDetails);
+      };
+      // Passer les erreurs asynchrones non capturées à Crashlytics
+      PlatformDispatcher.instance.onError = (error, stack) {
+        FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+        return true;
+      };
 
-  // 3. Initialiser le formatage de date en arrière-plan pour ne pas bloquer le démarrage
-  // La première utilisation attendra que l'initialisation soit terminée
-  unawaited(initializeDateFormatting('fr_FR', null));
+      // 4. Initialiser le formatage de date en arrière-plan pour ne pas bloquer le démarrage
+      // La première utilisation attendra que l'initialisation soit terminée
+      unawaited(initializeDateFormatting('fr_FR', null));
 
-  runApp(const MyApp());
+      // 5. Lancer l'application principale
+      runApp(const MyApp());
+    } catch (error, stackTrace) {
+      // En cas d'erreur lors de l'initialisation (ex: Firebase échoue)
+      // Essayer d'enregistrer dans Crashlytics si disponible
+      try {
+        await FirebaseCrashlytics.instance.recordError(
+          error,
+          stackTrace,
+          fatal: true,
+        );
+      } catch (_) {
+        // Si Crashlytics n'est pas disponible, on continue quand même
+      }
+
+      // Afficher une page d'erreur fatale au lieu de crasher
+      runApp(FatalErrorApp(error: error, stackTrace: stackTrace));
+    }
+  }, (error, stack) {
+    // Gestionnaire d'erreurs asynchrones non capturées
+    // Ces erreurs se produisent dans des Futures, Streams, etc. qui ne sont pas await
+    try {
+      FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+    } catch (_) {
+      // Si Crashlytics n'est pas disponible, on log quand même l'erreur
+      // En mode debug, on peut aussi l'afficher dans la console
+      debugPrint('Erreur asynchrone non capturée: $error');
+      debugPrint('StackTrace: $stack');
+    }
+  });
 }
 
 class MyApp extends StatefulWidget {
