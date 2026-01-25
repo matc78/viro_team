@@ -372,6 +372,18 @@ class _ClubDetailsPage extends StatelessWidget {
     };
   }
 
+  String _postalCodeCityLine(Map<String, dynamic>? clubData) {
+    if (clubData == null) return '';
+    final pc = clubData['postalCode']?.toString().trim();
+    final city = clubData['city']?.toString().trim();
+    final hasPc = pc != null && pc.isNotEmpty;
+    final hasCity = city != null && city.isNotEmpty;
+    if (!hasPc && !hasCity) return '';
+    if (hasPc && hasCity) return '$pc $city';
+    if (hasPc) return pc;
+    return city ?? '';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -419,6 +431,13 @@ class _ClubDetailsPage extends StatelessWidget {
                   clubData?['address'] ?? "Adresse non renseignée",
                   style: const TextStyle(color: Colors.grey),
                 ),
+                if (_postalCodeCityLine(clubData).isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    _postalCodeCityLine(clubData),
+                    style: const TextStyle(color: Colors.grey),
+                  ),
+                ],
 
                 const SizedBox(height: 30),
                 const Divider(),

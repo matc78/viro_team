@@ -20,6 +20,7 @@ class _CreateClubPageState extends State<CreateClubPage> {
   // Controllers pour les champs de texte
   final _nameController = TextEditingController();
   final _cityController = TextEditingController();
+  final _postalCodeController = TextEditingController();
   final _addressController = TextEditingController();
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
@@ -38,6 +39,18 @@ class _CreateClubPageState extends State<CreateClubPage> {
     'Autre',
   ];
 
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _cityController.dispose();
+    _postalCodeController.dispose();
+    _addressController.dispose();
+    _emailController.dispose();
+    _phoneController.dispose();
+    _descriptionController.dispose();
+    super.dispose();
+  }
+
   Future<void> _createClub() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -53,6 +66,7 @@ class _CreateClubPageState extends State<CreateClubPage> {
       clubRef = await FirebaseFirestore.instance.collection('clubs').add({
         'name': _nameController.text.trim(),
         'city': _cityController.text.trim(),
+        'postalCode': _postalCodeController.text.trim(),
         'address': _addressController.text.trim(),
         'sport': _selectedSport,
         'contactEmail': _emailController.text.trim(),
@@ -84,16 +98,12 @@ class _CreateClubPageState extends State<CreateClubPage> {
       // Construire la nouvelle structure roles
       final updatedRoles = {...existingRoles, 'admin': existingAdmins};
 
-      // Définir activeContext si ce n'est pas déjà défini
-      final activeContext =
-          existingData['activeContext'] as Map<String, dynamic>?;
-      final Map<String, dynamic> newActiveContext;
-      if (activeContext == null || activeContext.isEmpty) {
-        newActiveContext = {'role': 'admin', 'clubId': clubRef.id};
-      } else {
-        // Garder le contexte actuel
-        newActiveContext = Map<String, dynamic>.from(activeContext);
-      }
+      // Toujours basculer vers le club venant d'être créé pour afficher
+      // sa page coach (évite d'afficher un autre club par erreur)
+      final Map<String, dynamic> newActiveContext = {
+        'role': 'admin',
+        'clubId': clubRef.id,
+      };
 
       // Mettre à jour le document utilisateur avec la nouvelle structure
       await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
@@ -193,6 +203,14 @@ class _CreateClubPageState extends State<CreateClubPage> {
                 label: "Ville",
                 hint: "ex: Viroflay",
                 icon: Icons.location_city,
+              ),
+
+              _buildTextField(
+                controller: _postalCodeController,
+                label: "Code postal",
+                hint: "ex: 92130",
+                icon: Icons.markunread_mailbox,
+                keyboardType: TextInputType.number,
               ),
 
               _buildTextField(

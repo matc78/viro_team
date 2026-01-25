@@ -141,6 +141,15 @@ class _ClubSearchWidgetState extends State<ClubSearchWidget> {
     );
   }
 
+  String _clubSubtitle(Map<String, dynamic> club) {
+    final pc = club['postalCode']?.toString().trim();
+    final hasPostal = pc != null && pc.isNotEmpty;
+    final city = club['city'] ?? '';
+    final sport = club['sport'] ?? '';
+    if (hasPostal) return '$pc $city - $sport';
+    return '$city - $sport';
+  }
+
   Widget _buildClubList() {
     Query query = FirebaseFirestore.instance.collection('clubs');
     if (_sportFilter != 'Tous') {
@@ -194,13 +203,15 @@ class _ClubSearchWidgetState extends State<ClubSearchWidget> {
           final data = doc.data() as Map<String, dynamic>;
           final name = (data['name'] ?? '').toString().toLowerCase();
           final city = (data['city'] ?? '').toString().toLowerCase();
+          final postalCode = (data['postalCode'] ?? '').toString().toLowerCase();
           final searchLower = _searchTerm.toLowerCase();
 
           // Filtrer par recherche
           final matchesSearch =
               searchLower.isEmpty ||
               name.contains(searchLower) ||
-              city.contains(searchLower);
+              city.contains(searchLower) ||
+              postalCode.contains(searchLower);
 
           // Exclure les clubs déjà membres
           final isExcluded = widget.excludedClubIds?.contains(doc.id) ?? false;
@@ -246,7 +257,7 @@ class _ClubSearchWidgetState extends State<ClubSearchWidget> {
                   ),
                 ),
                 subtitle: Text(
-                  "${club['city']} - ${club['sport']}",
+                  _clubSubtitle(club),
                   style: const TextStyle(fontSize: 12),
                 ),
                 trailing: isSelected

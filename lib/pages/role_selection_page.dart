@@ -344,6 +344,15 @@ class _RoleSelectionPageState extends State<RoleSelectionPage> {
     );
   }
 
+  String _clubSubtitle(Map<String, dynamic> club) {
+    final pc = club['postalCode']?.toString().trim();
+    final hasPostal = pc != null && pc.isNotEmpty;
+    final city = club['city'] ?? '';
+    final sport = club['sport'] ?? '';
+    if (hasPostal) return '$pc $city - $sport';
+    return '$city - $sport';
+  }
+
   /// Liste dynamique des clubs filtrés
   Widget _buildClubDropdown() {
     Query query = FirebaseFirestore.instance.collection('clubs');
@@ -363,8 +372,11 @@ class _RoleSelectionPageState extends State<RoleSelectionPage> {
           final data = doc.data() as Map<String, dynamic>;
           final name = (data['name'] ?? '').toString().toLowerCase();
           final city = (data['city'] ?? '').toString().toLowerCase();
-          return name.contains(_searchTerm.toLowerCase()) ||
-              city.contains(_searchTerm.toLowerCase());
+          final postalCode = (data['postalCode'] ?? '').toString().toLowerCase();
+          final term = _searchTerm.toLowerCase();
+          return name.contains(term) ||
+              city.contains(term) ||
+              postalCode.contains(term);
         }).toList();
 
         if (docs.isEmpty) {
@@ -400,7 +412,7 @@ class _RoleSelectionPageState extends State<RoleSelectionPage> {
                   ),
                 ),
                 subtitle: Text(
-                  "${club['city']} - ${club['sport']}",
+                  _clubSubtitle(club),
                   style: const TextStyle(fontSize: 12),
                 ),
                 onTap: () {
