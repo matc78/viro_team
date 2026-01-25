@@ -278,7 +278,7 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
                 "Sélectionne les joueurs à convoquer :",
                 style: TextStyle(fontSize: 12, color: Colors.grey),
               ),
-              FutureBuilder<List<DocumentSnapshot>>(
+              FutureBuilder<List<DocumentSnapshot<Map<String, dynamic>>>>(
                 future: fetchUsersBatch(playerIds),
                 builder: (context, userSnap) {
                   if (!userSnap.hasData) {
@@ -465,16 +465,21 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
         .collection('clubs')
         .doc(widget.clubId)
         .get();
+    if (!mounted) return;
     final data = doc.data();
     final sport = data?['sport'] as String?;
     final clubAddress = data?['address'] as String?;
     if (_locationController.text == "Stade du club") {
       if (clubAddress != null && clubAddress.isNotEmpty) {
-        setState(() => _locationController.text = clubAddress);
+        if (mounted) {
+          setState(() => _locationController.text = clubAddress);
+        }
       } else {
-        setState(
-          () => _locationController.text = _defaultLocationForSport(sport),
-        );
+        if (mounted) {
+          setState(
+            () => _locationController.text = _defaultLocationForSport(sport),
+          );
+        }
       }
     }
   }

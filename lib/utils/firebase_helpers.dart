@@ -3,10 +3,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 /// Récupère plusieurs documents utilisateur en batch pour éviter les N+1 queries.
 /// Firestore limite whereIn à 10 éléments, donc on fait plusieurs appels si nécessaire.
-Future<List<DocumentSnapshot>> fetchUsersBatch(List<String> userIds) async {
+Future<List<DocumentSnapshot<Map<String, dynamic>>>> fetchUsersBatch(List<String> userIds) async {
   if (userIds.isEmpty) return [];
 
-  final batches = <Future<QuerySnapshot>>[];
+  final batches = <Future<QuerySnapshot<Map<String, dynamic>>>>[];
   for (var i = 0; i < userIds.length; i += 10) {
     final batch = userIds.sublist(i, math.min(i + 10, userIds.length));
     batches.add(
@@ -21,14 +21,14 @@ Future<List<DocumentSnapshot>> fetchUsersBatch(List<String> userIds) async {
   final allDocs = results.expand((snap) => snap.docs).toList();
 
   // Créer une map pour préserver l'ordre original
-  final Map<String, DocumentSnapshot> docsMap = {
+  final Map<String, DocumentSnapshot<Map<String, dynamic>>> docsMap = {
     for (var doc in allDocs) doc.id: doc,
   };
 
   // Retourner dans l'ordre de userIds
   return userIds
       .map((id) => docsMap[id])
-      .whereType<DocumentSnapshot>()
+      .whereType<DocumentSnapshot<Map<String, dynamic>>>()
       .toList();
 }
 
@@ -95,13 +95,13 @@ bool userBelongsToClub(Map<String, dynamic> userData, String clubId, {String? ro
 }
 
 /// Filtre une liste de documents utilisateur pour ne garder que ceux qui appartiennent au club
-List<DocumentSnapshot> filterUsersByClub(
-  List<DocumentSnapshot> users,
+List<DocumentSnapshot<Map<String, dynamic>>> filterUsersByClub(
+  List<DocumentSnapshot<Map<String, dynamic>>> users,
   String clubId, {
   String? role,
 }) {
   return users.where((doc) {
-    final data = doc.data() as Map<String, dynamic>?;
+    final data = doc.data();
     if (data == null) return false;
     return userBelongsToClub(data, clubId, role: role);
   }).toList();

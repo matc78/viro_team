@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import '../models/user_model.dart';
+import '../utils/firebase_error_handler.dart';
 
 /// Service de gestion de la session utilisateur
 /// Gère le contexte actif et les changements de profil
@@ -42,7 +43,7 @@ class UserSession extends ChangeNotifier {
         _currentUser = null;
       }
     } catch (e) {
-      debugPrint('Erreur lors du chargement de l\'utilisateur: $e');
+      debugPrint('Erreur lors du chargement de l\'utilisateur: ${FirebaseErrorHandler.getErrorMessage(e)}');
       _currentUser = null;
     } finally {
       _isLoading = false;
@@ -72,7 +73,7 @@ class UserSession extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     }, onError: (error) {
-      debugPrint('Erreur lors de l\'écoute utilisateur: $error');
+      debugPrint('Erreur lors de l\'écoute utilisateur: ${FirebaseErrorHandler.getErrorMessage(error)}');
       _isLoading = false;
       notifyListeners();
     });
@@ -105,7 +106,7 @@ class UserSession extends ChangeNotifier {
       // Le listener mettra à jour _currentUser automatiquement
       return true;
     } catch (e) {
-      debugPrint('Erreur lors du changement de contexte: $e');
+      debugPrint('Erreur lors du changement de contexte: ${FirebaseErrorHandler.getErrorMessage(e)}');
       return false;
     }
   }

@@ -36,7 +36,7 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (ctx) => StreamBuilder<QuerySnapshot>(
+      builder: (ctx) => StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
         stream: FirebaseFirestore.instance.collection('users').snapshots(),
         builder: (context, snapshot) {
           if (!snapshot.hasData) {
@@ -47,7 +47,7 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
           // Filtrer les utilisateurs du club avec le bon rôle
           final allDocs = snapshot.data!.docs;
           final clubMembers = filterUsersByClub(
-            allDocs,
+            allDocs.map((doc) => doc as DocumentSnapshot<Map<String, dynamic>>).toList(),
             widget.clubId,
             role: role == 'coach' ? 'coach' : 'player',
           );
@@ -302,7 +302,7 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
               style: TextStyle(color: Colors.grey, fontSize: 13),
             ),
           )
-        : FutureBuilder<List<DocumentSnapshot>>(
+        : FutureBuilder<List<DocumentSnapshot<Map<String, dynamic>>>>(
             future: fetchUsersBatch(ids.cast<String>()),
             builder: (ctx, snap) {
               if (!snap.hasData) {

@@ -5,6 +5,7 @@ import 'package:viro_team/pages/onboarding_page.dart';
 import 'player_pages/player_home_page.dart';
 import '../theme/viro_theme.dart';
 import '../widget/viro_loader.dart';
+import '../utils/firebase_error_handler.dart';
 
 class AuthPage extends StatefulWidget {
   const AuthPage({super.key});
@@ -23,8 +24,41 @@ class _AuthPageState extends State<AuthPage> {
 
   bool _isLogin = true;
   bool _isLoading = false;
+  final _formKey = GlobalKey<FormState>();
+
+  /// Valide le format de l'email
+  String? _validateEmail(String? value) {
+    if (value == null || value.isEmpty) {
+      return 'L\'email est requis';
+    }
+    final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+    if (!emailRegex.hasMatch(value)) {
+      return 'Format d\'email invalide';
+    }
+    return null;
+  }
+
+  /// Valide la complexité du mot de passe
+  String? _validatePassword(String? value) {
+    if (value == null || value.isEmpty) {
+      return 'Le mot de passe est requis';
+    }
+    if (value.length < 8) {
+      return 'Le mot de passe doit contenir au moins 8 caractères';
+    }
+    if (!value.contains(RegExp(r'[A-Z]'))) {
+      return 'Le mot de passe doit contenir au moins une majuscule';
+    }
+    if (!value.contains(RegExp(r'[0-9]'))) {
+      return 'Le mot de passe doit contenir au moins un chiffre';
+    }
+    return null;
+  }
 
   Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
     if (!_isLogin &&
         _passwordController.text != _confirmPasswordController.text) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -49,20 +83,27 @@ class _AuthPageState extends State<AuthPage> {
         );
         final user = cred.user;
         if (user != null) {
-          await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
-            'firstName': _firstNameController.text.trim(),
-            'lastName': _lastNameController.text.trim(),
-            'email': user.email,
-            'createdAt': FieldValue.serverTimestamp(),
-            // On ne met pas de clubId ici, il sera ajouté lors de l'acceptation
-          }, SetOptions(merge: true));
+          try {
+            await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+              'firstName': _firstNameController.text.trim(),
+              'lastName': _lastNameController.text.trim(),
+              'email': user.email,
+              'createdAt': FieldValue.serverTimestamp(),
+              // On ne met pas de clubId ici, il sera ajouté lors de l'acceptation
+            }, SetOptions(merge: true));
+          } catch (e) {
+            FirebaseErrorHandler.showErrorSnackBar(context, e);
+            // Déconnecter l'utilisateur si la création du document échoue
+            await FirebaseAuth.instance.signOut();
+            return;
+          }
         }
       }
       authSuccess = true;
     } on FirebaseAuthException catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message ?? "Une erreur est survenue")),
-      );
+      FirebaseErrorHandler.showErrorSnackBar(context, e);
+    } catch (e) {
+      FirebaseErrorHandler.showErrorSnackBar(context, e);
     }
 
     if (authSuccess) {
@@ -118,92 +159,119 @@ class _AuthPageState extends State<AuthPage> {
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              // Utilisation du logo JPG selon tes assets
-              Image.asset('assets/logo/logo.png', height: 150),
-              const SizedBox(height: 40),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // Utilisation du logo JPG selon tes assets
+                Image.asset('assets/logo/logo.png', height: 150),
+                const SizedBox(height: 40),
 
-              Text(
-                _isLogin ? "Bon retour !" : "Rejoins ViroTeam",
-                style: Theme.of(context).textTheme.headlineLarge,
-              ),
-              const SizedBox(height: 30),
+                Text(
+                  _isLogin ? "Bon retour !" : "Rejoins ViroTeam",
+                  style: Theme.of(context).textTheme.headlineLarge,
+                ),
+                const SizedBox(height: 30),
 
-              if (!_isLogin) ...[
-                TextField(
-                  controller: _firstNameController,
-                  decoration: const InputDecoration(
-                    labelText: "Prénom",
-                    prefixIcon: Icon(Icons.person_outline),
+                if (!_isLogin) ...[
+                  TextFormField(
+                    controller: _firstNameController,
+                    decoration: const InputDecoration(
+                      labelText: "Prénom",
+                      prefixIcon: Icon(Icons.person_outline),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Le prénom est requis';
+                      }
+                      return null;
+                    },
                   ),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: _lastNameController,
-                  decoration: const InputDecoration(
-                    labelText: "Nom",
-                    prefixIcon: Icon(Icons.person),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _lastNameController,
+                    decoration: const InputDecoration(
+                      labelText: "Nom",
+                      prefixIcon: Icon(Icons.person),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Le nom est requis';
+                      }
+                      return null;
+                    },
                   ),
+                  const SizedBox(height: 16),
+                ],
+
+                TextFormField(
+                  controller: _emailController,
+                  decoration: const InputDecoration(
+                    labelText: "Email",
+                    prefixIcon: Icon(Icons.email_outlined),
+                  ),
+                  keyboardType: TextInputType.emailAddress,
+                  validator: _validateEmail,
                 ),
                 const SizedBox(height: 16),
-              ],
 
-              TextField(
-                controller: _emailController,
-                decoration: const InputDecoration(
-                  labelText: "Email",
-                  prefixIcon: Icon(Icons.email_outlined),
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              TextField(
-                controller: _passwordController,
-                obscureText: true,
-                decoration: const InputDecoration(
-                  labelText: "Mot de passe",
-                  prefixIcon: Icon(Icons.lock_outline),
-                ),
-              ),
-
-              // 3. Affichage conditionnel du champ de confirmation
-              if (!_isLogin) ...[
-                const SizedBox(height: 16),
-                TextField(
-                  controller: _confirmPasswordController,
+                TextFormField(
+                  controller: _passwordController,
                   obscureText: true,
                   decoration: const InputDecoration(
-                    labelText: "Confirmer le mot de passe",
-                    prefixIcon: Icon(Icons.lock_reset_outlined),
+                    labelText: "Mot de passe",
+                    prefixIcon: Icon(Icons.lock_outline),
+                  ),
+                  validator: _isLogin ? null : _validatePassword,
+                ),
+
+                // 3. Affichage conditionnel du champ de confirmation
+                if (!_isLogin) ...[
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _confirmPasswordController,
+                    obscureText: true,
+                    decoration: const InputDecoration(
+                      labelText: "Confirmer le mot de passe",
+                      prefixIcon: Icon(Icons.lock_reset_outlined),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Veuillez confirmer le mot de passe';
+                      }
+                      if (value != _passwordController.text) {
+                        return 'Les mots de passe ne correspondent pas';
+                      }
+                      return null;
+                    },
+                  ),
+                ],
+
+                const SizedBox(height: 24),
+
+                SizedBox(
+                  width: double.infinity,
+                  height: 55,
+                  child: ElevatedButton(
+                    onPressed: _isLoading ? null : _submit,
+                    child: _isLoading
+                        ? const ViroLoader(size: 30)
+                        : Text(_isLogin ? "SE CONNECTER" : "CRÉER UN COMPTE"),
+                  ),
+                ),
+
+                TextButton(
+                  onPressed: () => setState(() => _isLogin = !_isLogin),
+                  child: Text(
+                    _isLogin
+                        ? "Pas encore de compte ? Inscris-toi"
+                        : "Déjà un compte ? Connecte-toi",
+                    style: const TextStyle(color: ViroColors.primary),
                   ),
                 ),
               ],
-
-              const SizedBox(height: 24),
-
-              SizedBox(
-                width: double.infinity,
-                height: 55,
-                child: ElevatedButton(
-                  onPressed: _isLoading ? null : _submit,
-                  child: _isLoading
-                      ? const ViroLoader(size: 30)
-                      : Text(_isLogin ? "SE CONNECTER" : "CRÉER UN COMPTE"),
-                ),
-              ),
-
-              TextButton(
-                onPressed: () => setState(() => _isLogin = !_isLogin),
-                child: Text(
-                  _isLogin
-                      ? "Pas encore de compte ? Inscris-toi"
-                      : "Déjà un compte ? Connecte-toi",
-                  style: const TextStyle(color: ViroColors.primary),
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),

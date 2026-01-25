@@ -350,9 +350,9 @@ class _PlayerTeamsPageState extends State<PlayerTeamsPage> {
         children: [
           const Divider(),
           // Section COACHS
-          FutureBuilder<List<DocumentSnapshot>>(
+          FutureBuilder<List<DocumentSnapshot<Map<String, dynamic>>>>(
             future: coachIds.isEmpty
-                ? Future.value(<DocumentSnapshot>[])
+                ? Future.value(<DocumentSnapshot<Map<String, dynamic>>>[])
                 : fetchUsersBatch(coachIds),
             builder: (context, coachSnap) {
               if (!coachSnap.hasData) {
@@ -380,9 +380,9 @@ class _PlayerTeamsPageState extends State<PlayerTeamsPage> {
           ),
           const SizedBox(height: 10),
           // Section JOUEURS
-          FutureBuilder<List<DocumentSnapshot>>(
+          FutureBuilder<List<DocumentSnapshot<Map<String, dynamic>>>>(
             future: playerIds.isEmpty
-                ? Future.value(<DocumentSnapshot>[])
+                ? Future.value(<DocumentSnapshot<Map<String, dynamic>>>[])
                 : fetchUsersBatch(playerIds),
             builder: (context, playerSnap) {
               if (!playerSnap.hasData) {

@@ -1,0 +1,17 @@
+/// Constantes pour les noms de collections Firestore
+/// Évite les typos et facilite le refactoring
+class FirebaseCollections {
+  FirebaseCollections._(); // Constructeur privé pour empêcher l'instanciation
+
+  // Collections principales
+  static const String users = 'users';
+  static const String clubs = 'clubs';
+  static const String teams = 'teams';
+  static const String events = 'events';
+  static const String joinRequests = 'join_requests';
+  static const String announcements = 'announcements';
+  
+  // Sous-collections
+  static const String members = 'members';
+  static const String attendance = 'attendance';
+}

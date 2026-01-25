@@ -288,7 +288,7 @@ class AdminEventDetailsPage extends StatelessWidget {
           if (sortedEntries.isEmpty)
             const Center(child: Text("Aucun joueur convoqué"))
           else
-            FutureBuilder<List<DocumentSnapshot>>(
+            FutureBuilder<List<DocumentSnapshot<Map<String, dynamic>>>>(
               future: fetchUsersBatch(userIds),
               builder: (context, snap) {
                 if (!snap.hasData) {

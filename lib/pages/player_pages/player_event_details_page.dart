@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../theme/viro_theme.dart';
 import '../../widget/viro_loader.dart';
 import '../../utils/firebase_helpers.dart';
+import '../../utils/firebase_error_handler.dart';
 
 class PlayerEventDetailsPage extends StatelessWidget {
   final String clubId;
@@ -66,7 +67,7 @@ class PlayerEventDetailsPage extends StatelessWidget {
                 _buildAttendanceSummary(attendance),
 
                 // --- LISTES DES JOUEURS ---
-                _buildAttendanceTabs(attendance, teamMembers),
+                _buildAttendanceTabs(context, attendance, teamMembers),
               ],
             ),
           ),
@@ -190,6 +191,7 @@ class PlayerEventDetailsPage extends StatelessWidget {
   }
 
   Future<void> _toggleAttendance(
+    BuildContext context,
     String clubId,
     String eventId,
     String newStatus,
@@ -213,7 +215,7 @@ class PlayerEventDetailsPage extends StatelessWidget {
           .update({'attendance.$uid': newStatus});
       debugPrint("[Attendance] Mise à jour réussie.");
     } catch (e) {
-      debugPrint("Erreur lors du changement de présence : $e");
+      FirebaseErrorHandler.showErrorSnackBar(context, e);
     }
   }
 
@@ -277,6 +279,7 @@ class PlayerEventDetailsPage extends StatelessWidget {
   }
 
   Widget _buildAttendanceTabs(
+    BuildContext context,
     Map<String, dynamic> attendance,
     List<dynamic> teamMembers,
   ) {
@@ -324,7 +327,7 @@ class PlayerEventDetailsPage extends StatelessWidget {
           if (sortedEntries.isEmpty)
             const Center(child: Text("Aucun joueur convoqué"))
           else
-            FutureBuilder<List<DocumentSnapshot>>(
+            FutureBuilder<List<DocumentSnapshot<Map<String, dynamic>>>>(
               future: fetchUsersBatch(userIds),
               builder: (context, snap) {
                 if (!snap.hasData) {
@@ -343,6 +346,7 @@ class PlayerEventDetailsPage extends StatelessWidget {
                         userMap[userId] ?? <String, dynamic>{};
                     if (user.isEmpty) return const SizedBox.shrink();
                     return _buildPlayerTile(
+                      context,
                       userId,
                       user,
                       entry.value,
@@ -366,6 +370,7 @@ class PlayerEventDetailsPage extends StatelessWidget {
   }
 
   Widget _buildPlayerTile(
+    BuildContext context,
     String userId,
     Map<String, dynamic> user,
     dynamic status,
@@ -410,7 +415,7 @@ class PlayerEventDetailsPage extends StatelessWidget {
           const Spacer(),
           GestureDetector(
             onTap: isCurrentUser
-                ? () => _toggleAttendance(clubId, eventId, nextStatus())
+                ? () => _toggleAttendance(context, clubId, eventId, nextStatus())
                 : null,
             child: Container(
               padding: const EdgeInsets.symmetric(

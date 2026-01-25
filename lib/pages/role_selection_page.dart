@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../theme/viro_theme.dart';
 import '../widget/viro_loader.dart';
+import '../utils/firebase_error_handler.dart';
 import 'player_pages/player_home_page.dart';
 import 'admin_coach_pages/create_club_page.dart';
 
@@ -137,9 +138,9 @@ class _RoleSelectionPageState extends State<RoleSelectionPage> {
         );
       }
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text("Erreur : $e")));
+      if (mounted) {
+        FirebaseErrorHandler.showErrorSnackBar(context, e);
+      }
     } finally {
       if (mounted) setState(() => _isUpdating = false);
     }

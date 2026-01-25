@@ -62,7 +62,9 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
           .doc(eventId)
           .update({'attendance.$_currentUserId': status});
     } catch (e) {
-      debugPrint("Erreur présence: $e");
+      if (mounted) {
+        FirebaseErrorHandler.showErrorSnackBar(context, e);
+      }
     }
   }
 
