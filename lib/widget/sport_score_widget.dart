@@ -900,21 +900,29 @@ class _SportScoreWidgetState extends State<SportScoreWidget> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
+                  _buildScoreButton('+1', () {
+                    setState(() {
+                      _team1Score += 1;
+                      _addToHistory('score_1_1');
+                      _saveScore();
+                    });
+                  }, isSmall: true),
+                  const SizedBox(width: 6),
                   _buildScoreButton('+2', () {
                     setState(() {
                       _team1Score += 2;
                       _addToHistory('score_1_2');
                       _saveScore();
                     });
-                  }),
-                  const SizedBox(width: 8),
+                  }, isSmall: true),
+                  const SizedBox(width: 6),
                   _buildScoreButton('+3', () {
                     setState(() {
                       _team1Score += 3;
                       _addToHistory('score_1_3');
                       _saveScore();
                     });
-                  }),
+                  }, isSmall: true),
                 ],
               ),
             ],
@@ -945,21 +953,29 @@ class _SportScoreWidgetState extends State<SportScoreWidget> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
+                  _buildScoreButton('+1', () {
+                    setState(() {
+                      _team2Score += 1;
+                      _addToHistory('score_2_1');
+                      _saveScore();
+                    });
+                  }, isSmall: true, color: ViroColors.accent),
+                  const SizedBox(width: 6),
                   _buildScoreButton('+2', () {
                     setState(() {
                       _team2Score += 2;
                       _addToHistory('score_2_2');
                       _saveScore();
                     });
-                  }, color: ViroColors.accent),
-                  const SizedBox(width: 8),
+                  }, isSmall: true, color: ViroColors.accent),
+                  const SizedBox(width: 6),
                   _buildScoreButton('+3', () {
                     setState(() {
                       _team2Score += 3;
                       _addToHistory('score_2_3');
                       _saveScore();
                     });
-                  }, color: ViroColors.accent),
+                  }, isSmall: true, color: ViroColors.accent),
                 ],
               ),
             ],

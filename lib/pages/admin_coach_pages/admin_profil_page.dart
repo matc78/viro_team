@@ -11,7 +11,12 @@ import 'package:viro_team/pages/add_profile_page.dart';
 import '../../theme/viro_theme.dart';
 import '../../widget/viro_loader.dart';
 import '../../utils/app_logger.dart';
+import '../../utils/firebase_helpers.dart';
+import '../../services/user_session.dart';
 import '../auth_page.dart';
+import '../onboarding_page.dart';
+import 'admin_home_page.dart';
+import '../player_pages/player_home_page.dart';
 
 class AdminProfilPage extends StatefulWidget {
   const AdminProfilPage({super.key});
@@ -180,7 +185,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
                   icon: Icons.settings_applications_outlined,
                   title: "Paramètres avancés",
                   subtitle: "Déconnexion, transfert et suppression",
-                  onTap: () => _showAdvancedSettings(context, clubId),
+                  onTap: () => _showAdvancedSettings(context, userData ?? {}),
                 ),
                 const SizedBox(height: 20),
               ],
@@ -561,13 +566,14 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
     }
   }
 
-  void _showDeleteConfirm(BuildContext context, String clubId) {
+  void _showDeleteClubConfirm(BuildContext context, String clubId) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text("Action irréversible"),
         content: const Text(
-          "Voulez-vous vraiment supprimer le club ? Cela déconnectera tous les membres.",
+          "Voulez-vous vraiment supprimer ce club ? Le club, ses équipes, "
+          "événements et annonces seront supprimés. Tous les membres seront retirés du club.",
         ),
         actions: [
           TextButton(
@@ -576,13 +582,629 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
           ),
           TextButton(
             onPressed: () {
-              // Logique de suppression complexe (Club + Members IDs...)
               Navigator.pop(ctx);
+              _deleteClub(context, clubId);
             },
-            child: const Text("SUPPRIMER", style: TextStyle(color: Colors.red)),
+            child: const Text(
+              "SUPPRIMER LE CLUB",
+              style: TextStyle(color: Colors.red),
+            ),
           ),
         ],
       ),
+    );
+  }
+
+  void _showDeleteAccountConfirm(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Supprimer mon compte"),
+        content: const Text(
+          "Voulez-vous vraiment supprimer définitivement votre compte ? "
+          "Cette action est irréversible.",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Annuler"),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _deleteAccount(context);
+            },
+            child: const Text(
+              "SUPPRIMER MON COMPTE",
+              style: TextStyle(color: Colors.red),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Retourne le premier (role, clubId) autre que [excludeClubId] depuis [userData].
+  ({String role, String clubId})? _getFirstOtherProfile(
+    Map<String, dynamic> userData,
+    String excludeClubId,
+  ) {
+    final roles = userData['roles'] as Map<String, dynamic>? ?? {};
+    // Admin
+    if (roles['admin'] is List) {
+      for (final cid in (roles['admin'] as List).whereType<String>()) {
+        if (cid != excludeClubId && cid.isNotEmpty) {
+          return (role: 'admin', clubId: cid);
+        }
+      }
+    }
+    // Coach
+    if (roles['coach'] is List) {
+      for (final e in (roles['coach'] as List)) {
+        if (e is Map) {
+          final cid = e['clubId'] as String?;
+          if (cid != null && cid != excludeClubId && cid.isNotEmpty) {
+            return (role: 'coach', clubId: cid);
+          }
+        }
+      }
+    }
+    if (roles['coach'] is List) {
+      for (final cid in (roles['coach'] as List).whereType<String>()) {
+        if (cid != excludeClubId && cid.isNotEmpty) {
+          return (role: 'coach', clubId: cid);
+        }
+      }
+    }
+    // Player
+    if (roles['player'] is Map) {
+      final pd = roles['player'] as Map;
+      if (pd['clubs'] is List) {
+        for (final c in (pd['clubs'] as List).whereType<Map>()) {
+          final cid = c['clubId'] as String?;
+          if (cid != null && cid != excludeClubId && cid.isNotEmpty) {
+            return (role: 'player', clubId: cid);
+          }
+        }
+      }
+      final legacy = pd['clubId'] as String?;
+      if (legacy != null && legacy != excludeClubId && legacy.isNotEmpty) {
+        return (role: 'player', clubId: legacy);
+      }
+    }
+    final legacyClubId = userData['clubId'] as String?;
+    if (legacyClubId != null &&
+        legacyClubId != excludeClubId &&
+        legacyClubId.isNotEmpty) {
+      final r = userData['role'] as String?;
+      return (role: r == 'admin_fondateur' ? 'admin' : (r ?? 'admin'), clubId: legacyClubId);
+    }
+    return null;
+  }
+
+  /// Retourne les [roles] mis à jour après retrait de [clubId].
+  Map<String, dynamic> _buildRolesAfterRemoveClub(
+    Map<String, dynamic>? roles,
+    String clubId,
+  ) {
+    final r = Map<String, dynamic>.from(roles ?? {});
+    if (r['admin'] is List) {
+      final list = (r['admin'] as List).whereType<String>().where((c) => c != clubId).toList();
+      r['admin'] = list;
+    }
+    if (r['coach'] is List) {
+      final list = (r['coach'] as List).toList();
+      final filtered = <dynamic>[];
+      for (final e in list) {
+        if (e is Map) {
+          final cid = e['clubId'] as String?;
+          if (cid != clubId) filtered.add(e);
+        } else if (e is String && e != clubId) {
+          filtered.add(e);
+        }
+      }
+      r['coach'] = filtered;
+    }
+    if (r['player'] is Map) {
+      final pd = Map<String, dynamic>.from(r['player'] as Map);
+      if (pd['clubs'] is List) {
+        final clubs = (pd['clubs'] as List)
+            .whereType<Map>()
+            .where((c) => (c['clubId'] as String?) != clubId)
+            .toList();
+        pd['clubs'] = clubs;
+        r['player'] = pd;
+      } else if (pd['clubId'] == clubId) {
+        pd.remove('clubId');
+        r['player'] = pd;
+      }
+    }
+    return r;
+  }
+
+  Future<void> _deleteClub(BuildContext context, String clubId) async {
+    if (clubId.isEmpty) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Aucun club sélectionné.")),
+        );
+      }
+      return;
+    }
+
+    final userId = _auth.currentUser?.uid;
+    if (userId == null) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      final usersSnap = await _firestore.collection('users').get();
+      final affected = usersSnap.docs.where((d) {
+        final data = d.data();
+        return userBelongsToClub(data, clubId);
+      }).toList();
+
+      Map<String, dynamic>? currentUserData;
+      ({String role, String clubId})? otherProfile;
+      for (final d in affected) {
+        if (d.id == userId) {
+          currentUserData = d.data();
+          otherProfile = _getFirstOtherProfile(currentUserData, clubId);
+          break;
+        }
+      }
+
+      final batch = _firestore.batch();
+      for (final doc in affected) {
+        final data = doc.data();
+        final updatedRoles = _buildRolesAfterRemoveClub(
+          data['roles'] as Map<String, dynamic>?,
+          clubId,
+        );
+        final isCurrent = doc.id == userId;
+        final other = isCurrent ? otherProfile : _getFirstOtherProfile(data, clubId);
+        final activeContext = data['activeContext'] as Map<String, dynamic>?;
+        final activeClub = activeContext?['clubId'] as String?;
+        Object? newActiveContext;
+        if (activeClub == clubId) {
+          if (other != null) {
+            newActiveContext = {'role': other.role, 'clubId': other.clubId};
+          } else {
+            newActiveContext = FieldValue.delete();
+          }
+        }
+
+        final updates = <String, dynamic>{
+          'roles': updatedRoles,
+          if (newActiveContext != null) 'activeContext': newActiveContext,
+        };
+        final legacyClubId = data['clubId'] as String?;
+        if (legacyClubId == clubId) {
+          if (other != null) {
+            updates['clubId'] = other.clubId;
+            final clubDoc = await _firestore.collection('clubs').doc(other.clubId).get();
+            final name = clubDoc.data()?['name'] as String?;
+            if (name != null) updates['clubName'] = name;
+          } else {
+            updates['clubId'] = FieldValue.delete();
+            updates['clubName'] = FieldValue.delete();
+          }
+        }
+
+        batch.set(doc.reference, updates, SetOptions(merge: true));
+      }
+
+      await batch.commit();
+
+      final joinRequests = await _firestore
+          .collection('join_requests')
+          .where('clubId', isEqualTo: clubId)
+          .get();
+      final jrBatch = _firestore.batch();
+      for (final d in joinRequests.docs) {
+        jrBatch.delete(d.reference);
+      }
+      if (joinRequests.docs.isNotEmpty) await jrBatch.commit();
+
+      final teamsRef = _firestore.collection('clubs').doc(clubId).collection('teams');
+      final teamsSnap = await teamsRef.get();
+      final tBatch = _firestore.batch();
+      for (final d in teamsSnap.docs) tBatch.delete(d.reference);
+      if (teamsSnap.docs.isNotEmpty) await tBatch.commit();
+
+      final eventsRef = _firestore.collection('clubs').doc(clubId).collection('events');
+      final eventsSnap = await eventsRef.get();
+      final eBatch = _firestore.batch();
+      for (final d in eventsSnap.docs) eBatch.delete(d.reference);
+      if (eventsSnap.docs.isNotEmpty) await eBatch.commit();
+
+      final annRef = _firestore.collection('clubs').doc(clubId).collection('announcements');
+      final annSnap = await annRef.get();
+      final aBatch = _firestore.batch();
+      for (final d in annSnap.docs) aBatch.delete(d.reference);
+      if (annSnap.docs.isNotEmpty) await aBatch.commit();
+
+      await _firestore.collection('clubs').doc(clubId).delete();
+
+      try {
+        final storageRef = FirebaseStorage.instance.ref().child('clubs').child(clubId);
+        final list = await storageRef.listAll();
+        for (final ref in list.items) await ref.delete();
+        for (final pre in list.prefixes) {
+          final sub = await pre.listAll();
+          for (final ref in sub.items) await ref.delete();
+        }
+      } catch (_) {}
+
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      if (otherProfile != null) {
+        final session = UserSession();
+        await session.switchContext(otherProfile.role, otherProfile.clubId);
+        if (!mounted) return;
+        if (otherProfile.role == 'player') {
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (_) => const PlayerHomePage()),
+            (route) => false,
+          );
+        } else {
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (_) => const AdminHomePage()),
+            (route) => false,
+          );
+        }
+      } else {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const OnboardingPage()),
+          (route) => false,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Erreur lors de la suppression du club : $e")),
+        );
+      }
+      AppLogger.instance.error('Suppression club', error: e, context: {'clubId': clubId});
+    } finally {}
+  }
+
+  Future<void> _showTransferClub(BuildContext context, String clubId) async {
+    if (clubId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Aucun club sélectionné.")),
+      );
+      return;
+    }
+    final userId = _auth.currentUser?.uid;
+    if (userId == null) return;
+
+    final usersSnap = await _firestore.collection('users').get();
+    final allDocs = usersSnap.docs;
+    final inClub = filterUsersByClub(allDocs, clubId);
+    final candidates = <DocumentSnapshot<Map<String, dynamic>>>[];
+    for (final d in inClub) {
+      if (d.id == userId) continue;
+      final r = getUserRoleInClub(d.data()!, clubId);
+      if (r == 'admin' || r == 'coach' || r == 'admin_fondateur') {
+        candidates.add(d);
+      }
+    }
+
+    if (!context.mounted) return;
+    if (candidates.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            "Aucun autre admin ou coach dans ce club. Ajoutez-en un avant de transférer.",
+          ),
+        ),
+      );
+      return;
+    }
+
+    showModalBottomSheet<void>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                "Transférer la propriété du club",
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                "Choisir le nouveau propriétaire (admin ou coach) :",
+                style: TextStyle(fontSize: 13, color: Colors.grey),
+              ),
+              const SizedBox(height: 12),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 280),
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: candidates.length,
+                  itemBuilder: (context, index) {
+                    final doc = candidates[index];
+                    final data = doc.data()!;
+                    final fn = data['firstName'] as String? ?? '';
+                    final ln = data['lastName'] as String? ?? '';
+                    final name = '$fn $ln'.trim();
+                    final r = getUserRoleInClub(data, clubId) ?? '';
+                    final roleLabel = r == 'admin_fondateur' || r == 'admin'
+                        ? 'Admin'
+                        : r == 'coach'
+                            ? 'Coach'
+                            : r;
+                    return ListTile(
+                      title: Text(name.isEmpty ? doc.id : name),
+                      subtitle: Text(roleLabel),
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        _confirmAndExecuteTransfer(
+                          context,
+                          clubId,
+                          doc.id,
+                          name.isEmpty ? doc.id : name,
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _confirmAndExecuteTransfer(
+    BuildContext context,
+    String clubId,
+    String newOwnerId,
+    String newOwnerName,
+  ) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Confirmer le transfert"),
+        content: Text(
+          "Transférer la propriété du club à $newOwnerName ? "
+          "Vous ne serez plus administrateur de ce club.",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Annuler"),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _executeTransferClub(context, clubId, newOwnerId);
+            },
+            child: const Text("Transférer"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _executeTransferClub(
+    BuildContext context,
+    String clubId,
+    String newOwnerId,
+  ) async {
+    final userId = _auth.currentUser?.uid;
+    if (userId == null) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      final clubRef = _firestore.collection('clubs').doc(clubId);
+      final clubSnap = await clubRef.get();
+      final clubData = clubSnap.data();
+      if (clubData == null) throw Exception("Club introuvable");
+
+      final admins = List<String>.from(
+        (clubData['admins'] as List?)?.whereType<String>() ?? [],
+      );
+      if (!admins.contains(newOwnerId)) admins.add(newOwnerId);
+      admins.remove(userId);
+
+      await clubRef.update({
+        'adminId': newOwnerId,
+        'admins': admins,
+      });
+
+      final newOwnerRef = _firestore.collection('users').doc(newOwnerId);
+      final newOwnerSnap = await newOwnerRef.get();
+      final newOwnerData = newOwnerSnap.data() ?? {};
+      final roles = Map<String, dynamic>.from(
+        newOwnerData['roles'] as Map<String, dynamic>? ?? {},
+      );
+      final adminList = List<String>.from(
+        (roles['admin'] as List?)?.whereType<String>() ?? [],
+      );
+      if (!adminList.contains(clubId)) adminList.add(clubId);
+      roles['admin'] = adminList;
+      await newOwnerRef.set({'roles': roles}, SetOptions(merge: true));
+
+      final currentUserRef = _firestore.collection('users').doc(userId);
+      final currentSnap = await currentUserRef.get();
+      final currentData = currentSnap.data() ?? {};
+      final updatedRoles = _buildRolesAfterRemoveClub(
+        currentData['roles'] as Map<String, dynamic>?,
+        clubId,
+      );
+      final other = _getFirstOtherProfile(currentData, clubId);
+      final newActiveContext = other != null
+          ? {'role': other.role, 'clubId': other.clubId}
+          : FieldValue.delete();
+      final updates = <String, dynamic>{
+        'roles': updatedRoles,
+        'activeContext': newActiveContext,
+      };
+      final legacyClubId = currentData['clubId'] as String?;
+      if (legacyClubId == clubId) {
+        if (other != null) {
+          updates['clubId'] = other.clubId;
+          final clubDoc = await _firestore.collection('clubs').doc(other.clubId).get();
+          final name = clubDoc.data()?['name'] as String?;
+          if (name != null) updates['clubName'] = name;
+        } else {
+          updates['clubId'] = FieldValue.delete();
+          updates['clubName'] = FieldValue.delete();
+        }
+      }
+      await currentUserRef.set(updates, SetOptions(merge: true));
+
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      if (other != null) {
+        final session = UserSession();
+        await session.switchContext(other.role, other.clubId);
+        if (!mounted) return;
+        if (other.role == 'player') {
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (_) => const PlayerHomePage()),
+            (route) => false,
+          );
+        } else {
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (_) => const AdminHomePage()),
+            (route) => false,
+          );
+        }
+      } else {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const OnboardingPage()),
+          (route) => false,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Erreur lors du transfert : $e")),
+        );
+      }
+      AppLogger.instance.error(
+        'Transfert club',
+        error: e,
+        context: {'clubId': clubId, 'newOwnerId': newOwnerId},
+      );
+    }
+  }
+
+  Future<void> _deleteAccount(BuildContext context) async {
+    final user = _auth.currentUser;
+    if (user == null) return;
+    final uid = user.uid;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      final joinReq = await _firestore
+          .collection('join_requests')
+          .where('userId', isEqualTo: uid)
+          .get();
+      final jrBatch = _firestore.batch();
+      for (final d in joinReq.docs) jrBatch.delete(d.reference);
+      if (joinReq.docs.isNotEmpty) await jrBatch.commit();
+    } catch (_) {}
+
+    try {
+      final clubsSnap = await _firestore.collection('clubs').get();
+      for (final clubDoc in clubsSnap.docs) {
+        final teamsSnap = await _firestore
+            .collection('clubs')
+            .doc(clubDoc.id)
+            .collection('teams')
+            .get();
+        for (final teamDoc in teamsSnap.docs) {
+          final d = teamDoc.data();
+          final playerIds = List<String>.from(
+            (d['playerIds'] as List?)?.whereType<String>() ?? [],
+          );
+          final coachIds = List<String>.from(
+            (d['coachIds'] as List?)?.whereType<String>() ?? [],
+          );
+          if (playerIds.contains(uid) || coachIds.contains(uid)) {
+            playerIds.remove(uid);
+            coachIds.remove(uid);
+            await teamDoc.reference.update({
+              'playerIds': playerIds,
+              'coachIds': coachIds,
+            });
+          }
+        }
+      }
+    } catch (_) {}
+
+    try {
+      await _firestore.collection('users').doc(uid).delete();
+    } catch (_) {}
+
+    try {
+      await user.delete();
+    } on FirebaseAuthException catch (e) {
+      if (mounted) {
+        Navigator.of(context).pop();
+        if (e.code == 'requires-recent-login') {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                "Cette action requiert une reconnexion récente. "
+                "Déconnectez-vous puis reconnectez-vous, puis réessayez.",
+              ),
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("Erreur suppression compte : ${e.message}")),
+          );
+        }
+      }
+      return;
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Erreur suppression compte : $e")),
+        );
+      }
+      return;
+    }
+
+    try {
+      await _auth.signOut();
+    } catch (_) {}
+
+    if (!mounted) return;
+    Navigator.of(context).pop();
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const AuthPage()),
+      (route) => false,
     );
   }
 
@@ -621,7 +1243,15 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
     }
   }
 
-  void _showAdvancedSettings(BuildContext context, String clubId) {
+  void _showAdvancedSettings(
+    BuildContext context,
+    Map<String, dynamic> userData,
+  ) {
+    final activeContext = userData['activeContext'] as Map<String, dynamic>?;
+    final activeClubId = activeContext?['clubId'] as String? ??
+        userData['clubId'] as String? ??
+        '';
+
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
@@ -651,15 +1281,8 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
                 leading: const Icon(Icons.swap_horiz, color: Colors.orange),
                 title: const Text("Transférer le club"),
                 onTap: () {
-                  // TODO: implémenter le transfert de club
                   Navigator.pop(ctx);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        "Fonction à implémenter : transfert de club",
-                      ),
-                    ),
-                  );
+                  _showTransferClub(context, activeClubId);
                 },
               ),
               ListTile(
@@ -667,7 +1290,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
                 title: const Text("Supprimer le club"),
                 onTap: () {
                   Navigator.pop(ctx);
-                  _showDeleteConfirm(context, clubId);
+                  _showDeleteClubConfirm(context, activeClubId);
                 },
               ),
               ListTile(
@@ -678,7 +1301,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
                 title: const Text("Supprimer mon compte"),
                 onTap: () {
                   Navigator.pop(ctx);
-                  _showDeleteConfirm(context, clubId);
+                  _showDeleteAccountConfirm(context);
                 },
               ),
             ],
