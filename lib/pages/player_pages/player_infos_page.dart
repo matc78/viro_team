@@ -39,7 +39,9 @@ class _PlayerInfosPageState extends State<PlayerInfosPage> {
           names[doc.id] = doc.data()['name'] as String? ?? doc.id;
         }
       } catch (_) {
-        for (var id in batch) names[id] = id;
+        for (var id in batch) {
+          names[id] = id;
+        }
       }
     }
     if (mounted) setState(() => _clubNamesCache = names);

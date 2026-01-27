@@ -361,8 +361,9 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
         final clubs = (playerData['clubs'] as List).whereType<Map>();
         for (var club in clubs) {
           final clubIdFromClub = club['clubId'] as String?;
-          if (clubIdFromClub == null || !clubIds.contains(clubIdFromClub))
+          if (clubIdFromClub == null || !clubIds.contains(clubIdFromClub)) {
             continue;
+          }
 
           final teamIds =
               (club['teamIds'] as List?)?.whereType<String>().toList() ?? [];

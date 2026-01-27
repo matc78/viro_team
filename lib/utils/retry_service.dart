@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 /// Service de retry avec backoff exponentiel pour les opérations réseau
@@ -61,17 +60,16 @@ class RetryService {
 
   /// Calcule le délai avant la prochaine tentative (backoff exponentiel)
   static Duration _calculateDelay(int attempt) {
-    final delayMs = (initialDelayMs * 
-        (backoffMultiplier * attempt)).round();
+    final delayMs = (initialDelayMs * (backoffMultiplier * attempt)).round();
     return Duration(milliseconds: delayMs);
   }
 
   /// Exécute une fonction avec retry automatique
-  /// 
+  ///
   /// [operation] : La fonction à exécuter
   /// [maxRetries] : Nombre maximum de tentatives (par défaut 3)
   /// [onRetry] : Callback appelé avant chaque retry (optionnel)
-  /// 
+  ///
   /// Retourne le résultat de l'opération ou lance l'erreur si toutes les tentatives échouent
   static Future<T> executeWithRetry<T>({
     required Future<T> Function() operation,
@@ -79,31 +77,31 @@ class RetryService {
     void Function(int attempt, Duration delay)? onRetry,
   }) async {
     int attempt = 0;
-    
+
     while (attempt < maxRetries) {
       try {
         return await operation();
       } catch (error) {
         attempt++;
-        
+
         // Si ce n'est pas une erreur récupérable ou qu'on a atteint le max, lancer l'erreur
         if (!isRetryableError(error) || attempt >= maxRetries) {
           rethrow;
         }
-        
+
         // Calculer le délai avant le prochain retry
         final delay = _calculateDelay(attempt);
-        
+
         // Appeler le callback si fourni
         if (onRetry != null) {
           onRetry(attempt, delay);
         }
-        
+
         // Attendre avant de réessayer
         await Future.delayed(delay);
       }
     }
-    
+
     // Ne devrait jamais arriver ici, mais au cas où
     throw Exception('Retry épuisé après $maxRetries tentatives');
   }

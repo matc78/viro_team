@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:viro_team/utils/retry_service.dart';
@@ -53,10 +52,7 @@ void main() {
     test('FirebaseAuthException network-request-failed est récupérable', () {
       expect(
         RetryService.isRetryableError(
-          FirebaseAuthException(
-            code: 'network-request-failed',
-            message: 'x',
-          ),
+          FirebaseAuthException(code: 'network-request-failed', message: 'x'),
         ),
         isTrue,
       );
@@ -79,17 +75,11 @@ void main() {
     });
 
     test('erreur avec "network" dans le message est récupérable', () {
-      expect(
-        RetryService.isRetryableError(Exception('network error')),
-        isTrue,
-      );
+      expect(RetryService.isRetryableError(Exception('network error')), isTrue);
     });
 
     test('erreur générique sans pattern n\'est pas récupérable', () {
-      expect(
-        RetryService.isRetryableError(Exception('invalid data')),
-        isFalse,
-      );
+      expect(RetryService.isRetryableError(Exception('invalid data')), isFalse);
     });
   });
 
@@ -131,21 +121,15 @@ void main() {
 
     test('erreur non récupérable relancée immédiatement', () async {
       var attempts = 0;
-      expect(
-        () async {
-          await RetryService.executeWithRetry<int>(
-            operation: () async {
-              attempts++;
-              throw FirebaseAuthException(
-                code: 'wrong-password',
-                message: 'x',
-              );
-            },
-            maxRetries: 3,
-          );
-        },
-        throwsA(isA<FirebaseAuthException>()),
-      );
+      expect(() async {
+        await RetryService.executeWithRetry<int>(
+          operation: () async {
+            attempts++;
+            throw FirebaseAuthException(code: 'wrong-password', message: 'x');
+          },
+          maxRetries: 3,
+        );
+      }, throwsA(isA<FirebaseAuthException>()));
       expect(attempts, 1);
     });
   });

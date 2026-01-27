@@ -3,28 +3,68 @@ class EquipmentHelpers {
   EquipmentHelpers._();
 
   // États possibles
+  static const String conditionNeuf = 'neuf';
   static const String conditionBon = 'bon';
   static const String conditionUse = 'use';
+  static const String conditionAReparer = 'a_reparer';
   static const String conditionMaintenance = 'maintenance';
   static const String conditionHorsService = 'hors_service';
 
   static const List<String> conditions = [
+    conditionNeuf,
     conditionBon,
     conditionUse,
+    conditionAReparer,
     conditionMaintenance,
     conditionHorsService,
   ];
 
   static String conditionLabel(String value) {
     switch (value) {
+      case conditionNeuf:
+        return 'Neuf';
       case conditionBon:
-        return 'Bon';
+        return 'Bon état';
       case conditionUse:
-        return 'Usé';
+        return 'Usagé';
+      case conditionAReparer:
+        return 'À réparer';
       case conditionMaintenance:
         return 'En maintenance';
       case conditionHorsService:
         return 'Hors service';
+      default:
+        return value;
+    }
+  }
+
+  // Catégories d'équipement
+  static const String categoryEntrainement = 'entrainement';
+  static const String categoryCompetition = 'competition';
+  static const String categorySoinsMedical = 'soins_medical';
+  static const String categoryTextile = 'textile';
+  static const String categoryGrosMateriel = 'gros_materiel';
+
+  static const List<String> categories = [
+    categoryEntrainement,
+    categoryCompetition,
+    categorySoinsMedical,
+    categoryTextile,
+    categoryGrosMateriel,
+  ];
+
+  static String categoryLabel(String value) {
+    switch (value) {
+      case categoryEntrainement:
+        return 'Entraînement';
+      case categoryCompetition:
+        return 'Compétition';
+      case categorySoinsMedical:
+        return 'Soins/Médical';
+      case categoryTextile:
+        return 'Textile';
+      case categoryGrosMateriel:
+        return 'Gros matériel';
       default:
         return value;
     }

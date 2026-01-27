@@ -274,10 +274,12 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
                               bRole == 'admin';
 
                           // D'abord, séparer les staff (en haut) des players (en bas)
-                          if (aIsStaff && !bIsStaff)
+                          if (aIsStaff && !bIsStaff) {
                             return -1; // a est staff, b est player -> a en premier
-                          if (!aIsStaff && bIsStaff)
+                          }
+                          if (!aIsStaff && bIsStaff) {
                             return 1; // a est player, b est staff -> b en premier
+                          }
 
                           // Si même type (tous les deux staff ou tous les deux players), trier par prénom
                           final aFirst = (aData?['firstName'] as String? ?? "")

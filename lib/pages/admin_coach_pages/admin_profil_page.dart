@@ -138,8 +138,10 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
                   subtitle: "Ajouter ou mettre à jour",
                   onTap: () => _pickClubLogo(clubId),
                 ),
-                if (getAllUserRolesInClub(userData ?? {}, clubId)
-                    .contains('admin_fondateur'))
+                if (getAllUserRolesInClub(
+                  userData ?? {},
+                  clubId,
+                ).contains('admin_fondateur'))
                   StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
                     stream: _firestore
                         .collection('clubs')
@@ -149,7 +151,8 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
                       DateTime? seasonEndDate;
                       if (clubSnap.hasData) {
                         final clubData = clubSnap.data?.data();
-                        final timestamp = clubData?['seasonEndDate'] as Timestamp?;
+                        final timestamp =
+                            clubData?['seasonEndDate'] as Timestamp?;
                         if (timestamp != null) {
                           seasonEndDate = timestamp.toDate();
                         } else {
@@ -162,14 +165,17 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
                         seasonEndDate = DateTime(now.year, 7, 31, 23, 59);
                       }
 
-                      final dateStr = DateFormat('dd MMMM yyyy à HH:mm', 'fr_FR')
-                          .format(seasonEndDate);
+                      final dateStr = DateFormat(
+                        'dd MMMM yyyy à HH:mm',
+                        'fr_FR',
+                      ).format(seasonEndDate);
 
                       return _buildMenuCard(
                         icon: Icons.calendar_today_outlined,
                         title: "Date de fin de saison",
                         subtitle: dateStr,
-                        onTap: () => _showEditSeasonEndDate(clubId, seasonEndDate),
+                        onTap: () =>
+                            _showEditSeasonEndDate(clubId, seasonEndDate),
                       );
                     },
                   ),
@@ -200,9 +206,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
                   onTap: () {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(
-                        builder: (_) => const AddProfilePage(),
-                      ),
+                      MaterialPageRoute(builder: (_) => const AddProfilePage()),
                     );
                   },
                 ),
@@ -552,15 +556,12 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
                     .doc(_auth.currentUser?.uid)
                     .update({'clubName': newNameInput});
 
-                AppLogger.instance.info(
-                  'Nom du club modifié',
-                  {
-                    'clubId': clubId,
-                    'oldName': currentName,
-                    'newName': newNameInput,
-                    'userId': _auth.currentUser?.uid,
-                  },
-                );
+                AppLogger.instance.info('Nom du club modifié', {
+                  'clubId': clubId,
+                  'oldName': currentName,
+                  'newName': newNameInput,
+                  'userId': _auth.currentUser?.uid,
+                });
 
                 if (mounted) Navigator.pop(ctx);
 
@@ -712,7 +713,10 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
         legacyClubId != excludeClubId &&
         legacyClubId.isNotEmpty) {
       final r = userData['role'] as String?;
-      return (role: r == 'admin_fondateur' ? 'admin' : (r ?? 'admin'), clubId: legacyClubId);
+      return (
+        role: r == 'admin_fondateur' ? 'admin' : (r ?? 'admin'),
+        clubId: legacyClubId,
+      );
     }
     return null;
   }
@@ -724,7 +728,10 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
   ) {
     final r = Map<String, dynamic>.from(roles ?? {});
     if (r['admin'] is List) {
-      final list = (r['admin'] as List).whereType<String>().where((c) => c != clubId).toList();
+      final list = (r['admin'] as List)
+          .whereType<String>()
+          .where((c) => c != clubId)
+          .toList();
       r['admin'] = list;
     }
     if (r['coach'] is List) {
@@ -801,7 +808,9 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
           clubId,
         );
         final isCurrent = doc.id == userId;
-        final other = isCurrent ? otherProfile : _getFirstOtherProfile(data, clubId);
+        final other = isCurrent
+            ? otherProfile
+            : _getFirstOtherProfile(data, clubId);
         final activeContext = data['activeContext'] as Map<String, dynamic>?;
         final activeClub = activeContext?['clubId'] as String?;
         Object? newActiveContext;
@@ -821,7 +830,10 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
         if (legacyClubId == clubId) {
           if (other != null) {
             updates['clubId'] = other.clubId;
-            final clubDoc = await _firestore.collection('clubs').doc(other.clubId).get();
+            final clubDoc = await _firestore
+                .collection('clubs')
+                .doc(other.clubId)
+                .get();
             final name = clubDoc.data()?['name'] as String?;
             if (name != null) updates['clubName'] = name;
           } else {
@@ -845,33 +857,55 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
       }
       if (joinRequests.docs.isNotEmpty) await jrBatch.commit();
 
-      final teamsRef = _firestore.collection('clubs').doc(clubId).collection('teams');
+      final teamsRef = _firestore
+          .collection('clubs')
+          .doc(clubId)
+          .collection('teams');
       final teamsSnap = await teamsRef.get();
       final tBatch = _firestore.batch();
-      for (final d in teamsSnap.docs) tBatch.delete(d.reference);
+      for (final d in teamsSnap.docs) {
+        tBatch.delete(d.reference);
+      }
       if (teamsSnap.docs.isNotEmpty) await tBatch.commit();
 
-      final eventsRef = _firestore.collection('clubs').doc(clubId).collection('events');
+      final eventsRef = _firestore
+          .collection('clubs')
+          .doc(clubId)
+          .collection('events');
       final eventsSnap = await eventsRef.get();
       final eBatch = _firestore.batch();
-      for (final d in eventsSnap.docs) eBatch.delete(d.reference);
+      for (final d in eventsSnap.docs) {
+        eBatch.delete(d.reference);
+      }
       if (eventsSnap.docs.isNotEmpty) await eBatch.commit();
 
-      final annRef = _firestore.collection('clubs').doc(clubId).collection('announcements');
+      final annRef = _firestore
+          .collection('clubs')
+          .doc(clubId)
+          .collection('announcements');
       final annSnap = await annRef.get();
       final aBatch = _firestore.batch();
-      for (final d in annSnap.docs) aBatch.delete(d.reference);
+      for (final d in annSnap.docs) {
+        aBatch.delete(d.reference);
+      }
       if (annSnap.docs.isNotEmpty) await aBatch.commit();
 
       await _firestore.collection('clubs').doc(clubId).delete();
 
       try {
-        final storageRef = FirebaseStorage.instance.ref().child('clubs').child(clubId);
+        final storageRef = FirebaseStorage.instance
+            .ref()
+            .child('clubs')
+            .child(clubId);
         final list = await storageRef.listAll();
-        for (final ref in list.items) await ref.delete();
+        for (final ref in list.items) {
+          await ref.delete();
+        }
         for (final pre in list.prefixes) {
           final sub = await pre.listAll();
-          for (final ref in sub.items) await ref.delete();
+          for (final ref in sub.items) {
+            await ref.delete();
+          }
         }
       } catch (_) {}
 
@@ -905,15 +939,19 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
           SnackBar(content: Text("Erreur lors de la suppression du club : $e")),
         );
       }
-      AppLogger.instance.error('Suppression club', error: e, context: {'clubId': clubId});
+      AppLogger.instance.error(
+        'Suppression club',
+        error: e,
+        context: {'clubId': clubId},
+      );
     } finally {}
   }
 
   Future<void> _showTransferClub(BuildContext context, String clubId) async {
     if (clubId.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Aucun club sélectionné.")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Aucun club sélectionné.")));
       return;
     }
     final userId = _auth.currentUser?.uid;
@@ -980,8 +1018,8 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
                     final roleLabel = r == 'admin_fondateur' || r == 'admin'
                         ? 'Admin'
                         : r == 'coach'
-                            ? 'Coach'
-                            : r;
+                        ? 'Coach'
+                        : r;
                     return ListTile(
                       title: Text(name.isEmpty ? doc.id : name),
                       subtitle: Text(roleLabel),
@@ -1062,10 +1100,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
       if (!admins.contains(newOwnerId)) admins.add(newOwnerId);
       admins.remove(userId);
 
-      await clubRef.update({
-        'adminId': newOwnerId,
-        'admins': admins,
-      });
+      await clubRef.update({'adminId': newOwnerId, 'admins': admins});
 
       final newOwnerRef = _firestore.collection('users').doc(newOwnerId);
       final newOwnerSnap = await newOwnerRef.get();
@@ -1099,7 +1134,10 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
       if (legacyClubId == clubId) {
         if (other != null) {
           updates['clubId'] = other.clubId;
-          final clubDoc = await _firestore.collection('clubs').doc(other.clubId).get();
+          final clubDoc = await _firestore
+              .collection('clubs')
+              .doc(other.clubId)
+              .get();
           final name = clubDoc.data()?['name'] as String?;
           if (name != null) updates['clubName'] = name;
         } else {
@@ -1164,7 +1202,9 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
           .where('userId', isEqualTo: uid)
           .get();
       final jrBatch = _firestore.batch();
-      for (final d in joinReq.docs) jrBatch.delete(d.reference);
+      for (final d in joinReq.docs) {
+        jrBatch.delete(d.reference);
+      }
       if (joinReq.docs.isNotEmpty) await jrBatch.commit();
     } catch (_) {}
 
@@ -1335,8 +1375,10 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
                           const Icon(Icons.calendar_today, size: 20),
                           const SizedBox(width: 12),
                           Text(
-                            DateFormat('dd MMMM yyyy', 'fr_FR')
-                                .format(selectedDate),
+                            DateFormat(
+                              'dd MMMM yyyy',
+                              'fr_FR',
+                            ).format(selectedDate),
                             style: const TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 16,
@@ -1386,7 +1428,10 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text("Annuler", style: TextStyle(color: Colors.grey)),
+                child: const Text(
+                  "Annuler",
+                  style: TextStyle(color: Colors.grey),
+                ),
               ),
               ElevatedButton(
                 onPressed: () {
@@ -1397,14 +1442,15 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
                     selectedTime.hour,
                     selectedTime.minute,
                   );
-                  Navigator.pop(ctx, {
-                    'date': finalDateTime,
-                  });
+                  Navigator.pop(ctx, {'date': finalDateTime});
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: ViroColors.primary,
                 ),
-                child: const Text("Enregistrer", style: TextStyle(color: Colors.white)),
+                child: const Text(
+                  "Enregistrer",
+                  style: TextStyle(color: Colors.white),
+                ),
               ),
             ],
           );
@@ -1414,7 +1460,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
 
     if (result != null && result['date'] != null) {
       final newDate = result['date'] as DateTime;
-      
+
       // Vérifier combien d'événements sont après la nouvelle date
       try {
         final eventsQuery = await _firestore
@@ -1423,10 +1469,10 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
             .collection('events')
             .where('date', isGreaterThan: Timestamp.fromDate(newDate))
             .get();
-        
+
         final eventsToDelete = eventsQuery.docs;
         final eventsCount = eventsToDelete.length;
-        
+
         // Afficher un dialog de confirmation si des événements seront supprimés
         if (eventsCount > 0) {
           final confirmDelete = await showDialog<bool>(
@@ -1444,24 +1490,30 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(ctx, false),
-                  child: const Text("Annuler", style: TextStyle(color: Colors.grey)),
+                  child: const Text(
+                    "Annuler",
+                    style: TextStyle(color: Colors.grey),
+                  ),
                 ),
                 ElevatedButton(
                   onPressed: () => Navigator.pop(ctx, true),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.redAccent,
                   ),
-                  child: const Text("Supprimer et continuer", style: TextStyle(color: Colors.white)),
+                  child: const Text(
+                    "Supprimer et continuer",
+                    style: TextStyle(color: Colors.white),
+                  ),
                 ),
               ],
             ),
           );
-          
+
           if (confirmDelete != true) {
             return; // L'utilisateur a annulé
           }
         }
-        
+
         // Supprimer les événements après la nouvelle date
         if (eventsCount > 0) {
           final batch = _firestore.batch();
@@ -1469,7 +1521,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
             batch.delete(doc.reference);
           }
           await batch.commit();
-          
+
           AppLogger.instance.info(
             'Événements supprimés après modification de la date de fin de saison',
             {
@@ -1480,43 +1532,37 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
             },
           );
         }
-        
+
         // Sauvegarder la nouvelle date de fin de saison
         await _firestore.collection('clubs').doc(clubId).set({
           'seasonEndDate': Timestamp.fromDate(newDate),
         }, SetOptions(merge: true));
 
-        AppLogger.instance.info(
-          'Date de fin de saison modifiée',
-          {
-            'clubId': clubId,
-            'newDate': newDate.toIso8601String(),
-            'eventsDeleted': eventsCount,
-            'userId': _auth.currentUser?.uid,
-          },
-        );
+        AppLogger.instance.info('Date de fin de saison modifiée', {
+          'clubId': clubId,
+          'newDate': newDate.toIso8601String(),
+          'eventsDeleted': eventsCount,
+          'userId': _auth.currentUser?.uid,
+        });
 
         if (mounted) {
           final message = eventsCount > 0
               ? "Date de fin de saison mise à jour. $eventsCount événement${eventsCount > 1 ? 's supprimé' : ' supprimé'}."
               : "Date de fin de saison mise à jour avec succès !";
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(message)),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(message)));
         }
       } catch (e) {
         AppLogger.instance.error(
           'Erreur lors de la modification de la date de fin de saison',
           error: e,
-          context: {
-            'clubId': clubId,
-            'userId': _auth.currentUser?.uid,
-          },
+          context: {'clubId': clubId, 'userId': _auth.currentUser?.uid},
         );
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("Erreur : $e")),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text("Erreur : $e")));
         }
       }
     }
@@ -1527,7 +1573,8 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
     Map<String, dynamic> userData,
   ) {
     final activeContext = userData['activeContext'] as Map<String, dynamic>?;
-    final activeClubId = activeContext?['clubId'] as String? ??
+    final activeClubId =
+        activeContext?['clubId'] as String? ??
         userData['clubId'] as String? ??
         '';
 
