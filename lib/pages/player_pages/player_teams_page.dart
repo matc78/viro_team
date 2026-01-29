@@ -3,8 +3,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../../theme/viro_theme.dart';
-import '../../widget/viro_loader.dart';
 import '../../utils/firebase_helpers.dart';
+import '../../widget/user_display_tile.dart';
+import '../../widget/viro_loader.dart';
 import '../profil_display_page.dart';
 
 class PlayerTeamsPage extends StatefulWidget {
@@ -102,14 +103,14 @@ class _PlayerTeamsPageState extends State<PlayerTeamsPage> {
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 child: Center(
-                    child: Opacity(
-                      opacity: 0.12,
-                      child: Image.asset(
-                        'assets/logo/logo_long.png',
-                        height: 100,
-                        fit: BoxFit.contain,
-                      ),
+                  child: Opacity(
+                    opacity: 0.12,
+                    child: Image.asset(
+                      'assets/logo/logo_long.png',
+                      height: 100,
+                      fit: BoxFit.contain,
                     ),
+                  ),
                 ),
               ),
             ),
@@ -153,10 +154,7 @@ class _PlayerTeamsPageState extends State<PlayerTeamsPage> {
       return StreamBuilder<QuerySnapshot>(
         stream: streams[0],
         builder: (context, snapshot) {
-          return _buildTeamsFromSnapshots(
-            [snapshot.data],
-            clubIds,
-          );
+          return _buildTeamsFromSnapshots([snapshot.data], clubIds);
         },
       );
     }
@@ -168,10 +166,10 @@ class _PlayerTeamsPageState extends State<PlayerTeamsPage> {
           return StreamBuilder<QuerySnapshot>(
             stream: streams[1],
             builder: (context, snapshot1) {
-              return _buildTeamsFromSnapshots(
-                [snapshot0.data, snapshot1.data],
-                clubIds,
-              );
+              return _buildTeamsFromSnapshots([
+                snapshot0.data,
+                snapshot1.data,
+              ], clubIds);
             },
           );
         },
@@ -189,22 +187,20 @@ class _PlayerTeamsPageState extends State<PlayerTeamsPage> {
               return StreamBuilder<QuerySnapshot>(
                 stream: streams[2],
                 builder: (context, snapshot2) {
-                  return _buildTeamsFromSnapshots(
-                    [snapshot0.data, snapshot1.data, snapshot2.data],
-                    clubIds,
-                  );
+                  return _buildTeamsFromSnapshots([
+                    snapshot0.data,
+                    snapshot1.data,
+                    snapshot2.data,
+                  ], clubIds);
                 },
               );
             }
             // Pour plus de 3 clubs, traiter les 3 premiers
-            return _buildTeamsFromSnapshots(
-              [
-                snapshot0.data,
-                snapshot1.data,
-                if (streams.length > 2) null,
-              ],
-              clubIds.take(3).toList(),
-            );
+            return _buildTeamsFromSnapshots([
+              snapshot0.data,
+              snapshot1.data,
+              if (streams.length > 2) null,
+            ], clubIds.take(3).toList());
           },
         );
       },
@@ -247,24 +243,28 @@ class _PlayerTeamsPageState extends State<PlayerTeamsPage> {
     }
 
     return ListView.builder(
-      padding: const EdgeInsets.only(
-        left: 16,
-        right: 16,
-        top: 16,
-        bottom: 140,
-      ),
+      padding: const EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 140),
       itemCount: allTeamsWithClub.length,
       itemBuilder: (context, index) {
         final teamInfo = allTeamsWithClub[index];
         final teamData = teamInfo['teamData'] as Map<String, dynamic>;
         final clubId = teamInfo['clubId'] as String;
         return FutureBuilder<DocumentSnapshot>(
-          future: FirebaseFirestore.instance.collection('clubs').doc(clubId).get(),
+          future: FirebaseFirestore.instance
+              .collection('clubs')
+              .doc(clubId)
+              .get(),
           builder: (context, clubSnap) {
             final clubData = clubSnap.data?.data() as Map<String, dynamic>?;
             final clubName = clubData?['name'] as String? ?? "Mon Club";
             final clubLogo = clubData?['logoUrl'] as String? ?? "";
-            return _buildTeamCard(context, teamData, clubName, clubLogo, clubId);
+            return _buildTeamCard(
+              context,
+              teamData,
+              clubName,
+              clubLogo,
+              clubId,
+            );
           },
         );
       },
@@ -311,7 +311,9 @@ class _PlayerTeamsPageState extends State<PlayerTeamsPage> {
             const Border(), // Retire la bordure par défaut de l'ExpansionTile
         leading: CircleAvatar(
           backgroundColor: clubColor.withOpacity(0.1),
-          backgroundImage: clubLogo.isNotEmpty ? CachedNetworkImageProvider(clubLogo) : null,
+          backgroundImage: clubLogo.isNotEmpty
+              ? CachedNetworkImageProvider(clubLogo)
+              : null,
           child: clubLogo.isEmpty
               ? Icon(Icons.shield_rounded, color: clubColor)
               : null,
@@ -460,22 +462,14 @@ class _MemberTile extends StatelessWidget {
     return ListTile(
       contentPadding: EdgeInsets.zero,
       dense: true,
-      leading: CircleAvatar(
-        radius: 14,
-        backgroundImage:
-            (userData['avatarUrl'] != null &&
-                (userData['avatarUrl'] as String).isNotEmpty)
-            ? CachedNetworkImageProvider(userData['avatarUrl'] as String)
-            : null,
-        child:
-            (userData['avatarUrl'] == null ||
-                (userData['avatarUrl'] as String).isEmpty)
-            ? const Icon(Icons.person, size: 14)
-            : null,
-      ),
-      title: Text(
-        "${userData['firstName'] ?? ''} ${userData['lastName'] ?? ''}",
-        style: const TextStyle(fontSize: 13),
+      leading: null,
+      title: UserDisplayTile(
+        userId: userId,
+        firstName: userData['firstName'] as String?,
+        lastName: userData['lastName'] as String?,
+        avatarUrl: userData['avatarUrl'] as String?,
+        navigateOnTap: false,
+        textStyle: const TextStyle(fontSize: 13),
       ),
       trailing: const Icon(Icons.chevron_right, size: 16, color: Colors.grey),
       onTap: () {

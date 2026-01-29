@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import '../../theme/viro_theme.dart';
 import '../../utils/firebase_helpers.dart';
+import '../../widget/user_display_tile.dart';
 import '../../widget/viro_loader.dart';
 
 class AdminClubCommunicationPage extends StatefulWidget {
@@ -481,9 +482,6 @@ class _AdminClubCommunicationPageState
               final expiresAt = createdAt?.add(Duration(days: durationDays));
               final senderFirst = data['senderFirstName'] as String? ?? '';
               final senderLast = data['senderLastName'] as String? ?? '';
-              final senderName = '$senderFirst $senderLast'.trim().isEmpty
-                  ? 'Club'
-                  : '$senderFirst $senderLast'.trim();
               final docId = doc.id;
               return Container(
                 margin: const EdgeInsets.only(bottom: 10),
@@ -547,17 +545,18 @@ class _AdminClubCommunicationPageState
                     const SizedBox(height: 8),
                     Row(
                       children: [
-                        Icon(
-                          Icons.person_outline,
-                          size: 12,
-                          color: Colors.grey[600],
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          senderName,
-                          style: TextStyle(
+                        UserDisplayTile(
+                          userId: data['senderId'] as String?,
+                          firstName: senderFirst.isNotEmpty
+                              ? senderFirst
+                              : null,
+                          lastName: senderLast.isNotEmpty ? senderLast : null,
+                          compact: true,
+                          fallback: 'Club',
+                          textStyle: TextStyle(
                             fontSize: 11,
                             color: Colors.grey[600],
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
                         if (expiresAt != null) ...[

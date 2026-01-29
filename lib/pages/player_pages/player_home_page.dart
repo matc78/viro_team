@@ -17,8 +17,9 @@ import 'player_infos_page.dart';
 import 'player_loan_catalog_page.dart';
 
 import '../../theme/viro_theme.dart';
-import '../../widget/viro_loader.dart';
 import '../../widget/profile_switcher_dialog.dart';
+import '../../widget/user_display_tile.dart';
+import '../../widget/viro_loader.dart';
 import '../add_profile_page.dart';
 
 class PlayerHomePage extends StatefulWidget {
@@ -540,66 +541,59 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
                             color: Colors.grey[900],
                           ),
                         ),
-                        if (senderName.isNotEmpty) ...[
+                        if (senderName.isNotEmpty || senderId != null) ...[
                           const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.person_outline,
-                                size: 12,
-                                color: clubColor,
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                senderName,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: clubColor,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ] else if (senderId != null) ...[
-                          const SizedBox(height: 4),
-                          FutureBuilder<DocumentSnapshot>(
-                            future: FirebaseFirestore.instance
-                                .collection('users')
-                                .doc(senderId)
-                                .get(),
-                            builder: (context, userSnap) {
-                              if (!userSnap.hasData ||
-                                  !(userSnap.data?.exists ?? false)) {
-                                return const SizedBox.shrink();
-                              }
-                              final uData =
-                                  userSnap.data!.data()
-                                      as Map<String, dynamic>?;
-                              final name = _formatName(
-                                uData?['firstName'] as String?,
-                                uData?['lastName'] as String?,
-                              );
-                              if (name.isEmpty) return const SizedBox.shrink();
-                              return Row(
-                                children: [
-                                  Icon(
-                                    Icons.person_outline,
-                                    size: 12,
+                          (senderId != null && senderName.isNotEmpty)
+                              ? UserDisplayTile(
+                                  userId: senderId,
+                                  firstName: senderFirstName,
+                                  lastName: senderLastName,
+                                  compact: true,
+                                  textStyle: TextStyle(
+                                    fontSize: 12,
                                     color: clubColor,
+                                    fontWeight: FontWeight.w500,
                                   ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    name,
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: clubColor,
-                                      fontWeight: FontWeight.w500,
-                                    ),
+                                )
+                              : senderId != null
+                              ? FutureBuilder<DocumentSnapshot>(
+                                  future: FirebaseFirestore.instance
+                                      .collection('users')
+                                      .doc(senderId)
+                                      .get(),
+                                  builder: (context, userSnap) {
+                                    if (!userSnap.hasData ||
+                                        !(userSnap.data?.exists ?? false)) {
+                                      return const SizedBox.shrink();
+                                    }
+                                    final uData =
+                                        userSnap.data!.data()
+                                            as Map<String, dynamic>?;
+                                    return UserDisplayTile(
+                                      userId: senderId,
+                                      firstName: uData?['firstName'] as String?,
+                                      lastName: uData?['lastName'] as String?,
+                                      avatarUrl: uData?['avatarUrl'] as String?,
+                                      compact: true,
+                                      textStyle: TextStyle(
+                                        fontSize: 12,
+                                        color: clubColor,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    );
+                                  },
+                                )
+                              : UserDisplayTile(
+                                  userId: null,
+                                  firstName: senderFirstName,
+                                  lastName: senderLastName,
+                                  compact: true,
+                                  textStyle: TextStyle(
+                                    fontSize: 12,
+                                    color: clubColor,
+                                    fontWeight: FontWeight.w500,
                                   ),
-                                ],
-                              );
-                            },
-                          ),
+                                ),
                         ],
                       ],
                     ),
@@ -611,16 +605,6 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
         ],
       ),
     );
-  }
-
-  String _formatName(String? first, String? last) {
-    final f = (first ?? "").trim();
-    final l = (last ?? "").trim();
-    final fFormatted = f.isEmpty
-        ? ""
-        : "${f[0].toUpperCase()}${f.length > 1 ? f.substring(1).toLowerCase() : ""}";
-    final lFormatted = l.isEmpty ? "" : l.toUpperCase();
-    return [fFormatted, lFormatted].where((s) => s.isNotEmpty).join(" ").trim();
   }
 
   Widget _buildSectionTitleLarge(String title) {

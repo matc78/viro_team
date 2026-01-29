@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../../theme/viro_theme.dart';
 import '../../utils/app_logger.dart';
+import '../../widget/user_display_tile.dart';
 
 class ProfilRequestPage extends StatefulWidget {
   final String requestId;
@@ -34,11 +35,6 @@ class _ProfilRequestPageState extends State<ProfilRequestPage> {
 
   @override
   Widget build(BuildContext context) {
-    final name = _formatName(
-      widget.firstName,
-      widget.lastName,
-      fallback: widget.userId ?? "Membre",
-    );
     return Scaffold(
       appBar: AppBar(title: const Text("Demande d'adhésion")),
       body: FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
@@ -61,9 +57,13 @@ class _ProfilRequestPageState extends State<ProfilRequestPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  name,
-                  style: const TextStyle(
+                UserDisplayTile(
+                  userId: widget.userId,
+                  firstName: widget.firstName,
+                  lastName: widget.lastName,
+                  avatarUrl: data['avatarUrl'] as String?,
+                  fallback: widget.userId ?? "Membre",
+                  textStyle: const TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
                   ),
@@ -217,25 +217,5 @@ class _ProfilRequestPageState extends State<ProfilRequestPage> {
     } finally {
       if (mounted) setState(() => _isProcessing = false);
     }
-  }
-
-  String _formatName(
-    dynamic firstName,
-    dynamic lastName, {
-    String fallback = "Membre",
-  }) {
-    final fn = (firstName as String?)?.trim();
-    final ln = (lastName as String?)?.trim();
-    if ((fn == null || fn.isEmpty) && (ln == null || ln.isEmpty)) {
-      return fallback;
-    }
-    String capitalize(String value) {
-      if (value.isEmpty) return value;
-      return value[0].toUpperCase() + value.substring(1).toLowerCase();
-    }
-
-    final first = fn != null ? capitalize(fn) : "";
-    final last = ln != null ? ln.toUpperCase() : "";
-    return [first, last].where((e) => e.isNotEmpty).join(" ");
   }
 }

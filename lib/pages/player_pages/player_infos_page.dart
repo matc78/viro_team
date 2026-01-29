@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../../theme/viro_theme.dart';
 import '../../utils/firebase_helpers.dart';
+import '../../widget/user_display_tile.dart';
 import '../../widget/viro_loader.dart';
 import '../profil_display_page.dart';
 import 'player_planning_page.dart';
@@ -595,16 +596,17 @@ class _StaffListPage extends StatelessWidget {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: ViroColors.primary,
-                    child: Text(
-                      (data['firstName'] ?? "?")[0],
-                      style: const TextStyle(color: Colors.white),
+                  leading: null,
+                  title: UserDisplayTile(
+                    userId: uid,
+                    firstName: data['firstName'] as String?,
+                    lastName: data['lastName'] as String?,
+                    avatarUrl: data['avatarUrl'] as String?,
+                    navigateOnTap: false,
+                    textStyle: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
                     ),
-                  ),
-                  title: Text(
-                    "${data['firstName']} ${data['lastName']}",
-                    style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                   subtitle: Text(
                     data['email'] ?? "",
@@ -1118,11 +1120,6 @@ class _ClubAnnouncementsList extends StatelessWidget {
 
         final targetName = _formatTargetName(targetType, targetIds);
         final timeRemaining = _getTimeRemaining(createdAt, durationDays);
-        final senderName = "$senderFirstName $senderLastName".trim();
-        final senderLabel = senderName.isNotEmpty
-            ? senderName
-            : 'Administration';
-
         final isExpiringSoon =
             createdAt != null &&
             createdAt
@@ -1164,14 +1161,21 @@ class _ClubAnnouncementsList extends StatelessWidget {
                           ),
                           const SizedBox(width: 6),
                           Flexible(
-                            child: Text(
-                              senderLabel,
-                              style: TextStyle(
+                            child: UserDisplayTile(
+                              userId: data['senderId'] as String?,
+                              firstName: senderFirstName.isNotEmpty
+                                  ? senderFirstName
+                                  : null,
+                              lastName: senderLastName.isNotEmpty
+                                  ? senderLastName
+                                  : null,
+                              compact: true,
+                              fallback: 'Administration',
+                              textStyle: TextStyle(
                                 fontSize: 12,
                                 color: Colors.grey[700],
                                 fontWeight: FontWeight.w600,
                               ),
-                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                         ],

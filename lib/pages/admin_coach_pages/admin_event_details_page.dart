@@ -2,8 +2,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../theme/viro_theme.dart';
-import '../../widget/viro_loader.dart';
 import '../../utils/firebase_helpers.dart';
+import '../../widget/user_display_tile.dart';
+import '../../widget/viro_loader.dart';
 
 class AdminEventDetailsPage extends StatelessWidget {
   final String clubId;
@@ -297,19 +298,15 @@ class AdminEventDetailsPage extends StatelessWidget {
                 final docs = snap.data!;
                 final userMap = {
                   for (final doc in docs)
-                    doc.id: doc.data() as Map<String, dynamic>
+                    doc.id: doc.data() as Map<String, dynamic>,
                 };
 
                 return Column(
                   children: sortedEntries.map((entry) {
                     final userId = entry.key.toString();
-                    final user =
-                        userMap[userId] ?? <String, dynamic>{};
+                    final user = userMap[userId] ?? <String, dynamic>{};
                     if (user.isEmpty) return const SizedBox.shrink();
-                    return _buildPlayerTile(
-                      user,
-                      entry.value,
-                    );
+                    return _buildPlayerTile(userId, user, entry.value);
                   }).toList(),
                 );
               },
@@ -327,6 +324,7 @@ class AdminEventDetailsPage extends StatelessWidget {
   }
 
   Widget _buildPlayerTile(
+    String userId,
     Map<String, dynamic> user,
     dynamic status,
   ) {
@@ -344,21 +342,15 @@ class AdminEventDetailsPage extends StatelessWidget {
       ),
       child: Row(
         children: [
-          CircleAvatar(
-            radius: 16,
-            backgroundColor: ViroColors.primary.withOpacity(0.1),
-            child: const Icon(
-              Icons.person,
-              size: 18,
-              color: ViroColors.primary,
+          Expanded(
+            child: UserDisplayTile(
+              userId: userId,
+              firstName: user['firstName'] as String?,
+              lastName: user['lastName'] as String?,
+              avatarUrl: user['avatarUrl'] as String?,
+              textStyle: const TextStyle(fontWeight: FontWeight.w600),
             ),
           ),
-          const SizedBox(width: 12),
-          Text(
-            "${user['firstName']} ${user['lastName']}",
-            style: const TextStyle(fontWeight: FontWeight.w600),
-          ),
-          const Spacer(),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(

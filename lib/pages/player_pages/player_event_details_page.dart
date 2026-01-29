@@ -3,10 +3,11 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../theme/viro_theme.dart';
-import '../../widget/viro_loader.dart';
 import '../../utils/app_logger.dart';
 import '../../utils/firebase_helpers.dart';
 import '../../utils/firebase_error_handler.dart';
+import '../../widget/user_display_tile.dart';
+import '../../widget/viro_loader.dart';
 
 class PlayerEventDetailsPage extends StatelessWidget {
   final String clubId;
@@ -213,15 +214,12 @@ class PlayerEventDetailsPage extends StatelessWidget {
           .collection('events')
           .doc(eventId)
           .update({'attendance.$uid': newStatus});
-      AppLogger.instance.info(
-        'Mise à jour de présence',
-        {
-          'userId': uid,
-          'clubId': clubId,
-          'eventId': eventId,
-          'status': newStatus,
-        },
-      );
+      AppLogger.instance.info('Mise à jour de présence', {
+        'userId': uid,
+        'clubId': clubId,
+        'eventId': eventId,
+        'status': newStatus,
+      });
     } catch (e) {
       AppLogger.instance.error(
         'Erreur lors de la mise à jour de présence',
@@ -354,14 +352,13 @@ class PlayerEventDetailsPage extends StatelessWidget {
                 final docs = snap.data!;
                 final userMap = {
                   for (final doc in docs)
-                    doc.id: doc.data() as Map<String, dynamic>
+                    doc.id: doc.data() as Map<String, dynamic>,
                 };
 
                 return Column(
                   children: sortedEntries.map((entry) {
                     final userId = entry.key.toString();
-                    final user =
-                        userMap[userId] ?? <String, dynamic>{};
+                    final user = userMap[userId] ?? <String, dynamic>{};
                     if (user.isEmpty) return const SizedBox.shrink();
                     return _buildPlayerTile(
                       context,
@@ -416,30 +413,22 @@ class PlayerEventDetailsPage extends StatelessWidget {
       ),
       child: Row(
         children: [
-          CircleAvatar(
-            radius: 16,
-            backgroundColor: ViroColors.primary.withOpacity(0.1),
-            child: const Icon(
-              Icons.person,
-              size: 18,
-              color: ViroColors.primary,
+          Expanded(
+            child: UserDisplayTile(
+              userId: userId,
+              firstName: user['firstName'] as String?,
+              lastName: user['lastName'] as String?,
+              avatarUrl: user['avatarUrl'] as String?,
+              textStyle: const TextStyle(fontWeight: FontWeight.w600),
             ),
           ),
-          const SizedBox(width: 12),
-          Text(
-            "${user['firstName']} ${user['lastName']}",
-            style: const TextStyle(fontWeight: FontWeight.w600),
-          ),
-          const Spacer(),
           GestureDetector(
             onTap: isCurrentUser
-                ? () => _toggleAttendance(context, clubId, eventId, nextStatus())
+                ? () =>
+                      _toggleAttendance(context, clubId, eventId, nextStatus())
                 : null,
             child: Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 8,
-                vertical: 4,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
                 color: statusColor.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(20),

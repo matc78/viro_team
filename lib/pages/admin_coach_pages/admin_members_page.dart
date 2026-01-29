@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../../theme/viro_theme.dart';
 import '../../utils/firebase_helpers.dart';
+import '../../widget/user_display_tile.dart';
 import '../profil_display_page.dart';
 
 class AdminMembersPage extends StatefulWidget {
@@ -331,7 +332,7 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
                         final userId = doc.id;
                         final firstName = data['firstName'] as String? ?? "";
                         final lastName = data['lastName'] as String? ?? "";
-                        final name = _formatName(firstName, lastName);
+                        final avatarUrl = data['avatarUrl'] as String?;
 
                         // Pour les joueurs, afficher la catégorie
                         // Pour les admins/coachs, ne pas afficher de catégorie
@@ -362,16 +363,18 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
                             .join(' ');
 
                         return ListTile(
-                          leading: CircleAvatar(
-                            backgroundColor: ViroColors.primary.withOpacity(
-                              0.1,
-                            ),
-                            child: const Icon(
-                              Icons.person,
-                              color: ViroColors.primary,
+                          leading: null,
+                          title: UserDisplayTile(
+                            userId: userId,
+                            firstName: firstName,
+                            lastName: lastName,
+                            avatarUrl: avatarUrl,
+                            navigateOnTap: false,
+                            textStyle: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
                             ),
                           ),
-                          title: Text(name),
                           subtitle: isPlayer
                               ? Text(
                                   category.isNotEmpty
@@ -467,14 +470,6 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
         ],
       ),
     );
-  }
-
-  String _formatName(String first, String last) {
-    String cap(String v) =>
-        v.isEmpty ? v : v[0].toUpperCase() + v.substring(1).toLowerCase();
-    final f = cap(first);
-    final l = last.toUpperCase();
-    return [f, l].where((e) => e.isNotEmpty).join(" ").trim();
   }
 
   String _normalize(String input) {

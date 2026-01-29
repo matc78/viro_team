@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import '../../constants/firebase_collections.dart';
 import '../../theme/viro_theme.dart';
 import '../../utils/firebase_error_handler.dart';
+import '../../widget/user_display_tile.dart';
 import '../../widget/viro_loader.dart';
 
 class AdminLoansPage extends StatefulWidget {
@@ -1864,6 +1865,7 @@ class _OverdueLoansSection extends StatelessWidget {
                   loan['equipmentName'] as String? ?? 'Équipement';
               final quantity = loan['quantity'] as int? ?? 1;
               final borrowerName = loan['borrowerName'] as String? ?? 'Joueur';
+              final borrowerId = loan['borrowerId'] as String?;
               final dueAt = loan['dueAt'] as Timestamp?;
               final lentAt = loan['lentAt'] as Timestamp?;
 
@@ -1913,9 +1915,14 @@ class _OverdueLoansSection extends StatelessWidget {
                         ],
                       ),
                       const SizedBox(height: 4),
-                      Text(
-                        "Joueur: $borrowerName",
-                        style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+                      UserDisplayTile(
+                        userId: borrowerId,
+                        fallback: borrowerName,
+                        compact: true,
+                        textStyle: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[700],
+                        ),
                       ),
                       if (dueDate != null) ...[
                         const SizedBox(height: 4),
@@ -2069,6 +2076,7 @@ class _ActiveLoansSection extends StatelessWidget {
                 final quantity = loan['quantity'] as int? ?? 1;
                 final borrowerName =
                     loan['borrowerName'] as String? ?? 'Joueur';
+                final borrowerId = loan['borrowerId'] as String?;
                 final dueAt = loan['dueAt'] as Timestamp?;
                 final lentAt = loan['lentAt'] as Timestamp?;
 
@@ -2116,9 +2124,11 @@ class _ActiveLoansSection extends StatelessWidget {
                           ],
                         ),
                         const SizedBox(height: 4),
-                        Text(
-                          "Joueur: $borrowerName",
-                          style: TextStyle(
+                        UserDisplayTile(
+                          userId: borrowerId,
+                          fallback: borrowerName,
+                          compact: true,
+                          textStyle: TextStyle(
                             fontSize: 12,
                             color: Colors.grey[700],
                           ),
@@ -2303,6 +2313,7 @@ class _UpcomingLoansSection extends StatelessWidget {
                   final quantity = data['quantity'] as int? ?? 1;
                   final borrowerName =
                       data['playerName'] as String? ?? 'Joueur';
+                  final playerId = data['playerId'] as String?;
                   final requestedPickupDate =
                       data['requestedPickupDate'] as Timestamp?;
                   final duration = data['duration'] as int? ?? 0;
@@ -2362,9 +2373,11 @@ class _UpcomingLoansSection extends StatelessWidget {
                             ],
                           ),
                           const SizedBox(height: 4),
-                          Text(
-                            "Joueur: $borrowerName",
-                            style: TextStyle(
+                          UserDisplayTile(
+                            userId: playerId,
+                            fallback: borrowerName,
+                            compact: true,
+                            textStyle: TextStyle(
                               fontSize: 12,
                               color: Colors.grey[700],
                             ),
@@ -2430,6 +2443,7 @@ class _LoanRequestCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final playerName = requestData['playerName'] as String? ?? 'Joueur inconnu';
+    final playerId = requestData['playerId'] as String?;
     final equipmentName =
         requestData['equipmentName'] as String? ?? 'Équipement';
     final quantity = requestData['quantity'] as int? ?? 1;
@@ -2475,9 +2489,25 @@ class _LoanRequestCard extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 4),
-                      Text(
-                        "Demandé par $playerName",
-                        style: TextStyle(fontSize: 13, color: Colors.grey[700]),
+                      Row(
+                        children: [
+                          Text(
+                            "Demandé par ",
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.grey[700],
+                            ),
+                          ),
+                          UserDisplayTile(
+                            userId: playerId,
+                            fallback: playerName,
+                            compact: true,
+                            textStyle: TextStyle(
+                              fontSize: 13,
+                              color: Colors.grey[700],
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),

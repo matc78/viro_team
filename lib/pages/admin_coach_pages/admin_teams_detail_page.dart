@@ -1,9 +1,9 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../../theme/viro_theme.dart';
 import '../../utils/app_logger.dart';
 import '../../utils/firebase_helpers.dart';
+import '../../widget/user_display_tile.dart';
 import '../../widget/viro_loader.dart';
 import '../profil_display_page.dart';
 
@@ -48,7 +48,9 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
           // Filtrer les utilisateurs du club avec le bon rôle
           final allDocs = snapshot.data!.docs;
           final clubMembers = filterUsersByClub(
-            allDocs.map((doc) => doc as DocumentSnapshot<Map<String, dynamic>>).toList(),
+            allDocs
+                .map((doc) => doc as DocumentSnapshot<Map<String, dynamic>>)
+                .toList(),
             widget.clubId,
             role: role == 'coach' ? 'coach' : 'player',
           );
@@ -95,13 +97,20 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
                       );
                     }
                     final user = users[i].data() as Map<String, dynamic>;
-                    final formattedName = _formatName(
-                      user['firstName'],
-                      user['lastName'],
-                    );
+                    final userId = users[i].id;
                     return ListTile(
-                      leading: const CircleAvatar(child: Icon(Icons.person)),
-                      title: Text(formattedName),
+                      leading: null,
+                      title: UserDisplayTile(
+                        userId: userId,
+                        firstName: user['firstName'] as String?,
+                        lastName: user['lastName'] as String?,
+                        avatarUrl: user['avatarUrl'] as String?,
+                        navigateOnTap: false,
+                        textStyle: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
                       trailing: const Icon(
                         Icons.add_circle_outline,
                         color: ViroColors.primary,
@@ -109,7 +118,6 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
                       onTap: () async {
                         if (_isProcessing) return;
                         setState(() => _isProcessing = true);
-                        final userId = users[i].id;
                         try {
                           String field = (role == 'player')
                               ? 'playerIds'
@@ -151,16 +159,13 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
                               add: true,
                             );
                           }
-                          AppLogger.instance.info(
-                            'Membre ajouté à l\'équipe',
-                            {
-                              'userId': userId,
-                              'teamId': widget.teamDoc.id,
-                              'teamName': teamName,
-                              'role': role,
-                              'clubId': widget.clubId,
-                            },
-                          );
+                          AppLogger.instance.info('Membre ajouté à l\'équipe', {
+                            'userId': userId,
+                            'teamId': widget.teamDoc.id,
+                            'teamName': teamName,
+                            'role': role,
+                            'clubId': widget.clubId,
+                          });
                           if (mounted) Navigator.pop(ctx);
                         } catch (e) {
                           AppLogger.instance.error(
@@ -354,25 +359,14 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
                     ),
                     child: ListTile(
                       visualDensity: VisualDensity.compact,
-                      leading: CircleAvatar(
-                        radius: 18,
-                        backgroundImage:
-                            (userData['avatarUrl'] != null &&
-                                (userData['avatarUrl'] as String).isNotEmpty)
-                            ? CachedNetworkImageProvider(userData['avatarUrl'])
-                            : null,
-                        child:
-                            (userData['avatarUrl'] == null ||
-                                (userData['avatarUrl'] as String).isEmpty)
-                            ? const Icon(Icons.person_outline, size: 18)
-                            : null,
-                      ),
-                      title: Text(
-                        _formatName(
-                          userData['firstName'],
-                          userData['lastName'],
-                        ),
-                        style: const TextStyle(
+                      leading: null,
+                      title: UserDisplayTile(
+                        userId: userId,
+                        firstName: userData['firstName'] as String?,
+                        lastName: userData['lastName'] as String?,
+                        avatarUrl: userData['avatarUrl'] as String?,
+                        navigateOnTap: false,
+                        textStyle: const TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
                         ),
@@ -424,16 +418,14 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
                                     add: false,
                                   );
                                 }
-                                AppLogger.instance.info(
-                                  'Membre retiré de l\'équipe',
-                                  {
-                                    'userId': userId,
-                                    'teamId': widget.teamDoc.id,
-                                    'teamName': teamName,
-                                    'role': role,
-                                    'clubId': widget.clubId,
-                                  },
-                                );
+                                AppLogger.instance
+                                    .info('Membre retiré de l\'équipe', {
+                                      'userId': userId,
+                                      'teamId': widget.teamDoc.id,
+                                      'teamName': teamName,
+                                      'role': role,
+                                      'clubId': widget.clubId,
+                                    });
                               },
                             )
                           : null,
@@ -476,17 +468,6 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
         ],
       ),
     );
-  }
-
-  String _formatName(dynamic firstName, dynamic lastName) {
-    final fn = (firstName as String?)?.trim() ?? "";
-    final ln = (lastName as String?)?.trim() ?? "";
-    String cap(String v) =>
-        v.isEmpty ? v : v[0].toUpperCase() + v.substring(1).toLowerCase();
-    final first = cap(fn);
-    final last = ln.toUpperCase();
-    final full = [first, last].where((e) => e.isNotEmpty).join(" ").trim();
-    return full.isEmpty ? "Membre" : full;
   }
 
   Future<void> _updateEventsAttendanceForPlayer(

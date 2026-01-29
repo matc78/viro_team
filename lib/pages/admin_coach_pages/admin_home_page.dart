@@ -17,6 +17,7 @@ import '../../utils/firebase_helpers.dart';
 import '../../widget/profile_switcher_dialog.dart';
 import '../../widget/sport_score_widget.dart';
 import '../../widget/sport_timer_widget.dart';
+import '../../widget/user_display_tile.dart';
 import '../add_profile_page.dart';
 
 class AdminHomePage extends StatefulWidget {
@@ -31,27 +32,6 @@ class _AdminHomePageState extends State<AdminHomePage> {
   bool _showAllRequests = false;
   String? _processingRequestId;
   String? _processingLoanRequestId;
-
-  String _formatName(
-    dynamic firstName,
-    dynamic lastName, {
-    String fallback = "Membre",
-  }) {
-    final fn = (firstName as String?)?.trim();
-    final ln = (lastName as String?)?.trim();
-    if ((fn == null || fn.isEmpty) && (ln == null || ln.isEmpty)) {
-      return fallback;
-    }
-
-    String capitalize(String value) {
-      if (value.isEmpty) return value;
-      return value[0].toUpperCase() + value.substring(1).toLowerCase();
-    }
-
-    final first = fn != null ? capitalize(fn) : "";
-    final last = ln != null ? ln.toUpperCase() : "";
-    return [first, last].where((e) => e.isNotEmpty).join(" ");
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -450,11 +430,6 @@ class _AdminHomePageState extends State<AdminHomePage> {
             children: [
               ...toShow.map((doc) {
                 final data = doc.data();
-                final requester = _formatName(
-                  data['firstName'],
-                  data['lastName'],
-                  fallback: data['userId'] ?? "Membre",
-                );
                 final role = data['roleRequested'] ?? "player";
                 final message = data['message'] ?? "";
                 final createdAt = data['createdAt'] as Timestamp?;
@@ -493,13 +468,15 @@ class _AdminHomePageState extends State<AdminHomePage> {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Expanded(
-                              child: Text(
-                                requester,
-                                style: const TextStyle(
+                              child: UserDisplayTile(
+                                userId: data['userId'] as String?,
+                                firstName: data['firstName'] as String?,
+                                lastName: data['lastName'] as String?,
+                                fallback: data['userId'] ?? "Membre",
+                                textStyle: const TextStyle(
                                   fontWeight: FontWeight.w700,
                                   fontSize: 16,
                                 ),
-                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
                             Text(
@@ -874,6 +851,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
                 final equipmentName =
                     data['equipmentName'] as String? ?? 'Équipement';
                 final playerName = data['playerName'] as String? ?? 'Joueur';
+                final playerId = data['playerId'] as String?;
                 final quantity = data['quantity'] as int? ?? 1;
                 final duration = data['duration'] as int? ?? 0;
                 final durationUnit = data['durationUnit'] as String? ?? 'jour';
@@ -943,12 +921,25 @@ class _AdminHomePageState extends State<AdminHomePage> {
                           ],
                         ),
                         const SizedBox(height: 4),
-                        Text(
-                          "Demandé par $playerName",
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: Colors.grey[700],
-                          ),
+                        Row(
+                          children: [
+                            Text(
+                              "Demandé par ",
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Colors.grey[700],
+                              ),
+                            ),
+                            UserDisplayTile(
+                              userId: playerId,
+                              fallback: playerName,
+                              compact: true,
+                              textStyle: TextStyle(
+                                fontSize: 13,
+                                color: Colors.grey[700],
+                              ),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 8),
                         Text(
@@ -1386,6 +1377,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
                     data['equipmentName'] as String? ?? 'Équipement';
                 final quantity = data['quantity'] as int? ?? 1;
                 final borrowerName = data['playerName'] as String? ?? 'Joueur';
+                final playerId = data['playerId'] as String?;
                 final requestedPickupDate =
                     data['requestedPickupDate'] as Timestamp?;
                 final duration = data['duration'] as int? ?? 0;
@@ -1444,9 +1436,11 @@ class _AdminHomePageState extends State<AdminHomePage> {
                           ],
                         ),
                         const SizedBox(height: 4),
-                        Text(
-                          "Joueur: $borrowerName",
-                          style: TextStyle(
+                        UserDisplayTile(
+                          userId: playerId,
+                          fallback: borrowerName,
+                          compact: true,
+                          textStyle: TextStyle(
                             fontSize: 12,
                             color: Colors.grey[700],
                           ),
