@@ -236,7 +236,7 @@ class _CatalogTab extends StatelessWidget {
       stream: FirebaseFirestore.instance
           .collection(FirebaseCollections.clubs)
           .doc(clubId)
-          .collection('equipmentCatalog')
+          .collection(FirebaseCollections.equipmentCatalog)
           .snapshots(),
       builder: (context, catalogSnap) {
         if (catalogSnap.connectionState == ConnectionState.waiting) {
@@ -283,6 +283,20 @@ class _CatalogTab extends StatelessWidget {
             final clubData = clubSnap.data?.data() ?? {};
             final paymentMethods =
                 clubData['paymentMethods'] as List<dynamic>? ?? [];
+            final loanAllowedWeekdays =
+                clubData['loanAllowedWeekdays'] as List<dynamic>? ?? [];
+            final loanScheduleRaw =
+                clubData['loanSchedule'] as Map<String, dynamic>? ?? {};
+            final allowedDaysSet = loanAllowedWeekdays
+                .map((e) => e is int ? e : int.tryParse(e.toString()) ?? 0)
+                .where((e) => e >= 1 && e <= 7)
+                .toSet();
+            final effectiveWeekdays = allowedDaysSet.isNotEmpty
+                ? allowedDaysSet
+                : loanScheduleRaw.keys
+                      .map((k) => int.tryParse(k) ?? 0)
+                      .where((e) => e >= 1 && e <= 7)
+                      .toSet();
 
             return ListView(
               padding: const EdgeInsets.all(16),
@@ -300,6 +314,7 @@ class _CatalogTab extends StatelessWidget {
                       catalogData: catalogData,
                       paymentMethods: paymentMethods,
                       currentUserId: currentUserId,
+                      allowedWeekdays: effectiveWeekdays,
                     ),
                   );
                 }),
@@ -495,6 +510,7 @@ class _EquipmentCard extends StatelessWidget {
   final Map<String, dynamic> catalogData;
   final List<dynamic> paymentMethods;
   final String currentUserId;
+  final Set<int> allowedWeekdays;
 
   const _EquipmentCard({
     required this.clubId,
@@ -502,6 +518,7 @@ class _EquipmentCard extends StatelessWidget {
     required this.catalogData,
     required this.paymentMethods,
     required this.currentUserId,
+    required this.allowedWeekdays,
   });
 
   String _getPaymentMethodLabel(String method) {
@@ -544,6 +561,7 @@ class _EquipmentCard extends StatelessWidget {
 
         final price = catalogData['price'] as num?;
         final priceUnit = catalogData['priceUnit'] as String? ?? 'jour';
+        final caution = catalogData['caution'] as num?;
         final maxLoanDurationDays = catalogData['maxLoanDurationDays'] as int?;
 
         String priceUnitLabel(String unit) {
@@ -654,6 +672,23 @@ class _EquipmentCard extends StatelessWidget {
                       ],
                     ),
                   ),
+                if (caution != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Row(
+                      children: [
+                        Icon(Icons.security, size: 16, color: Colors.grey[700]),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Caution: ${caution.toStringAsFixed(2)} € (si perdu ou endommagé)',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.grey[700],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 if (paymentMethods.isNotEmpty) ...[
                   const SizedBox(height: 8),
                   Wrap(
@@ -716,6 +751,7 @@ class _EquipmentCard extends StatelessWidget {
         catalogData: catalogData,
         maxQuantity: maxQuantity,
         currentUserId: currentUserId,
+        allowedWeekdays: allowedWeekdays,
       ),
     );
   }
@@ -729,6 +765,7 @@ class _RequestLoanDialog extends StatefulWidget {
   final Map<String, dynamic> catalogData;
   final int maxQuantity;
   final String currentUserId;
+  final Set<int> allowedWeekdays;
 
   const _RequestLoanDialog({
     required this.clubId,
@@ -737,6 +774,7 @@ class _RequestLoanDialog extends StatefulWidget {
     required this.catalogData,
     required this.maxQuantity,
     required this.currentUserId,
+    required this.allowedWeekdays,
   });
 
   @override
@@ -771,6 +809,13 @@ class _RequestLoanDialogState extends State<_RequestLoanDialog> {
     super.dispose();
   }
 
+  /// Vérifie si la date tombe sur un jour autorisé pour récupération/retour (config club).
+  bool _isAllowedWeekday(DateTime date) {
+    final allowed = widget.allowedWeekdays;
+    if (allowed.isEmpty) return true;
+    return allowed.contains(date.weekday);
+  }
+
   /// Charge la disponibilité des jours du mois focalisé pour la quantité sélectionnée (mode récup.).
   Future<void> _loadPickupMonthAvailability() async {
     final now = DateTime.now();
@@ -785,6 +830,8 @@ class _RequestLoanDialogState extends State<_RequestLoanDialog> {
     ) {
       final normalized = DateTime(d.year, d.month, d.day);
       if (normalized.isBefore(today)) {
+        result[normalized] = false;
+      } else if (!_isAllowedWeekday(normalized)) {
         result[normalized] = false;
       } else {
         final available = await _checkAvailabilityForDate(
@@ -919,6 +966,10 @@ class _RequestLoanDialogState extends State<_RequestLoanDialog> {
     if (checkDate.isBefore(today)) {
       return false;
     }
+    // Seuls les jours autorisés par le club (récup./retour) sont disponibles
+    if (!_isAllowedWeekday(checkDate)) {
+      return false;
+    }
 
     final available = await _checkAvailabilityForDate(date, _selectedQuantity);
     return available >= _selectedQuantity;
@@ -941,6 +992,10 @@ class _RequestLoanDialogState extends State<_RequestLoanDialog> {
 
     // Les dates avant la date de récupération ne sont pas disponibles
     if (returnDate.isBefore(pickupDate)) {
+      return false;
+    }
+    // Seuls les jours autorisés par le club (récup./retour) sont disponibles
+    if (!_isAllowedWeekday(returnDate)) {
       return false;
     }
 
@@ -1184,7 +1239,10 @@ class _RequestLoanDialogState extends State<_RequestLoanDialog> {
         Navigator.of(context).pop();
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text("Demande de prêt envoyée avec succès !"),
+            content: Text(
+              "Demande envoyée. Consultez l'onglet Mes demandes pour suivre votre demande.",
+            ),
+            duration: Duration(seconds: 4),
           ),
         );
       }
@@ -1245,6 +1303,9 @@ class _RequestLoanDialogState extends State<_RequestLoanDialog> {
       },
       enabledDayPredicate: (day) {
         final normalizedDay = DateTime(day.year, day.month, day.day);
+
+        // Seuls les jours autorisés par le club (récup./retour) sont sélectionnables
+        if (!_isAllowedWeekday(normalizedDay)) return false;
 
         if (_calendarMode == 'pickup') {
           // Pour la récupération : pas de dates passées
@@ -1596,6 +1657,22 @@ class _RequestLoanDialogState extends State<_RequestLoanDialog> {
                         },
                       ),
                       const SizedBox(height: 16),
+                      TextFormField(
+                        controller: _reasonController,
+                        maxLines: 3,
+                        decoration: const InputDecoration(
+                          labelText: "Raison de la demande",
+                          hintText:
+                              "Expliquez pourquoi vous avez besoin de cet équipement",
+                        ),
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return "Veuillez indiquer une raison";
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 16),
                       // Affichage des dates sélectionnées
                       Container(
                         padding: const EdgeInsets.all(12),
@@ -1747,25 +1824,9 @@ class _RequestLoanDialogState extends State<_RequestLoanDialog> {
                           ),
                         ),
                       ],
-                      const SizedBox(height: 5),
-                      // Calendrier
-                      SizedBox(height: 400, child: _buildCalendar()),
                       const SizedBox(height: 16),
-                      TextFormField(
-                        controller: _reasonController,
-                        maxLines: 3,
-                        decoration: const InputDecoration(
-                          labelText: "Raison de la demande",
-                          hintText:
-                              "Expliquez pourquoi vous avez besoin de cet équipement",
-                        ),
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return "Veuillez indiquer une raison";
-                          }
-                          return null;
-                        },
-                      ),
+                      // Calendrier
+                      SizedBox(height: 350, child: _buildCalendar()),
                       if (maxLoanDurationDays != null) ...[
                         const SizedBox(height: 8),
                         Text(

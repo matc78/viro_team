@@ -6,6 +6,8 @@ import 'package:intl/intl.dart';
 
 import '../../constants/firebase_collections.dart';
 import '../../theme/viro_theme.dart';
+import '../../utils/firebase_error_handler.dart';
+import '../../widget/viro_loader.dart';
 
 class AdminLoansPage extends StatefulWidget {
   final String clubId;
@@ -62,14 +64,12 @@ class _AdminLoansPageState extends State<AdminLoansPage>
                 .snapshots(),
             builder: (context, snap) {
               if (snap.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
+                return const Center(child: ViroLoader(size: 60));
               }
               if (snap.hasError) {
-                return Center(
-                  child: Text(
-                    "Erreur : ${snap.error}",
-                    style: const TextStyle(color: ViroColors.error),
-                  ),
+                return FirebaseErrorHandler.buildErrorWidget(
+                  context,
+                  snap.error,
                 );
               }
               final docs = snap.data?.docs ?? [];
@@ -950,6 +950,10 @@ class _CatalogItemCard extends StatelessWidget {
                   Text(
                     'Durée max: ${formatMaxLoanDuration(maxLoanDuration, priceUnit)}',
                   ),
+                if (data['caution'] != null)
+                  Text(
+                    'Caution: ${(data['caution'] as num).toStringAsFixed(2)} € (si perdu ou endommagé)',
+                  ),
                 Text(
                   'Stock: $quantityTotal',
                   style: TextStyle(
@@ -1194,6 +1198,7 @@ class _CatalogItemDialog extends StatefulWidget {
 class _CatalogItemDialogState extends State<_CatalogItemDialog> {
   late TextEditingController _maxQuantityController;
   late TextEditingController _priceController;
+  late TextEditingController _cautionController;
   late TextEditingController _maxLoanDurationController;
   String _priceUnit = 'jour';
   bool _saving = false;
@@ -1209,6 +1214,12 @@ class _CatalogItemDialogState extends State<_CatalogItemDialog> {
     final initialPrice = catalogPrice ?? equipmentLoanPrice;
     _priceController = TextEditingController(
       text: initialPrice?.toString() ?? '',
+    );
+    final catalogCaution = widget.existingCatalogData?['caution'] as num?;
+    final equipmentCaution = widget.equipmentData['caution'] as num?;
+    final initialCaution = catalogCaution ?? equipmentCaution;
+    _cautionController = TextEditingController(
+      text: initialCaution?.toString() ?? '',
     );
     _priceUnit = widget.existingCatalogData?['priceUnit'] as String? ?? 'jour';
     final maxLoanDurationDays =
@@ -1263,6 +1274,7 @@ class _CatalogItemDialogState extends State<_CatalogItemDialog> {
   void dispose() {
     _maxQuantityController.dispose();
     _priceController.dispose();
+    _cautionController.dispose();
     _maxLoanDurationController.dispose();
     super.dispose();
   }
@@ -1272,6 +1284,9 @@ class _CatalogItemDialogState extends State<_CatalogItemDialog> {
     final price = _priceController.text.trim().isEmpty
         ? null
         : double.tryParse(_priceController.text.trim().replaceAll(',', '.'));
+    final caution = _cautionController.text.trim().isEmpty
+        ? null
+        : double.tryParse(_cautionController.text.trim().replaceAll(',', '.'));
     final maxLoanDurationValue = _maxLoanDurationController.text.trim().isEmpty
         ? null
         : int.tryParse(_maxLoanDurationController.text.trim());
@@ -1330,6 +1345,7 @@ class _CatalogItemDialogState extends State<_CatalogItemDialog> {
             'equipmentId': widget.equipmentId,
             'maxQuantity': maxQty,
             'price': price,
+            'caution': caution,
             'priceUnit': _priceUnit,
             'maxLoanDurationDays': maxLoanDurationDays,
             'updatedAt': FieldValue.serverTimestamp(),
@@ -1401,6 +1417,16 @@ class _CatalogItemDialogState extends State<_CatalogItemDialog> {
               decoration: const InputDecoration(
                 labelText: "Prix du prêt à l'unité (€)",
                 hintText: "ex. 2.50",
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _cautionController,
+              keyboardType: TextInputType.numberWithOptions(decimal: true),
+              enabled: !_saving,
+              decoration: const InputDecoration(
+                labelText: "Caution (€) si perdu ou endommagé",
+                hintText: "ex. 50",
               ),
             ),
             const SizedBox(height: 12),
@@ -1590,7 +1616,7 @@ class _LoanRequestsSection extends StatelessWidget {
           return const Card(
             child: Padding(
               padding: EdgeInsets.all(16),
-              child: Center(child: CircularProgressIndicator()),
+              child: Center(child: ViroLoader(size: 60)),
             ),
           );
         }
@@ -1599,9 +1625,9 @@ class _LoanRequestsSection extends StatelessWidget {
           return Card(
             child: Padding(
               padding: const EdgeInsets.all(16),
-              child: Text(
-                "Erreur : ${snapshot.error}",
-                style: const TextStyle(color: ViroColors.error),
+              child: FirebaseErrorHandler.buildErrorWidget(
+                context,
+                snapshot.error,
               ),
             ),
           );
@@ -1674,6 +1700,102 @@ class _LoanRequestsSection extends StatelessWidget {
         );
       },
     );
+  }
+}
+
+/// Affiche un dialog de confirmation puis marque le prêt comme retourné.
+Future<void> _markLoanReturned(
+  BuildContext context,
+  String clubId,
+  String loanId,
+) async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (_) => AlertDialog(
+      title: const Text("Confirmer le retour"),
+      content: const Text("Confirmer le retour du matériel ?"),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text("Annuler"),
+        ),
+        ElevatedButton(
+          onPressed: () => Navigator.of(context).pop(true),
+          child: const Text("Confirmer"),
+        ),
+      ],
+    ),
+  );
+  if (confirmed != true) return;
+  try {
+    await FirebaseFirestore.instance
+        .collection(FirebaseCollections.clubs)
+        .doc(clubId)
+        .collection(FirebaseCollections.equipmentLoans)
+        .doc(loanId)
+        .update({
+          'status': 'returned',
+          'returnedAt': FieldValue.serverTimestamp(),
+        });
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Prêt marqué comme retourné."),
+          backgroundColor: ViroColors.success,
+        ),
+      );
+    }
+  } catch (e) {
+    if (context.mounted) {
+      FirebaseErrorHandler.showErrorSnackBar(context, e);
+    }
+  }
+}
+
+/// Affiche un dialog de confirmation puis marque le prêt comme perdu.
+Future<void> _markLoanLost(
+  BuildContext context,
+  String clubId,
+  String loanId,
+) async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (_) => AlertDialog(
+      title: const Text("Déclarer comme perdu"),
+      content: const Text("Déclarer ce prêt comme perdu ?"),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text("Annuler"),
+        ),
+        ElevatedButton(
+          onPressed: () => Navigator.of(context).pop(true),
+          style: ElevatedButton.styleFrom(backgroundColor: ViroColors.error),
+          child: const Text("Déclarer perdu"),
+        ),
+      ],
+    ),
+  );
+  if (confirmed != true) return;
+  try {
+    await FirebaseFirestore.instance
+        .collection(FirebaseCollections.clubs)
+        .doc(clubId)
+        .collection(FirebaseCollections.equipmentLoans)
+        .doc(loanId)
+        .update({'status': 'lost', 'returnedAt': FieldValue.serverTimestamp()});
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Prêt marqué comme perdu."),
+          backgroundColor: ViroColors.error,
+        ),
+      );
+    }
+  } catch (e) {
+    if (context.mounted) {
+      FirebaseErrorHandler.showErrorSnackBar(context, e);
+    }
   }
 }
 
@@ -1828,6 +1950,34 @@ class _OverdueLoansSection extends StatelessWidget {
                           ),
                         ),
                       ],
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          OutlinedButton.icon(
+                            onPressed: () => _markLoanReturned(
+                              context,
+                              clubId,
+                              loan['id'] as String,
+                            ),
+                            icon: const Icon(Icons.check, size: 15),
+                            label: const Text("Retourné"),
+                          ),
+                          const SizedBox(width: 8),
+                          OutlinedButton.icon(
+                            onPressed: () => _markLoanLost(
+                              context,
+                              clubId,
+                              loan['id'] as String,
+                            ),
+                            icon: const Icon(Icons.warning_amber, size: 15),
+                            label: const Text("Perdu/Endommagé"),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: ViroColors.error,
+                              side: const BorderSide(color: ViroColors.error),
+                            ),
+                          ),
+                        ],
+                      ),
                     ],
                   ),
                 ),
@@ -2000,6 +2150,34 @@ class _ActiveLoansSection extends StatelessWidget {
                             ),
                           ),
                         ],
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            OutlinedButton.icon(
+                              onPressed: () => _markLoanReturned(
+                                context,
+                                clubId,
+                                loan['id'] as String,
+                              ),
+                              icon: const Icon(Icons.check, size: 15),
+                              label: const Text("Retourné"),
+                            ),
+                            const SizedBox(width: 8),
+                            OutlinedButton.icon(
+                              onPressed: () => _markLoanLost(
+                                context,
+                                clubId,
+                                loan['id'] as String,
+                              ),
+                              icon: const Icon(Icons.warning_amber, size: 15),
+                              label: const Text("Perdu/Endommagé"),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: ViroColors.error,
+                                side: const BorderSide(color: ViroColors.error),
+                              ),
+                            ),
+                          ],
+                        ),
                       ],
                     ),
                   ),
@@ -2035,13 +2213,21 @@ class _UpcomingLoansSection extends StatelessWidget {
           return const Card(
             child: Padding(
               padding: EdgeInsets.all(16),
-              child: Center(child: CircularProgressIndicator()),
+              child: Center(child: ViroLoader(size: 60)),
             ),
           );
         }
 
         if (snapshot.hasError) {
-          return const SizedBox.shrink();
+          return Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: FirebaseErrorHandler.buildErrorWidget(
+                context,
+                snapshot.error,
+              ),
+            ),
+          );
         }
 
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {

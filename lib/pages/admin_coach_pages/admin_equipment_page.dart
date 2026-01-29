@@ -245,6 +245,7 @@ class _EquipmentCard extends StatelessWidget {
         data['quantityTotal'] as int? ?? data['quantity'] as int? ?? 0;
     final unitPrice = data['unitPrice'] as num?;
     final loanUnitPrice = data['loanUnitPrice'] as num?;
+    final caution = data['caution'] as num?;
     final condition =
         data['condition'] as String? ?? EquipmentHelpers.conditionBon;
     final availability =
@@ -315,7 +316,7 @@ class _EquipmentCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Stock: $quantityTotal${unitPrice != null ? ' • Achat: ${unitPrice.toStringAsFixed(2)} €' : ''}${loanUnitPrice != null ? ' • Prêt: ${loanUnitPrice.toStringAsFixed(2)} €' : ''}',
+                          'Stock: $quantityTotal${unitPrice != null ? ' • Achat: ${unitPrice.toStringAsFixed(2)} €' : ''}${loanUnitPrice != null ? ' • Prêt: ${loanUnitPrice.toStringAsFixed(2)} €' : ''}${caution != null ? ' • Caution: ${caution.toStringAsFixed(2)} €' : ''}',
                           style: const TextStyle(fontSize: 13),
                         ),
                         if (location != null) ...[
@@ -518,6 +519,7 @@ class _AddEquipmentDialogState extends State<_AddEquipmentDialog> {
   final _estimatedLifespanController = TextEditingController();
   final _unitPriceController = TextEditingController();
   final _loanUnitPriceController = TextEditingController();
+  final _cautionController = TextEditingController();
   final _notesController = TextEditingController();
   String _category = EquipmentHelpers.categoryEntrainement;
   String _condition = EquipmentHelpers.conditionBon;
@@ -540,6 +542,8 @@ class _AddEquipmentDialogState extends State<_AddEquipmentDialog> {
     _invoiceReferenceController.dispose();
     _estimatedLifespanController.dispose();
     _unitPriceController.dispose();
+    _loanUnitPriceController.dispose();
+    _cautionController.dispose();
     _notesController.dispose();
     super.dispose();
   }
@@ -568,6 +572,9 @@ class _AddEquipmentDialogState extends State<_AddEquipmentDialog> {
         : double.tryParse(
             _loanUnitPriceController.text.trim().replaceAll(',', '.'),
           );
+    final caution = _cautionController.text.trim().isEmpty
+        ? null
+        : double.tryParse(_cautionController.text.trim().replaceAll(',', '.'));
 
     setState(() => _saving = true);
     try {
@@ -591,6 +598,7 @@ class _AddEquipmentDialogState extends State<_AddEquipmentDialog> {
             'quantity': qtyTotal, // Garder pour compatibilité
             'unitPrice': unitPrice,
             'loanUnitPrice': loanUnitPrice,
+            'caution': caution,
             'condition': _condition,
             'availability': _availability,
             'location': _locationController.text.trim().isEmpty
@@ -781,6 +789,18 @@ class _AddEquipmentDialogState extends State<_AddEquipmentDialog> {
                       hintText: "ex. 2.50 (pour le catalogue)",
                       helperText:
                           "Prix affiché dans le catalogue pour les joueurs",
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _cautionController,
+                    keyboardType: TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: const InputDecoration(
+                      labelText: "Caution (€) si perdu ou endommagé",
+                      hintText: "ex. 50",
+                      helperText: "Montant en cas de perte ou d'endommagement",
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -1059,6 +1079,7 @@ class _EditEquipmentSheetState extends State<_EditEquipmentSheet> {
   late TextEditingController _estimatedLifespanController;
   late TextEditingController _unitPriceController;
   late TextEditingController _loanUnitPriceController;
+  late TextEditingController _cautionController;
   late TextEditingController _notesController;
   DateTime? _purchaseDate;
   DateTime? _lastMaintenance;
@@ -1108,6 +1129,8 @@ class _EditEquipmentSheetState extends State<_EditEquipmentSheet> {
     _loanUnitPriceController = TextEditingController(
       text: loanUnitPrice?.toString() ?? '',
     );
+    final caution = data['caution'] as num?;
+    _cautionController = TextEditingController(text: caution?.toString() ?? '');
     _notesController = TextEditingController(
       text: data['notes'] as String? ?? '',
     );
@@ -1139,6 +1162,7 @@ class _EditEquipmentSheetState extends State<_EditEquipmentSheet> {
     _estimatedLifespanController.dispose();
     _unitPriceController.dispose();
     _loanUnitPriceController.dispose();
+    _cautionController.dispose();
     _notesController.dispose();
     super.dispose();
   }
@@ -1160,6 +1184,9 @@ class _EditEquipmentSheetState extends State<_EditEquipmentSheet> {
         : double.tryParse(
             _loanUnitPriceController.text.trim().replaceAll(',', '.'),
           );
+    final caution = _cautionController.text.trim().isEmpty
+        ? null
+        : double.tryParse(_cautionController.text.trim().replaceAll(',', '.'));
 
     setState(() => _saving = true);
     try {
@@ -1184,6 +1211,7 @@ class _EditEquipmentSheetState extends State<_EditEquipmentSheet> {
             'quantity': qtyTotal, // Garder pour compatibilité
             'unitPrice': unitPrice,
             'loanUnitPrice': loanUnitPrice,
+            'caution': caution,
             'location': _locationController.text.trim().isEmpty
                 ? null
                 : _locationController.text.trim(),
@@ -1356,6 +1384,16 @@ class _EditEquipmentSheetState extends State<_EditEquipmentSheet> {
                 labelText: "Prix du prêt à l'unité (€) / Jour",
                 hintText: "ex. 2.50 (pour le catalogue)",
                 helperText: "Prix affiché dans le catalogue pour les joueurs",
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _cautionController,
+              keyboardType: TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(
+                labelText: "Caution (€) si perdu ou endommagé",
+                hintText: "ex. 50",
+                helperText: "Montant en cas de perte ou d'endommagement",
               ),
             ),
             const SizedBox(height: 20),
