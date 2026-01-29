@@ -351,90 +351,6 @@ class _SportScoreWidgetState extends State<SportScoreWidget> {
                 ],
               ),
             ),
-            // Bordure supérieure - moitié gauche (primary)
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              child: Container(
-                height: 3,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      ViroColors.primary,
-                      ViroColors.primary,
-                      ViroColors.accent,
-                      ViroColors.accent,
-                    ],
-                    stops: const [0.0, 0.5, 0.5, 1.0],
-                  ),
-                ),
-              ),
-            ),
-            // Bordure inférieure - moitié gauche (primary)
-            Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
-              child: Container(
-                height: 3,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      ViroColors.primary,
-                      ViroColors.primary,
-                      ViroColors.accent,
-                      ViroColors.accent,
-                    ],
-                    stops: const [0.0, 0.5, 0.5, 1.0],
-                  ),
-                ),
-              ),
-            ),
-            // Bordure gauche - moitié supérieure (primary)
-            Positioned(
-              top: 0,
-              left: 0,
-              bottom: 0,
-              child: Container(
-                width: 3,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      ViroColors.primary,
-                      ViroColors.primary,
-                      ViroColors.accent,
-                      ViroColors.accent,
-                    ],
-                    stops: const [0.0, 0.5, 0.5, 1.0],
-                  ),
-                ),
-              ),
-            ),
-            // Bordure droite - moitié supérieure (primary)
-            Positioned(
-              top: 0,
-              right: 0,
-              bottom: 0,
-              child: Container(
-                width: 3,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      ViroColors.primary,
-                      ViroColors.primary,
-                      ViroColors.accent,
-                      ViroColors.accent,
-                    ],
-                    stops: const [0.0, 0.5, 0.5, 1.0],
-                  ),
-                ),
-              ),
-            ),
           ],
         ),
       ),
@@ -953,29 +869,44 @@ class _SportScoreWidgetState extends State<SportScoreWidget> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  _buildScoreButton('+1', () {
-                    setState(() {
-                      _team2Score += 1;
-                      _addToHistory('score_2_1');
-                      _saveScore();
-                    });
-                  }, isSmall: true, color: ViroColors.accent),
+                  _buildScoreButton(
+                    '+1',
+                    () {
+                      setState(() {
+                        _team2Score += 1;
+                        _addToHistory('score_2_1');
+                        _saveScore();
+                      });
+                    },
+                    isSmall: true,
+                    color: ViroColors.accent,
+                  ),
                   const SizedBox(width: 6),
-                  _buildScoreButton('+2', () {
-                    setState(() {
-                      _team2Score += 2;
-                      _addToHistory('score_2_2');
-                      _saveScore();
-                    });
-                  }, isSmall: true, color: ViroColors.accent),
+                  _buildScoreButton(
+                    '+2',
+                    () {
+                      setState(() {
+                        _team2Score += 2;
+                        _addToHistory('score_2_2');
+                        _saveScore();
+                      });
+                    },
+                    isSmall: true,
+                    color: ViroColors.accent,
+                  ),
                   const SizedBox(width: 6),
-                  _buildScoreButton('+3', () {
-                    setState(() {
-                      _team2Score += 3;
-                      _addToHistory('score_2_3');
-                      _saveScore();
-                    });
-                  }, isSmall: true, color: ViroColors.accent),
+                  _buildScoreButton(
+                    '+3',
+                    () {
+                      setState(() {
+                        _team2Score += 3;
+                        _addToHistory('score_2_3');
+                        _saveScore();
+                      });
+                    },
+                    isSmall: true,
+                    color: ViroColors.accent,
+                  ),
                 ],
               ),
             ],

@@ -255,9 +255,28 @@ class _AdminHomePageState extends State<AdminHomePage> {
                           clubId: clubId,
                         ),
 
-                        const SizedBox(height: 20),
+                        const SizedBox(height: 30),
 
-                        // Grille d'actions
+                        const Text(
+                          "À ne pas manquer",
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        _buildJoinRequestsSection(clubId, clubName),
+                        const SizedBox(height: 24),
+                        _buildLoanRequestsSection(clubId),
+                        const SizedBox(height: 24),
+                        _buildUpcomingLoans(clubId),
+                        const SizedBox(height: 24),
+                        _buildLoanPreparationReminders(clubId),
+                        const SizedBox(height: 24),
+                        _buildLoanReturnReminders(clubId),
+                        const SizedBox(height: 30),
+
+                        // Grille d'actions (cards en bas du body)
                         GridView.count(
                           shrinkWrap: true,
                           physics: const NeverScrollableScrollPhysics(),
@@ -334,26 +353,6 @@ class _AdminHomePageState extends State<AdminHomePage> {
                             ),
                           ],
                         ),
-
-                        const SizedBox(height: 30),
-
-                        const Text(
-                          "À ne pas manquer",
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        _buildJoinRequestsSection(clubId, clubName),
-                        const SizedBox(height: 24),
-                        _buildLoanRequestsSection(clubId),
-                        const SizedBox(height: 24),
-                        _buildUpcomingLoans(clubId),
-                        const SizedBox(height: 24),
-                        _buildLoanPreparationReminders(clubId),
-                        const SizedBox(height: 24),
-                        _buildLoanReturnReminders(clubId),
                         const SizedBox(height: 24),
                         if ((club['logoUrl'] as String?)?.isNotEmpty ?? false)
                           Center(

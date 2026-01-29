@@ -733,6 +733,9 @@ class _ClubAnnouncementsList extends StatelessWidget {
         [];
 
     switch (targetType) {
+      case 'Tous les membres':
+        return true;
+
       case 'Équipes':
         final userTeamIds =
             (userClubInfo['teamIds'] as List?)?.whereType<String>().toList() ??
@@ -986,6 +989,26 @@ class _ClubAnnouncementsList extends StatelessWidget {
 
         validAnnouncements.add((doc: doc, clubId: clubId));
       }
+    }
+
+    if (validAnnouncements.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.notifications_off_outlined,
+              size: 60,
+              color: Colors.grey.withOpacity(0.5),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              "Aucune actualité pour le moment",
+              style: TextStyle(color: Colors.grey),
+            ),
+          ],
+        ),
+      );
     }
 
     // Trier par date de création (plus récent en premier)
