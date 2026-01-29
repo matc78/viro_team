@@ -4,12 +4,14 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:viro_team/pages/admin_coach_pages/admin_club_communication_page.dart';
 import 'package:viro_team/pages/admin_coach_pages/admin_equipment_page.dart';
+import 'package:viro_team/pages/admin_coach_pages/admin_loans_page.dart';
 import 'package:viro_team/pages/admin_coach_pages/admin_planning_page.dart';
 import 'package:viro_team/pages/admin_coach_pages/admin_teams_page.dart';
 import 'package:viro_team/pages/admin_coach_pages/profil_request_page.dart';
 import 'admin_members_page.dart';
 import 'admin_profil_page.dart';
 import 'package:intl/intl.dart';
+import '../../constants/firebase_collections.dart';
 import '../../theme/viro_theme.dart';
 import '../../utils/firebase_helpers.dart';
 import '../../widget/profile_switcher_dialog.dart';
@@ -28,6 +30,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
   final user = FirebaseAuth.instance.currentUser;
   bool _showAllRequests = false;
   String? _processingRequestId;
+  String? _processingLoanRequestId;
 
   String _formatName(
     dynamic firstName,
@@ -300,7 +303,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
                               },
                             ),
                             _adminCard(
-                              title: "Matériel & équipement",
+                              title: "Équipement",
                               count: "",
                               icon: Icons.inventory_2,
                               color: ViroColors.primary,
@@ -311,6 +314,20 @@ class _AdminHomePageState extends State<AdminHomePage> {
                                       clubId: clubId,
                                       sport: club['sport'] as String?,
                                     ),
+                                  ),
+                                );
+                              },
+                            ),
+                            _adminCard(
+                              title: "Prêts",
+                              count: "",
+                              icon: Icons.handshake_outlined,
+                              color: ViroColors.accent,
+                              onTap: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        AdminLoansPage(clubId: clubId),
                                   ),
                                 );
                               },
@@ -329,6 +346,14 @@ class _AdminHomePageState extends State<AdminHomePage> {
                         ),
                         const SizedBox(height: 10),
                         _buildJoinRequestsSection(clubId, clubName),
+                        const SizedBox(height: 24),
+                        _buildLoanRequestsSection(clubId),
+                        const SizedBox(height: 24),
+                        _buildUpcomingLoans(clubId),
+                        const SizedBox(height: 24),
+                        _buildLoanPreparationReminders(clubId),
+                        const SizedBox(height: 24),
+                        _buildLoanReturnReminders(clubId),
                         const SizedBox(height: 24),
                         if ((club['logoUrl'] as String?)?.isNotEmpty ?? false)
                           Center(
@@ -752,6 +777,922 @@ class _AdminHomePageState extends State<AdminHomePage> {
     } finally {
       if (mounted) setState(() => _processingRequestId = null);
     }
+  }
+
+  Widget _buildLoanRequestsSection(String clubId) {
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection(FirebaseCollections.clubs)
+          .doc(clubId)
+          .collection(FirebaseCollections.equipmentLoanRequests)
+          .where('status', isEqualTo: 'pending')
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          final error = snapshot.error.toString();
+          // Vérifier si c'est une erreur d'index manquant
+          if (error.contains('index') || error.contains('requires an index')) {
+            return _infoCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    "Index Firestore requis",
+                    style: TextStyle(
+                      color: Colors.redAccent,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    "Un index composite est nécessaire pour cette requête.",
+                    style: TextStyle(color: Colors.redAccent),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    "Erreur: $error",
+                    style: const TextStyle(color: Colors.grey, fontSize: 12),
+                  ),
+                ],
+              ),
+            );
+          }
+          return _infoCard(
+            child: Text(
+              "Erreur de chargement: $error",
+              style: const TextStyle(color: Colors.redAccent),
+            ),
+          );
+        }
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const _infoCard(
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        final docs = snapshot.data?.docs ?? [];
+
+        if (docs.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        // Trier côté client par createdAt (descendant)
+        final sortedDocs = docs.toList()
+          ..sort((a, b) {
+            final aCreated = a.data()['createdAt'] as Timestamp?;
+            final bCreated = b.data()['createdAt'] as Timestamp?;
+            if (aCreated == null && bCreated == null) return 0;
+            if (aCreated == null) return 1;
+            if (bCreated == null) return -1;
+            return bCreated.compareTo(aCreated); // Descendant
+          });
+
+        return _infoCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.request_quote, color: ViroColors.warning),
+                  const SizedBox(width: 8),
+                  const Text(
+                    "Demandes de prêt",
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                  const SizedBox(width: 8),
+                  Chip(
+                    label: Text(
+                      "${docs.length}",
+                      style: const TextStyle(fontSize: 12, color: Colors.white),
+                    ),
+                    backgroundColor: ViroColors.warning,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              ...sortedDocs.map((doc) {
+                final data = doc.data();
+                final equipmentName =
+                    data['equipmentName'] as String? ?? 'Équipement';
+                final playerName = data['playerName'] as String? ?? 'Joueur';
+                final quantity = data['quantity'] as int? ?? 1;
+                final duration = data['duration'] as int? ?? 0;
+                final durationUnit = data['durationUnit'] as String? ?? 'jour';
+                final reason = data['reason'] as String? ?? '';
+                final requestedPickupDate =
+                    data['requestedPickupDate'] as Timestamp?;
+                final createdAt = data['createdAt'] as Timestamp?;
+
+                String durationUnitLabel(String unit) {
+                  switch (unit) {
+                    case 'jour':
+                      return 'jour(s)';
+                    case 'semaine':
+                      return 'semaine(s)';
+                    case 'mois':
+                      return 'mois';
+                    default:
+                      return unit;
+                  }
+                }
+
+                final dateText = createdAt != null
+                    ? "${createdAt.toDate().day}/${createdAt.toDate().month}"
+                    : "";
+
+                return InkWell(
+                  onTap: () {
+                    // Optionnel : navigation vers une page de détail
+                  },
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: ViroColors.borderColor),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                equipmentName,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 16,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            Chip(
+                              label: const Text(
+                                "En attente",
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              backgroundColor: ViroColors.warning,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          "Demandé par $playerName",
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.grey[700],
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          "Quantité: $quantity • Durée: $duration ${durationUnitLabel(durationUnit)}",
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.grey[700],
+                          ),
+                        ),
+                        if (requestedPickupDate != null) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            "Récupération: ${DateFormat('dd/MM/yyyy', 'fr_FR').format(requestedPickupDate.toDate())}",
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.grey[700],
+                            ),
+                          ),
+                        ],
+                        if (reason.isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: Colors.grey[100],
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  "Raison:",
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.grey[700],
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  reason,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey[800],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                        if (dateText.isNotEmpty) ...[
+                          const SizedBox(height: 6),
+                          Text(
+                            "Reçue le $dateText",
+                            style: const TextStyle(
+                              color: Colors.grey,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: _processingLoanRequestId == doc.id
+                                    ? null
+                                    : () => _handleLoanRequest(
+                                        doc.id,
+                                        clubId,
+                                        data,
+                                        accept: false,
+                                      ),
+                                child: const Text("Refuser"),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: ElevatedButton(
+                                onPressed: _processingLoanRequestId == doc.id
+                                    ? null
+                                    : () => _handleLoanRequest(
+                                        doc.id,
+                                        clubId,
+                                        data,
+                                        accept: true,
+                                      ),
+                                child: _processingLoanRequestId == doc.id
+                                    ? const SizedBox(
+                                        height: 16,
+                                        width: 16,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Colors.white,
+                                        ),
+                                      )
+                                    : const Text("Accepter"),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _handleLoanRequest(
+    String requestId,
+    String clubId,
+    Map<String, dynamic> requestData, {
+    required bool accept,
+  }) async {
+    setState(() => _processingLoanRequestId = requestId);
+    try {
+      if (accept) {
+        await _acceptLoanRequest(requestId, clubId, requestData);
+      } else {
+        await _refuseLoanRequest(requestId, clubId);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Erreur : $e")));
+    } finally {
+      if (mounted) setState(() => _processingLoanRequestId = null);
+    }
+  }
+
+  Future<void> _acceptLoanRequest(
+    String requestId,
+    String clubId,
+    Map<String, dynamic> requestData,
+  ) async {
+    final responseController = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Accepter la demande"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              "Voulez-vous accepter cette demande de prêt ?",
+              style: TextStyle(fontSize: 14),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: responseController,
+              maxLines: 3,
+              decoration: const InputDecoration(
+                labelText: "Message (optionnel)",
+                hintText: "Message pour le joueur",
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text("Annuler"),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text("Accepter"),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) {
+      setState(() => _processingLoanRequestId = null);
+      return;
+    }
+
+    try {
+      final currentUser = FirebaseAuth.instance.currentUser;
+      final requestedPickupDate =
+          requestData['requestedPickupDate'] as Timestamp?;
+      final duration = requestData['duration'] as int? ?? 0;
+      final durationUnit = requestData['durationUnit'] as String? ?? 'jour';
+      final equipmentId = requestData['equipmentId'] as String? ?? '';
+      final equipmentName =
+          requestData['equipmentName'] as String? ?? 'Équipement';
+      final quantity = requestData['quantity'] as int? ?? 1;
+      final playerId = requestData['playerId'] as String? ?? '';
+      final playerName = requestData['playerName'] as String? ?? 'Joueur';
+
+      if (requestedPickupDate == null) {
+        throw Exception("Date de récupération manquante");
+      }
+
+      // Calculer la date de retour
+      final pickupDate = requestedPickupDate.toDate();
+      int durationDays = duration;
+      if (durationUnit == 'semaine') {
+        durationDays = duration * 7;
+      } else if (durationUnit == 'mois') {
+        durationDays = duration * 30;
+      }
+      final returnDate = pickupDate.add(Duration(days: durationDays));
+
+      // Créer le prêt actif
+      await FirebaseFirestore.instance
+          .collection(FirebaseCollections.clubs)
+          .doc(clubId)
+          .collection(FirebaseCollections.equipmentLoans)
+          .add({
+            'equipmentId': equipmentId,
+            'equipmentName': equipmentName,
+            'quantity': quantity,
+            'borrowerId': playerId,
+            'borrowerName': playerName,
+            'lentAt': requestedPickupDate,
+            'dueAt': Timestamp.fromDate(returnDate),
+            'status': 'active',
+            'requestId': requestId,
+            'createdAt': FieldValue.serverTimestamp(),
+          });
+
+      // Mettre à jour la demande
+      await FirebaseFirestore.instance
+          .collection(FirebaseCollections.clubs)
+          .doc(clubId)
+          .collection(FirebaseCollections.equipmentLoanRequests)
+          .doc(requestId)
+          .update({
+            'status': 'accepted',
+            'adminResponse': responseController.text.trim().isNotEmpty
+                ? responseController.text.trim()
+                : null,
+            'respondedAt': FieldValue.serverTimestamp(),
+            'respondedBy': currentUser?.uid,
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Demande acceptée et prêt créé avec succès !"),
+            backgroundColor: ViroColors.success,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Erreur : $e"),
+            backgroundColor: ViroColors.error,
+          ),
+        );
+      }
+      rethrow;
+    }
+  }
+
+  Future<void> _refuseLoanRequest(String requestId, String clubId) async {
+    final responseController = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Refuser la demande"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              "Voulez-vous refuser cette demande de prêt ?",
+              style: TextStyle(fontSize: 14),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: responseController,
+              maxLines: 3,
+              decoration: const InputDecoration(
+                labelText: "Raison du refus *",
+                hintText: "Expliquez pourquoi la demande est refusée",
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text("Annuler"),
+          ),
+          ElevatedButton(
+            onPressed: responseController.text.trim().isEmpty
+                ? null
+                : () => Navigator.of(context).pop(true),
+            style: ElevatedButton.styleFrom(backgroundColor: ViroColors.error),
+            child: const Text("Refuser"),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) {
+      setState(() => _processingLoanRequestId = null);
+      return;
+    }
+
+    if (responseController.text.trim().isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Veuillez indiquer une raison de refus."),
+            backgroundColor: ViroColors.error,
+          ),
+        );
+      }
+      setState(() => _processingLoanRequestId = null);
+      return;
+    }
+
+    try {
+      final currentUser = FirebaseAuth.instance.currentUser;
+      await FirebaseFirestore.instance
+          .collection(FirebaseCollections.clubs)
+          .doc(clubId)
+          .collection(FirebaseCollections.equipmentLoanRequests)
+          .doc(requestId)
+          .update({
+            'status': 'refused',
+            'adminResponse': responseController.text.trim(),
+            'respondedAt': FieldValue.serverTimestamp(),
+            'respondedBy': currentUser?.uid,
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Demande refusée."),
+            backgroundColor: ViroColors.error,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Erreur : $e"),
+            backgroundColor: ViroColors.error,
+          ),
+        );
+      }
+      rethrow;
+    }
+  }
+
+  Widget _buildUpcomingLoans(String clubId) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection(FirebaseCollections.clubs)
+          .doc(clubId)
+          .collection(FirebaseCollections.equipmentLoanRequests)
+          .where('status', isEqualTo: 'accepted')
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const SizedBox.shrink();
+        }
+
+        if (snapshot.hasError) {
+          return const SizedBox.shrink();
+        }
+
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        final requests = snapshot.data!.docs;
+
+        // Filtrer les prêts acceptés dont la date de récupération est dans le futur
+        final upcomingLoans = requests.where((doc) {
+          final data = doc.data();
+          final requestedPickupDate = data['requestedPickupDate'] as Timestamp?;
+          if (requestedPickupDate == null) return false;
+          final pickupDate = requestedPickupDate.toDate();
+          final pickupDay = DateTime(
+            pickupDate.year,
+            pickupDate.month,
+            pickupDate.day,
+          );
+          return pickupDay.isAfter(today);
+        }).toList();
+
+        if (upcomingLoans.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        // Trier par date de récupération (ascendant)
+        upcomingLoans.sort((a, b) {
+          final aData = a.data();
+          final bData = b.data();
+          final aDate = (aData['requestedPickupDate'] as Timestamp?)?.toDate();
+          final bDate = (bData['requestedPickupDate'] as Timestamp?)?.toDate();
+          if (aDate == null && bDate == null) return 0;
+          if (aDate == null) return 1;
+          if (bDate == null) return -1;
+          return aDate.compareTo(bDate);
+        });
+
+        return _infoCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.calendar_today, color: ViroColors.primary),
+                  const SizedBox(width: 8),
+                  const Text(
+                    "Prochains prêts",
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              ...upcomingLoans.map((doc) {
+                final data = doc.data();
+                final equipmentName =
+                    data['equipmentName'] as String? ?? 'Équipement';
+                final quantity = data['quantity'] as int? ?? 1;
+                final borrowerName = data['playerName'] as String? ?? 'Joueur';
+                final requestedPickupDate =
+                    data['requestedPickupDate'] as Timestamp?;
+                final duration = data['duration'] as int? ?? 0;
+                final durationUnit = data['durationUnit'] as String? ?? 'jour';
+
+                String durationUnitLabel(String unit) {
+                  switch (unit) {
+                    case 'jour':
+                      return 'jour(s)';
+                    case 'semaine':
+                      return 'semaine(s)';
+                    case 'mois':
+                      return 'mois';
+                    default:
+                      return unit;
+                  }
+                }
+
+                final pickupDate = requestedPickupDate?.toDate();
+                final daysUntilPickup = pickupDate?.difference(today).inDays;
+
+                return Padding(
+                  key: ValueKey(doc.id),
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.blue[50],
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: ViroColors.primary.withOpacity(0.3),
+                        width: 1,
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.event,
+                              color: ViroColors.primary,
+                              size: 18,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                "$equipmentName (x$quantity)",
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.grey[900],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          "Joueur: $borrowerName",
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[700],
+                          ),
+                        ),
+                        if (pickupDate != null) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            "Récupération: ${DateFormat('dd/MM/yyyy', 'fr_FR').format(pickupDate)}",
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[700],
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                        if (daysUntilPickup != null) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            daysUntilPickup == 1
+                                ? "Dans 1 jour"
+                                : "Dans $daysUntilPickup jours",
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: ViroColors.primary,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 4),
+                        Text(
+                          "Durée: $duration ${durationUnitLabel(durationUnit)}",
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildLoanPreparationReminders(String clubId) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final tomorrow = today.add(const Duration(days: 1));
+
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection(FirebaseCollections.clubs)
+          .doc(clubId)
+          .collection(FirebaseCollections.equipmentLoans)
+          .where('status', isEqualTo: 'active')
+          .where('lentAt', isGreaterThanOrEqualTo: Timestamp.fromDate(today))
+          .where('lentAt', isLessThan: Timestamp.fromDate(tomorrow))
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const SizedBox.shrink();
+        }
+
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        final loans = snapshot.data!.docs;
+
+        return _infoCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.inventory_2_rounded, color: ViroColors.primary),
+                  const SizedBox(width: 8),
+                  const Text(
+                    "Prêts à récupérer aujourd'hui",
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              ...loans.map((doc) {
+                final data = doc.data();
+                final equipmentName =
+                    data['equipmentName'] as String? ?? 'Équipement';
+                final quantity = data['quantity'] as int? ?? 1;
+                final borrowerName =
+                    data['borrowerName'] as String? ?? 'Joueur';
+
+                return Padding(
+                  key: ValueKey(doc.id),
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.check_circle_outline,
+                        color: ViroColors.primary,
+                        size: 18,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          "$equipmentName (x$quantity) - $borrowerName",
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.grey[900],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildLoanReturnReminders(String clubId) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final inThreeDays = today.add(const Duration(days: 3));
+
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection(FirebaseCollections.clubs)
+          .doc(clubId)
+          .collection(FirebaseCollections.equipmentLoans)
+          .where('status', isEqualTo: 'active')
+          .where('dueAt', isGreaterThanOrEqualTo: Timestamp.fromDate(today))
+          .where('dueAt', isLessThanOrEqualTo: Timestamp.fromDate(inThreeDays))
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const SizedBox.shrink();
+        }
+
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        final loans = snapshot.data!.docs;
+
+        // Trier côté client par dueAt (ascendant)
+        final sortedLoans = loans.toList()
+          ..sort((a, b) {
+            final aDue = a.data()['dueAt'] as Timestamp?;
+            final bDue = b.data()['dueAt'] as Timestamp?;
+            if (aDue == null && bDue == null) return 0;
+            if (aDue == null) return 1;
+            if (bDue == null) return -1;
+            return aDue.compareTo(bDue); // Ascendant
+          });
+
+        return _infoCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.schedule_rounded, color: ViroColors.warning),
+                  const SizedBox(width: 8),
+                  const Text(
+                    "Retours de prêt à venir",
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              ...sortedLoans.map((doc) {
+                final data = doc.data();
+                final equipmentName =
+                    data['equipmentName'] as String? ?? 'Équipement';
+                final quantity = data['quantity'] as int? ?? 1;
+                final borrowerName =
+                    data['borrowerName'] as String? ?? 'Joueur';
+                final dueAt = data['dueAt'] as Timestamp?;
+
+                final dueDate = dueAt?.toDate();
+                final isToday =
+                    dueDate != null &&
+                    DateTime(dueDate.year, dueDate.month, dueDate.day) == today;
+
+                return Padding(
+                  key: ValueKey(doc.id),
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    children: [
+                      Icon(
+                        isToday
+                            ? Icons.warning_amber_rounded
+                            : Icons.calendar_today,
+                        color: isToday ? ViroColors.error : ViroColors.warning,
+                        size: 18,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              "$equipmentName (x$quantity) - $borrowerName",
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.grey[900],
+                              ),
+                            ),
+                            if (dueDate != null)
+                              Text(
+                                isToday
+                                    ? "Retour aujourd'hui"
+                                    : "Retour le ${DateFormat('dd/MM/yyyy', 'fr_FR').format(dueDate)}",
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: isToday
+                                      ? ViroColors.error
+                                      : Colors.grey[700],
+                                  fontWeight: isToday
+                                      ? FontWeight.bold
+                                      : FontWeight.normal,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+            ],
+          ),
+        );
+      },
+    );
   }
 }
 

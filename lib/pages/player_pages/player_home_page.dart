@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:viro_team/pages/player_pages/player_teams_page.dart';
+import '../../constants/firebase_collections.dart';
 import '../../utils/firebase_error_handler.dart';
 
 // Import de tes nouvelles pages
@@ -13,6 +14,7 @@ import 'player_profil_page.dart';
 import 'player_planning_page.dart';
 import 'player_event_details_page.dart';
 import 'player_infos_page.dart';
+import 'player_loan_catalog_page.dart';
 
 import '../../theme/viro_theme.dart';
 import '../../widget/viro_loader.dart';
@@ -310,6 +312,13 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
                   _buildAnnouncements(allClubIds, userData),
                   const SizedBox(height: 20),
 
+                  _buildLoanRequestNotifications(clubId),
+                  const SizedBox(height: 20),
+                  _buildLoanPreparationReminders(clubId),
+                  const SizedBox(height: 20),
+                  _buildLoanReturnReminders(clubId),
+                  const SizedBox(height: 20),
+
                   // Navigation Rapide
                   Row(
                     children: [
@@ -584,6 +593,399 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
                                 },
                               ),
                             ],
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildLoanRequestNotifications(String clubId) {
+    final now = DateTime.now();
+    final oneDayAgo = now.subtract(const Duration(days: 1));
+
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('clubs')
+          .doc(clubId)
+          .collection('equipment_loan_requests')
+          .where('playerId', isEqualTo: _currentUserId)
+          .where('status', whereIn: ['accepted', 'refused'])
+          .where('respondedAt',
+              isGreaterThanOrEqualTo: Timestamp.fromDate(oneDayAgo))
+          .orderBy('respondedAt', descending: true)
+          .limit(10)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        final requests = snapshot.data!.docs;
+        final clubColor = _getClubColor(clubId);
+
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: clubColor.withOpacity(0.08),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: clubColor.withOpacity(0.3), width: 1.5),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.request_quote_rounded, color: clubColor),
+                  const SizedBox(width: 8),
+                  Text(
+                    "Réponses aux demandes de prêt",
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      color: clubColor,
+                    ),
+                  ),
+                  const Spacer(),
+                  if (requests.length > 3)
+                    TextButton(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                PlayerLoanCatalogPage(clubId: clubId),
+                          ),
+                        );
+                      },
+                      child: const Text("Voir tout"),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              ...requests.take(3).map((doc) {
+                final data = doc.data() as Map<String, dynamic>;
+                final status = data['status'] as String? ?? '';
+                final equipmentName =
+                    data['equipmentName'] as String? ?? 'Équipement';
+                final adminResponse = data['adminResponse'] as String?;
+                final respondedAt = data['respondedAt'] as Timestamp?;
+
+                final isAccepted = status == 'accepted';
+                final statusColor =
+                    isAccepted ? ViroColors.success : ViroColors.error;
+                final statusLabel = isAccepted ? 'Acceptée' : 'Refusée';
+                final statusIcon = isAccepted ? Icons.check_circle : Icons.cancel;
+
+                return Padding(
+                  key: ValueKey(doc.id),
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: InkWell(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              PlayerLoanCatalogPage(clubId: clubId),
+                        ),
+                      );
+                    },
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          width: 4,
+                          margin: const EdgeInsets.only(
+                            right: 12,
+                            top: 2,
+                            bottom: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: statusColor,
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(
+                                    statusIcon,
+                                    size: 16,
+                                    color: statusColor,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    statusLabel,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                      color: statusColor,
+                                    ),
+                                  ),
+                                  if (respondedAt != null) ...[
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      DateFormat('dd/MM à HH:mm', 'fr_FR')
+                                          .format(respondedAt.toDate()),
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: Colors.grey[600],
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                equipmentName,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.grey[900],
+                                ),
+                              ),
+                              if (adminResponse != null &&
+                                  adminResponse.isNotEmpty) ...[
+                                const SizedBox(height: 4),
+                                Text(
+                                  adminResponse,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey[700],
+                                  ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildLoanPreparationReminders(String clubId) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final tomorrow = today.add(const Duration(days: 1));
+
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection(FirebaseCollections.clubs)
+          .doc(clubId)
+          .collection(FirebaseCollections.equipmentLoans)
+          .where('borrowerId', isEqualTo: _currentUserId)
+          .where('status', isEqualTo: 'active')
+          .where('lentAt',
+              isGreaterThanOrEqualTo: Timestamp.fromDate(today))
+          .where('lentAt', isLessThan: Timestamp.fromDate(tomorrow))
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        final loans = snapshot.data!.docs;
+
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: ViroColors.primary.withOpacity(0.08),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: ViroColors.primary.withOpacity(0.3),
+              width: 1.5,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.inventory_2_rounded, color: ViroColors.primary),
+                  const SizedBox(width: 8),
+                  Text(
+                    "Prêt à récupérer aujourd'hui",
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      color: ViroColors.primary,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              ...loans.map((doc) {
+                final data = doc.data() as Map<String, dynamic>;
+                final equipmentName =
+                    data['equipmentName'] as String? ?? 'Équipement';
+                final quantity = data['quantity'] as int? ?? 1;
+
+                return Padding(
+                  key: ValueKey(doc.id),
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    children: [
+                      Icon(Icons.check_circle_outline,
+                          color: ViroColors.primary, size: 18),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          "$equipmentName (x$quantity)",
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.grey[900],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildLoanReturnReminders(String clubId) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final inThreeDays = today.add(const Duration(days: 3));
+
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection(FirebaseCollections.clubs)
+          .doc(clubId)
+          .collection(FirebaseCollections.equipmentLoans)
+          .where('borrowerId', isEqualTo: _currentUserId)
+          .where('status', isEqualTo: 'active')
+          .where('dueAt', isGreaterThanOrEqualTo: Timestamp.fromDate(today))
+          .where('dueAt', isLessThanOrEqualTo: Timestamp.fromDate(inThreeDays))
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        final loans = snapshot.data!.docs;
+
+        // Trier côté client par dueAt (ascendant)
+        final sortedLoans = loans.toList()
+          ..sort((a, b) {
+            final aData = a.data();
+            final bData = b.data();
+            if (aData == null && bData == null) return 0;
+            if (aData == null) return 1;
+            if (bData == null) return -1;
+            final aDue = (aData as Map<String, dynamic>)['dueAt'] as Timestamp?;
+            final bDue = (bData as Map<String, dynamic>)['dueAt'] as Timestamp?;
+            if (aDue == null && bDue == null) return 0;
+            if (aDue == null) return 1;
+            if (bDue == null) return -1;
+            return aDue.compareTo(bDue); // Ascendant
+          });
+
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: ViroColors.warning.withOpacity(0.08),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: ViroColors.warning.withOpacity(0.3),
+              width: 1.5,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.schedule_rounded, color: ViroColors.warning),
+                  const SizedBox(width: 8),
+                  Text(
+                    "Retour de prêt à venir",
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      color: ViroColors.warning,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              ...sortedLoans.map((doc) {
+                final data = doc.data() as Map<String, dynamic>;
+                final equipmentName =
+                    data['equipmentName'] as String? ?? 'Équipement';
+                final quantity = data['quantity'] as int? ?? 1;
+                final dueAt = data['dueAt'] as Timestamp?;
+
+                final dueDate = dueAt?.toDate();
+                final isToday = dueDate != null &&
+                    DateTime(dueDate.year, dueDate.month, dueDate.day) == today;
+
+                return Padding(
+                  key: ValueKey(doc.id),
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    children: [
+                      Icon(
+                        isToday ? Icons.warning_amber_rounded : Icons.calendar_today,
+                        color: isToday ? ViroColors.error : ViroColors.warning,
+                        size: 18,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              "$equipmentName (x$quantity)",
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.grey[900],
+                              ),
+                            ),
+                            if (dueDate != null)
+                              Text(
+                                isToday
+                                    ? "Retour aujourd'hui"
+                                    : "Retour le ${DateFormat('dd/MM/yyyy', 'fr_FR').format(dueDate)}",
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: isToday
+                                      ? ViroColors.error
+                                      : Colors.grey[700],
+                                  fontWeight: isToday
+                                      ? FontWeight.bold
+                                      : FontWeight.normal,
+                                ),
+                              ),
                           ],
                         ),
                       ),
@@ -1175,7 +1577,9 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
         if (index == 3) {
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => const PlayerProfilPage()),
+            MaterialPageRoute(
+              builder: (_) => PlayerLoanCatalogPage(clubId: clubId),
+            ),
           );
         }
       },
@@ -1193,8 +1597,8 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
           label: "Infos",
         ),
         BottomNavigationBarItem(
-          icon: Icon(Icons.person_outline),
-          label: "Profil",
+          icon: Icon(Icons.inventory_2_outlined),
+          label: "Catalogue prêt",
         ),
       ],
     );

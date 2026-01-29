@@ -138,6 +138,43 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
                   subtitle: "Ajouter ou mettre à jour",
                   onTap: () => _pickClubLogo(clubId),
                 ),
+                StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                  stream: _firestore
+                      .collection('clubs')
+                      .doc(clubId)
+                      .snapshots(),
+                  builder: (context, clubSnap) {
+                    final clubData = clubSnap.data?.data();
+                    final paymentMethods = clubData?['paymentMethods'] as List<dynamic>? ?? [];
+                    final paymentMethodsList = paymentMethods.map((e) => e.toString()).toList();
+                    
+                    String paymentMethodsSubtitle;
+                    if (paymentMethodsList.isEmpty) {
+                      paymentMethodsSubtitle = "Aucun moyen sélectionné";
+                    } else {
+                      final labels = paymentMethodsList.map((method) {
+                        switch (method) {
+                          case 'carte':
+                            return 'Carte';
+                          case 'cheque':
+                            return 'Chèque';
+                          case 'especes':
+                            return 'Espèces';
+                          default:
+                            return method;
+                        }
+                      }).toList();
+                      paymentMethodsSubtitle = labels.join(', ');
+                    }
+                    
+                    return _buildMenuCard(
+                      icon: Icons.payment_outlined,
+                      title: "Moyens de paiement acceptés",
+                      subtitle: paymentMethodsSubtitle,
+                      onTap: () => _showPaymentMethodsDialog(clubId, paymentMethodsList),
+                    );
+                  },
+                ),
                 if (getAllUserRolesInClub(
                   userData ?? {},
                   clubId,
@@ -443,6 +480,112 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
   }
 
   // --- LOGIQUE ACTIONS ---
+
+  void _showPaymentMethodsDialog(String clubId, List<String> currentMethods) {
+    final Set<String> selectedMethods = Set<String>.from(currentMethods);
+    
+    showDialog<void>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text("Moyens de paiement acceptés"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                "Sélectionnez les moyens de paiement acceptés par le club :",
+                style: TextStyle(fontSize: 14),
+              ),
+              const SizedBox(height: 16),
+              CheckboxListTile(
+                title: const Text("Carte bancaire"),
+                value: selectedMethods.contains('carte'),
+                onChanged: (value) {
+                  setDialogState(() {
+                    if (value == true) {
+                      selectedMethods.add('carte');
+                    } else {
+                      selectedMethods.remove('carte');
+                    }
+                  });
+                },
+              ),
+              CheckboxListTile(
+                title: const Text("Chèque"),
+                value: selectedMethods.contains('cheque'),
+                onChanged: (value) {
+                  setDialogState(() {
+                    if (value == true) {
+                      selectedMethods.add('cheque');
+                    } else {
+                      selectedMethods.remove('cheque');
+                    }
+                  });
+                },
+              ),
+              CheckboxListTile(
+                title: const Text("Espèces"),
+                value: selectedMethods.contains('especes'),
+                onChanged: (value) {
+                  setDialogState(() {
+                    if (value == true) {
+                      selectedMethods.add('especes');
+                    } else {
+                      selectedMethods.remove('especes');
+                    }
+                  });
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text("Annuler"),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                try {
+                  await _firestore.collection('clubs').doc(clubId).update({
+                    'paymentMethods': selectedMethods.toList(),
+                  });
+                  
+                  AppLogger.instance.info('Moyens de paiement mis à jour', {
+                    'clubId': clubId,
+                    'paymentMethods': selectedMethods.toList(),
+                  });
+                  
+                  if (mounted) {
+                    Navigator.of(context).pop();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text("Moyens de paiement mis à jour avec succès !"),
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  AppLogger.instance.error(
+                    'Erreur lors de la mise à jour des moyens de paiement',
+                    error: e,
+                    context: {'clubId': clubId},
+                  );
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text("Erreur : $e"),
+                      ),
+                    );
+                  }
+                }
+              },
+              child: const Text("Enregistrer"),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   void _showEditClubName(String clubId, String currentName) {
     // On utilise deux contrôleurs distincts

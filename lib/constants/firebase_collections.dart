@@ -10,10 +10,12 @@ class FirebaseCollections {
   static const String events = 'events';
   static const String joinRequests = 'join_requests';
   static const String announcements = 'announcements';
-  
+
   // Sous-collections
   static const String members = 'members';
   static const String attendance = 'attendance';
   static const String equipment = 'equipment';
+  static const String equipmentCatalog = 'equipmentCatalog';
   static const String equipmentLoans = 'equipment_loans';
+  static const String equipmentLoanRequests = 'equipment_loan_requests';
 }
