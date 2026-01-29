@@ -551,36 +551,46 @@ class _StaffListPage extends StatelessWidget {
         title: const Text("Staff & Contacts"),
         backgroundColor: ViroColors.background,
       ),
-      body: StreamBuilder<QuerySnapshot>(
+      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
         stream: FirebaseFirestore.instance.collection('users').snapshots(),
         builder: (context, snapshot) {
           if (!snapshot.hasData) return const Center(child: ViroLoader());
 
-          final allDocs = snapshot.data!.docs;
-          // Filtrer les utilisateurs du club avec les rôles staff
-          final docs = allDocs.where((doc) {
-            final data = doc.data() as Map<String, dynamic>?;
+          final allDocs = snapshot.data!.docs
+              .cast<DocumentSnapshot<Map<String, dynamic>>>();
+          // Même logique que _fetchClubStats : d'abord utilisateurs du club
+          final usersInClub = filterUsersByClub(allDocs, clubId);
+          // Puis garder uniquement staff (coach, admin, admin_fondateur)
+          final staffDocs = usersInClub.where((doc) {
+            final data = doc.data();
             if (data == null) return false;
-            final role = getUserRoleInClub(data, clubId);
-            return role == 'coach' ||
-                role == 'admin' ||
-                role == 'admin_fondateur';
+            final rolesInClub = getAllUserRolesInClub(data, clubId);
+            return rolesInClub.any(
+              (r) => r == 'coach' || r == 'admin' || r == 'admin_fondateur',
+            );
           }).toList();
-          if (docs.isEmpty) {
+          if (staffDocs.isEmpty) {
             return const Center(child: Text("Aucun contact trouvé"));
           }
 
           return ListView.builder(
             padding: const EdgeInsets.all(16),
-            itemCount: docs.length,
+            itemCount: staffDocs.length,
             itemBuilder: (context, index) {
-              final rawData = docs[index].data();
-              final data = rawData as Map<String, dynamic>?;
+              final doc = staffDocs[index];
+              final data = doc.data();
               if (data == null) return const SizedBox.shrink();
 
-              // Utiliser la nouvelle fonction pour obtenir le rôle dans ce club
-              final String role = getUserRoleInClub(data, clubId) ?? 'user';
-              final String uid = docs[index].id;
+              final rolesInClub = getAllUserRolesInClub(data, clubId);
+              // Priorité : admin_fondateur > admin > coach pour l'affichage
+              final String role = rolesInClub.contains('admin_fondateur')
+                  ? 'admin_fondateur'
+                  : rolesInClub.contains('admin')
+                  ? 'admin'
+                  : rolesInClub.contains('coach')
+                  ? 'coach'
+                  : 'user';
+              final String uid = doc.id;
 
               // Définition de l'affichage du rôle
               String roleLabel = "Coach";

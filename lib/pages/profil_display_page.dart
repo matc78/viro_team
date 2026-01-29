@@ -12,7 +12,7 @@ class ProfilDisplayPage extends StatelessWidget {
 
   const ProfilDisplayPage({super.key, required this.userId});
 
-  // Vérifie si l'utilisateur actuel a le droit de voir les infos privées
+  // Vérifie si l'utilisateur actuel a le droit de voir les infos privées (email, téléphone)
   Future<Map<String, dynamic>> _viewerInfo() async {
     final currentUid = FirebaseAuth.instance.currentUser?.uid;
     if (currentUid == null) return {'hasAccess': false, 'role': null};
@@ -24,22 +24,84 @@ class ProfilDisplayPage extends StatelessWidget {
         .collection('users')
         .doc(currentUid)
         .get();
+    final currentUserData = currentUserDoc.data();
+    if (currentUserData == null) return {'hasAccess': false, 'role': null};
 
     // Utiliser activeContext pour le rôle actuel
     final activeContext =
-        currentUserDoc.data()?['activeContext'] as Map<String, dynamic>?;
+        currentUserData['activeContext'] as Map<String, dynamic>?;
     final role = activeContext?['role'] as String?;
-
-    // Fallback pour compatibilité avec ancien système
-    final legacyRole = currentUserDoc.data()?['role'] as String?;
+    final legacyRole = currentUserData['role'] as String?;
     final finalRole = role ?? legacyRole;
 
-    // Seuls les admins et coachs ont accès aux coordonnées
-    final hasAccess =
-        finalRole == 'admin' ||
+    // Admins et coachs voient toujours les coordonnées
+    if (finalRole == 'admin' ||
         finalRole == 'admin_fondateur' ||
-        finalRole == 'coach';
+        finalRole == 'coach') {
+      return {'hasAccess': true, 'role': finalRole};
+    }
+
+    // Un joueur peut voir les coordonnées des coachs/admins des clubs auxquels il appartient
+    final viewerClubIds = _getViewerPlayerClubIds(currentUserData);
+    if (viewerClubIds.isEmpty) return {'hasAccess': false, 'role': finalRole};
+
+    final viewedUserDoc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(userId)
+        .get();
+    final viewedData = viewedUserDoc.data();
+    if (viewedData == null) return {'hasAccess': false, 'role': finalRole};
+
+    final staffClubIds = _getStaffClubIds(viewedData);
+    final hasSharedClub = viewerClubIds.any(
+      (clubId) => staffClubIds.contains(clubId),
+    );
+    final hasAccess = hasSharedClub;
+
     return {'hasAccess': hasAccess, 'role': finalRole};
+  }
+
+  /// Club IDs auxquels le viewer appartient en tant que joueur
+  List<String> _getViewerPlayerClubIds(Map<String, dynamic> userData) {
+    final ids = <String>{};
+    final roles = userData['roles'] as Map<String, dynamic>?;
+    if (roles != null && roles['player'] is Map) {
+      final playerData = roles['player'] as Map;
+      if (playerData['clubs'] is List) {
+        for (final c in (playerData['clubs'] as List)) {
+          if (c is Map) {
+            final clubId = c['clubId'] as String?;
+            if (clubId != null && clubId.isNotEmpty) ids.add(clubId);
+          }
+        }
+      } else if (playerData['clubId'] != null) {
+        ids.add(playerData['clubId'] as String);
+      }
+    }
+    final legacyClubId = userData['clubId'] as String?;
+    if (legacyClubId != null && legacyClubId.isNotEmpty) ids.add(legacyClubId);
+    return ids.toList();
+  }
+
+  /// Club IDs où l'utilisateur est coach ou admin
+  List<String> _getStaffClubIds(Map<String, dynamic> userData) {
+    final ids = <String>{};
+    final roles = userData['roles'] as Map<String, dynamic>?;
+    if (roles == null) return ids.toList();
+    if (roles['coach'] is List) {
+      for (final c in (roles['coach'] as List)) {
+        if (c is Map) {
+          final clubId = c['clubId'] as String?;
+          if (clubId != null && clubId.isNotEmpty) ids.add(clubId);
+        }
+      }
+    }
+    if (roles['admin'] is List) {
+      for (final id in (roles['admin'] as List).whereType<String>()) {
+        if (id.isNotEmpty) ids.add(id);
+      }
+    }
+    return ids.toList();
   }
 
   // Vérifie si l'utilisateur actuel peut modifier la licence d'un joueur dans un club
