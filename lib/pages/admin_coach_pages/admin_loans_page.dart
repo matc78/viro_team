@@ -346,7 +346,7 @@ class _LoanCatalogSection extends StatelessWidget {
                     onPressed: () => _showLoanAllowedDaysDialog(context),
                     icon: const Icon(Icons.calendar_today, size: 15),
                     label: Text(
-                      "Jours récup./retour",
+                      "Infos récup./retour",
                       style: const TextStyle(fontSize: 13),
                       overflow: TextOverflow.ellipsis,
                     ),
