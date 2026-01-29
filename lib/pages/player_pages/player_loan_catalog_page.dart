@@ -1096,6 +1096,13 @@ class _RequestLoanDialogState extends State<_RequestLoanDialog> {
     return (price.toDouble() * units * _selectedQuantity);
   }
 
+  /// Calcule la caution totale (caution par objet × quantité)
+  double? _calculateTotalCaution() {
+    final caution = widget.catalogData['caution'] as num?;
+    if (caution == null) return null;
+    return caution.toDouble() * _selectedQuantity;
+  }
+
   Future<void> _submitRequest() async {
     try {
       // Vérifier que le formulaire est valide
@@ -1199,6 +1206,13 @@ class _RequestLoanDialogState extends State<_RequestLoanDialog> {
 
     // Convertir la durée en unité appropriée
     final duration = _convertDaysToUnit(durationDays, priceUnit);
+    final totalPrice = _calculateTotalPrice();
+    final catalogPrice = widget.catalogData['price'] as num?;
+    final catalogCaution = widget.catalogData['caution'] as num?;
+    // Caution totale = caution par objet × nombre d'objets demandés
+    final totalCaution = catalogCaution != null
+        ? (catalogCaution.toDouble() * quantity)
+        : null;
 
     setState(() => _isSubmitting = true);
 
@@ -1233,6 +1247,10 @@ class _RequestLoanDialogState extends State<_RequestLoanDialog> {
             'status': 'pending',
             'createdAt': FieldValue.serverTimestamp(),
             'updatedAt': FieldValue.serverTimestamp(),
+            if (catalogPrice != null) 'price': catalogPrice,
+            'priceUnit': priceUnit,
+            if (totalCaution != null) 'caution': totalCaution,
+            if (totalPrice != null) 'totalPrice': totalPrice,
           });
 
       if (mounted) {
@@ -1855,20 +1873,34 @@ class _RequestLoanDialogState extends State<_RequestLoanDialog> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  // Prix total
+                  // Prix total et caution calculée
                   Expanded(
-                    child: _calculateTotalPrice() != null
-                        ? Row(
+                    child:
+                        (_calculateTotalPrice() != null ||
+                            _calculateTotalCaution() != null)
+                        ? Wrap(
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            spacing: 8,
                             children: [
-                              const SizedBox(width: 4),
-                              Text(
-                                '${_calculateTotalPrice()!.toStringAsFixed(2)} €',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.grey[800],
+                              if (_calculateTotalPrice() != null) ...[
+                                Text(
+                                  '${_calculateTotalPrice()!.toStringAsFixed(2)} €',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.grey[800],
+                                  ),
                                 ),
-                              ),
+                              ],
+                              if (_calculateTotalCaution() != null) ...[
+                                Text(
+                                  'Caution: ${_calculateTotalCaution()!.toStringAsFixed(2)} €',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey[600],
+                                  ),
+                                ),
+                              ],
                             ],
                           )
                         : const SizedBox.shrink(),
@@ -2127,6 +2159,26 @@ class _RequestHistoryCard extends StatelessWidget {
               "Quantité: $quantity • Durée: $duration ${durationUnitLabel(durationUnit)}",
               style: TextStyle(fontSize: 13, color: Colors.grey[700]),
             ),
+            if (requestData['totalPrice'] != null ||
+                requestData['caution'] != null) ...[
+              const SizedBox(height: 4),
+              Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 6,
+                children: [
+                  if (requestData['totalPrice'] != null)
+                    Text(
+                      "Prix: ${(requestData['totalPrice'] as num).toStringAsFixed(2)} €",
+                      style: TextStyle(fontSize: 13, color: Colors.grey[700]),
+                    ),
+                  if (requestData['caution'] != null)
+                    Text(
+                      "Caution: ${(requestData['caution'] as num).toStringAsFixed(2)} €",
+                      style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                    ),
+                ],
+              ),
+            ],
             if (requestedPickupDate != null) ...[
               const SizedBox(height: 4),
               Text(

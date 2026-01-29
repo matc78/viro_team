@@ -1866,6 +1866,8 @@ class _OverdueLoansSection extends StatelessWidget {
               final quantity = loan['quantity'] as int? ?? 1;
               final borrowerName = loan['borrowerName'] as String? ?? 'Joueur';
               final borrowerId = loan['borrowerId'] as String?;
+              final totalPrice = loan['totalPrice'] as num?;
+              final caution = loan['caution'] as num?;
               final dueAt = loan['dueAt'] as Timestamp?;
               final lentAt = loan['lentAt'] as Timestamp?;
 
@@ -1924,6 +1926,26 @@ class _OverdueLoansSection extends StatelessWidget {
                           color: Colors.grey[700],
                         ),
                       ),
+                      if (totalPrice != null) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          "Prix: ${totalPrice.toStringAsFixed(2)} €",
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[700],
+                          ),
+                        ),
+                      ],
+                      if (caution != null) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          "Caution: ${caution.toStringAsFixed(2)} €",
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[700],
+                          ),
+                        ),
+                      ],
                       if (dueDate != null) ...[
                         const SizedBox(height: 4),
                         Text(
@@ -2077,6 +2099,8 @@ class _ActiveLoansSection extends StatelessWidget {
                 final borrowerName =
                     loan['borrowerName'] as String? ?? 'Joueur';
                 final borrowerId = loan['borrowerId'] as String?;
+                final totalPrice = loan['totalPrice'] as num?;
+                final caution = loan['caution'] as num?;
                 final dueAt = loan['dueAt'] as Timestamp?;
                 final lentAt = loan['lentAt'] as Timestamp?;
 
@@ -2133,6 +2157,26 @@ class _ActiveLoansSection extends StatelessWidget {
                             color: Colors.grey[700],
                           ),
                         ),
+                        if (totalPrice != null) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            "Prix: ${totalPrice.toStringAsFixed(2)} €",
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[700],
+                            ),
+                          ),
+                        ],
+                        if (caution != null) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            "Caution: ${caution.toStringAsFixed(2)} €",
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[700],
+                            ),
+                          ),
+                        ],
                         if (dueDate != null) ...[
                           const SizedBox(height: 4),
                           Text(
@@ -2319,6 +2363,8 @@ class _UpcomingLoansSection extends StatelessWidget {
                   final duration = data['duration'] as int? ?? 0;
                   final durationUnit =
                       data['durationUnit'] as String? ?? 'jour';
+                  final totalPrice = data['totalPrice'] as num?;
+                  final caution = data['caution'] as num?;
 
                   String durationUnitLabel(String unit) {
                     switch (unit) {
@@ -2382,6 +2428,26 @@ class _UpcomingLoansSection extends StatelessWidget {
                               color: Colors.grey[700],
                             ),
                           ),
+                          if (totalPrice != null) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              "Prix: ${totalPrice.toStringAsFixed(2)} €",
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey[700],
+                              ),
+                            ),
+                          ],
+                          if (caution != null) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              "Caution: ${caution.toStringAsFixed(2)} €",
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey[700],
+                              ),
+                            ),
+                          ],
                           if (pickupDate != null) ...[
                             const SizedBox(height: 4),
                             Text(
@@ -2526,6 +2592,26 @@ class _LoanRequestCard extends StatelessWidget {
               "Quantité: $quantity • Durée: $duration ${durationUnitLabel(durationUnit)}",
               style: TextStyle(fontSize: 13, color: Colors.grey[700]),
             ),
+            if (requestData['totalPrice'] != null ||
+                requestData['caution'] != null) ...[
+              const SizedBox(height: 4),
+              Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 6,
+                children: [
+                  if (requestData['totalPrice'] != null)
+                    Text(
+                      "Prix: ${(requestData['totalPrice'] as num).toStringAsFixed(2)} €",
+                      style: TextStyle(fontSize: 13, color: Colors.grey[700]),
+                    ),
+                  if (requestData['caution'] != null)
+                    Text(
+                      "Caution: ${(requestData['caution'] as num).toStringAsFixed(2)} €",
+                      style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                    ),
+                ],
+              ),
+            ],
             if (requestedPickupDate != null) ...[
               const SizedBox(height: 4),
               Text(
@@ -2661,6 +2747,8 @@ class _LoanRequestCard extends StatelessWidget {
       final quantity = requestData['quantity'] as int? ?? 1;
       final playerId = requestData['playerId'] as String? ?? '';
       final playerName = requestData['playerName'] as String? ?? 'Joueur';
+      final totalPrice = requestData['totalPrice'] as num?;
+      final caution = requestData['caution'] as num?;
 
       if (requestedPickupDate == null) {
         throw Exception("Date de récupération manquante");
@@ -2690,6 +2778,8 @@ class _LoanRequestCard extends StatelessWidget {
             'status': 'active',
             'requestId': requestId,
             'createdAt': FieldValue.serverTimestamp(),
+            if (totalPrice != null) 'totalPrice': totalPrice,
+            if (caution != null) 'caution': caution,
           });
 
       await FirebaseFirestore.instance
