@@ -33,6 +33,11 @@ class _AdminHomePageState extends State<AdminHomePage> {
   String? _processingRequestId;
   String? _processingLoanRequestId;
 
+  /// Rafraîchit le contenu (scroll vers le bas = pull-to-refresh).
+  Future<void> _refreshAdminHome() async {
+    setState(() {});
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -180,183 +185,190 @@ class _AdminHomePageState extends State<AdminHomePage> {
                       ),
                     ),
                   ),
-                  // Contenu principal
-                  SingleChildScrollView(
-                    padding: const EdgeInsets.all(20.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Header Bienvenue avec Chronomètre
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    "Salut Coach ! 👋",
-                                    style: Theme.of(
-                                      context,
-                                    ).textTheme.headlineSmall,
+                  // Contenu principal (pull-to-refresh comme player_home_page)
+                  RefreshIndicator(
+                    onRefresh: _refreshAdminHome,
+                    child: SingleChildScrollView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.all(20.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Header Bienvenue avec Chronomètre
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      "Salut Coach ! 👋",
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.headlineSmall,
+                                    ),
+                                    Text(
+                                      clubName,
+                                      style: const TextStyle(
+                                        color: ViroColors.primary,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 18,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Flexible(
+                                child: ConstrainedBox(
+                                  constraints: BoxConstraints(
+                                    maxWidth:
+                                        MediaQuery.of(context).size.width * 0.5,
                                   ),
+                                  child: SportTimerWidget(
+                                    sport: club['sport'] as String?,
+                                    clubId: clubId,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+
+                          const SizedBox(height: 30),
+
+                          // Scoreur adaptatif selon le sport
+                          SportScoreWidget(
+                            sport: club['sport'] as String?,
+                            clubId: clubId,
+                          ),
+
+                          const SizedBox(height: 30),
+
+                          const Text(
+                            "À ne pas manquer",
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          _buildJoinRequestsSection(clubId, clubName),
+                          const SizedBox(height: 12),
+                          _buildLoanRequestsSection(clubId),
+                          _buildLoanChangeRequestsSection(clubId),
+                          _buildActiveLoans(clubId),
+                          _buildPickupToConfirmSection(clubId),
+                          _buildUpcomingLoans(clubId),
+                          _buildLoanPreparationReminders(clubId),
+                          _buildLoanReturnReminders(clubId),
+                          const SizedBox(height: 12),
+
+                          // Grille d'actions (cards en bas du body)
+                          GridView.count(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            crossAxisCount: 2,
+                            crossAxisSpacing: 15,
+                            mainAxisSpacing: 15,
+                            children: [
+                              _MembersCountCard(
+                                clubId: clubId,
+                                clubName: clubName,
+                              ),
+                              _TeamsCountCard(clubId: clubId),
+                              _adminCard(
+                                title: "Planning",
+                                count: DateFormat(
+                                  'd MMM',
+                                  'fr_FR',
+                                ).format(DateTime.now()),
+                                icon: Icons.calendar_today_rounded,
+                                color: ViroColors.primary,
+                                onTap: () {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          AdminPlanningPage(clubId: clubId),
+                                    ),
+                                  );
+                                },
+                              ),
+                              _adminCard(
+                                title: "Communiquer",
+                                count: "",
+                                icon: Icons.campaign_rounded,
+                                color: ViroColors.accent,
+                                onTap: () {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          AdminClubCommunicationPage(
+                                            clubId: clubId,
+                                          ),
+                                    ),
+                                  );
+                                },
+                              ),
+                              _adminCard(
+                                title: "Équipement",
+                                count: "",
+                                icon: Icons.inventory_2,
+                                color: ViroColors.primary,
+                                onTap: () {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) => AdminEquipmentPage(
+                                        clubId: clubId,
+                                        sport: club['sport'] as String?,
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                              _adminCard(
+                                title: "Prêts",
+                                count: "",
+                                icon: Icons.handshake_outlined,
+                                color: ViroColors.accent,
+                                onTap: () {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) => AdminLoansPage(
+                                        clubId: clubId,
+                                        initialTabIndex: 1,
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 24),
+                          if ((club['logoUrl'] as String?)?.isNotEmpty ?? false)
+                            Center(
+                              child: Column(
+                                children: [
+                                  CircleAvatar(
+                                    radius: 32,
+                                    backgroundImage: CachedNetworkImageProvider(
+                                      club['logoUrl'] as String,
+                                    ),
+                                    backgroundColor: Colors.transparent,
+                                  ),
+                                  const SizedBox(height: 8),
                                   Text(
                                     clubName,
                                     style: const TextStyle(
-                                      color: ViroColors.primary,
                                       fontWeight: FontWeight.bold,
-                                      fontSize: 18,
+                                      color: Colors.grey,
                                     ),
                                   ),
                                 ],
                               ),
                             ),
-                            const SizedBox(width: 12),
-                            Flexible(
-                              child: ConstrainedBox(
-                                constraints: BoxConstraints(
-                                  maxWidth:
-                                      MediaQuery.of(context).size.width * 0.5,
-                                ),
-                                child: SportTimerWidget(
-                                  sport: club['sport'] as String?,
-                                  clubId: clubId,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-
-                        const SizedBox(height: 30),
-
-                        // Scoreur adaptatif selon le sport
-                        SportScoreWidget(
-                          sport: club['sport'] as String?,
-                          clubId: clubId,
-                        ),
-
-                        const SizedBox(height: 30),
-
-                        const Text(
-                          "À ne pas manquer",
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        _buildJoinRequestsSection(clubId, clubName),
-                        const SizedBox(height: 24),
-                        _buildLoanRequestsSection(clubId),
-                        const SizedBox(height: 24),
-                        _buildUpcomingLoans(clubId),
-                        const SizedBox(height: 24),
-                        _buildLoanPreparationReminders(clubId),
-                        const SizedBox(height: 24),
-                        _buildLoanReturnReminders(clubId),
-                        const SizedBox(height: 30),
-
-                        // Grille d'actions (cards en bas du body)
-                        GridView.count(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          crossAxisCount: 2,
-                          crossAxisSpacing: 15,
-                          mainAxisSpacing: 15,
-                          children: [
-                            _MembersCountCard(
-                              clubId: clubId,
-                              clubName: clubName,
-                            ),
-                            _TeamsCountCard(clubId: clubId),
-                            _adminCard(
-                              title: "Planning",
-                              count: DateFormat(
-                                'd MMM',
-                                'fr_FR',
-                              ).format(DateTime.now()),
-                              icon: Icons.calendar_today_rounded,
-                              color: ViroColors.primary,
-                              onTap: () {
-                                Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (_) =>
-                                        AdminPlanningPage(clubId: clubId),
-                                  ),
-                                );
-                              },
-                            ),
-                            _adminCard(
-                              title: "Communiquer",
-                              count: "",
-                              icon: Icons.campaign_rounded,
-                              color: ViroColors.accent,
-                              onTap: () {
-                                Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (_) => AdminClubCommunicationPage(
-                                      clubId: clubId,
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
-                            _adminCard(
-                              title: "Équipement",
-                              count: "",
-                              icon: Icons.inventory_2,
-                              color: ViroColors.primary,
-                              onTap: () {
-                                Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (_) => AdminEquipmentPage(
-                                      clubId: clubId,
-                                      sport: club['sport'] as String?,
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
-                            _adminCard(
-                              title: "Prêts",
-                              count: "",
-                              icon: Icons.handshake_outlined,
-                              color: ViroColors.accent,
-                              onTap: () {
-                                Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (_) =>
-                                        AdminLoansPage(clubId: clubId),
-                                  ),
-                                );
-                              },
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 24),
-                        if ((club['logoUrl'] as String?)?.isNotEmpty ?? false)
-                          Center(
-                            child: Column(
-                              children: [
-                                CircleAvatar(
-                                  radius: 32,
-                                  backgroundImage: CachedNetworkImageProvider(
-                                    club['logoUrl'] as String,
-                                  ),
-                                  backgroundColor: Colors.transparent,
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  clubName,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.grey,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ],
@@ -1053,6 +1065,167 @@ class _AdminHomePageState extends State<AdminHomePage> {
     );
   }
 
+  Widget _buildLoanChangeRequestsSection(String clubId) {
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection(FirebaseCollections.clubs)
+          .doc(clubId)
+          .collection(FirebaseCollections.equipmentLoanChangeRequests)
+          .where('status', isEqualTo: 'pending')
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return const SizedBox.shrink();
+        }
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const _infoCard(
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
+        final docs = snapshot.data?.docs ?? [];
+        if (docs.isEmpty) {
+          return const SizedBox.shrink();
+        }
+        final sortedDocs = docs.toList()
+          ..sort((a, b) {
+            final aCreated = a.data()['createdAt'] as Timestamp?;
+            final bCreated = b.data()['createdAt'] as Timestamp?;
+            if (aCreated == null && bCreated == null) return 0;
+            if (aCreated == null) return 1;
+            if (bCreated == null) return -1;
+            return aCreated.compareTo(bCreated);
+          });
+        return _infoCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.edit_calendar, color: Colors.orange.shade700),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      "Demandes de modification / annulation",
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ),
+                  Chip(
+                    label: Text(
+                      "${docs.length}",
+                      style: const TextStyle(fontSize: 12, color: Colors.white),
+                    ),
+                    backgroundColor: Colors.orange.shade700,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              ...sortedDocs.map((doc) {
+                final data = doc.data();
+                final type = data['type'] as String? ?? '';
+                final reason = data['reason'] as String? ?? '';
+                final playerName = data['playerName'] as String? ?? 'Joueur';
+                final playerId = data['requestedBy'] as String?;
+                final typeLabel = type == 'cancellation'
+                    ? 'Annulation'
+                    : 'Modification';
+                final reasonPreview = reason.length > 60
+                    ? '${reason.substring(0, 60)}...'
+                    : reason;
+                return InkWell(
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            AdminLoansPage(clubId: clubId, initialTabIndex: 1),
+                      ),
+                    );
+                  },
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.orange.shade200),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Chip(
+                              label: Text(
+                                typeLabel,
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              backgroundColor: type == 'cancellation'
+                                  ? ViroColors.error
+                                  : ViroColors.primary,
+                            ),
+                            const Icon(
+                              Icons.arrow_forward_ios,
+                              size: 14,
+                              color: Colors.grey,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        UserDisplayTile(
+                          userId: playerId,
+                          fallback: playerName,
+                          compact: true,
+                          textStyle: TextStyle(
+                            fontSize: 13,
+                            color: Colors.grey[700],
+                          ),
+                        ),
+                        if (reasonPreview.isNotEmpty) ...[
+                          const SizedBox(height: 6),
+                          Text(
+                            reasonPreview,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[800],
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                );
+              }),
+              const SizedBox(height: 8),
+              Center(
+                child: TextButton.icon(
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            AdminLoansPage(clubId: clubId, initialTabIndex: 1),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.handshake_outlined, size: 18),
+                  label: const Text("Voir toutes les demandes (Prêts)"),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _handleLoanRequest(
     String requestId,
     String clubId,
@@ -1149,9 +1322,11 @@ class _AdminHomePageState extends State<AdminHomePage> {
         durationDays = duration * 30;
       }
       final returnDate = pickupDate.add(Duration(days: durationDays));
+      final totalPrice = requestData['totalPrice'] as num?;
+      final caution = requestData['caution'] as num?;
 
-      // Créer le prêt actif
-      await FirebaseFirestore.instance
+      // Créer le prêt actif (remise non encore confirmée)
+      final loanRef = await FirebaseFirestore.instance
           .collection(FirebaseCollections.clubs)
           .doc(clubId)
           .collection(FirebaseCollections.equipmentLoans)
@@ -1164,11 +1339,14 @@ class _AdminHomePageState extends State<AdminHomePage> {
             'lentAt': requestedPickupDate,
             'dueAt': Timestamp.fromDate(returnDate),
             'status': 'active',
+            'pickupConfirmed': false,
             'requestId': requestId,
             'createdAt': FieldValue.serverTimestamp(),
+            if (totalPrice != null) 'totalPrice': totalPrice,
+            if (caution != null) 'caution': caution,
           });
 
-      // Mettre à jour la demande
+      // Mettre à jour la demande (avec loanId pour annulation des prêts à venir)
       await FirebaseFirestore.instance
           .collection(FirebaseCollections.clubs)
           .doc(clubId)
@@ -1176,6 +1354,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
           .doc(requestId)
           .update({
             'status': 'accepted',
+            'loanId': loanRef.id,
             'adminResponse': responseController.text.trim().isNotEmpty
                 ? responseController.text.trim()
                 : null,
@@ -1300,6 +1479,377 @@ class _AdminHomePageState extends State<AdminHomePage> {
     }
   }
 
+  Widget _buildActiveLoans(String clubId) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection(FirebaseCollections.clubs)
+          .doc(clubId)
+          .collection(FirebaseCollections.equipmentLoans)
+          .where('status', isEqualTo: 'active')
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const SizedBox.shrink();
+        }
+        if (snapshot.hasError || !snapshot.hasData) {
+          return const SizedBox.shrink();
+        }
+        final docs = snapshot.data!.docs;
+        final allLoans = docs
+            .map((d) => {'id': d.id, ...d.data()})
+            .cast<Map<String, dynamic>>()
+            .toList();
+        final activeLoans = allLoans.where((loan) {
+          if (loan['pickupConfirmed'] == false) return false;
+          final lentAt = loan['lentAt'] as Timestamp?;
+          final dueAt = loan['dueAt'] as Timestamp?;
+          if (lentAt == null || dueAt == null) return false;
+          final lentDate = lentAt.toDate();
+          final dueDate = dueAt.toDate();
+          final lentDay = DateTime(lentDate.year, lentDate.month, lentDate.day);
+          final dueDay = DateTime(dueDate.year, dueDate.month, dueDate.day);
+          return !lentDay.isAfter(today) && !dueDay.isBefore(today);
+        }).toList();
+        if (activeLoans.isEmpty) {
+          return const SizedBox.shrink();
+        }
+        activeLoans.sort((a, b) {
+          final aDue = a['dueAt'] as Timestamp?;
+          final bDue = b['dueAt'] as Timestamp?;
+          if (aDue == null && bDue == null) return 0;
+          if (aDue == null) return 1;
+          if (bDue == null) return -1;
+          return aDue.compareTo(bDue);
+        });
+        return _infoCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.inventory_2_rounded, color: ViroColors.success),
+                  const SizedBox(width: 8),
+                  const Text(
+                    "Prêts en cours",
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                  const SizedBox(width: 8),
+                  Chip(
+                    label: Text(
+                      "${activeLoans.length}",
+                      style: const TextStyle(fontSize: 12, color: Colors.white),
+                    ),
+                    backgroundColor: ViroColors.success,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              ...activeLoans.map((loan) {
+                final equipmentName =
+                    loan['equipmentName'] as String? ?? 'Équipement';
+                final quantity = loan['quantity'] as int? ?? 1;
+                final borrowerName =
+                    loan['borrowerName'] as String? ?? 'Joueur';
+                final borrowerId = loan['borrowerId'] as String?;
+                final dueAt = loan['dueAt'] as Timestamp?;
+                final dueDate = dueAt?.toDate();
+                return Padding(
+                  key: ValueKey(loan['id']),
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: InkWell(
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => AdminLoansPage(
+                            clubId: clubId,
+                            initialTabIndex: 1,
+                          ),
+                        ),
+                      );
+                    },
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.green[50],
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: ViroColors.success.withOpacity(0.3),
+                          width: 1,
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.check_circle_outline,
+                                color: ViroColors.success,
+                                size: 18,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  "$equipmentName (x$quantity)",
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.grey[900],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          UserDisplayTile(
+                            userId: borrowerId,
+                            fallback: borrowerName,
+                            compact: true,
+                            textStyle: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[700],
+                            ),
+                          ),
+                          if (dueDate != null) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              "Retour le ${DateFormat('dd/MM/yyyy', 'fr_FR').format(dueDate)}",
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey[700],
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              }),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildPickupToConfirmSection(String clubId) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection(FirebaseCollections.clubs)
+          .doc(clubId)
+          .collection(FirebaseCollections.equipmentLoans)
+          .where('status', isEqualTo: 'active')
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const SizedBox.shrink();
+        }
+        if (snapshot.hasError || !snapshot.hasData) {
+          return const SizedBox.shrink();
+        }
+        final docs = snapshot.data!.docs;
+        final allLoans = docs
+            .map((d) => {'id': d.id, ...d.data()})
+            .cast<Map<String, dynamic>>()
+            .toList();
+        final toConfirm = allLoans.where((loan) {
+          if (loan['pickupConfirmed'] != false) return false;
+          final lentAt = loan['lentAt'] as Timestamp?;
+          final dueAt = loan['dueAt'] as Timestamp?;
+          if (lentAt == null || dueAt == null) return false;
+          final lentDay = DateTime(
+            lentAt.toDate().year,
+            lentAt.toDate().month,
+            lentAt.toDate().day,
+          );
+          final dueDay = DateTime(
+            dueAt.toDate().year,
+            dueAt.toDate().month,
+            dueAt.toDate().day,
+          );
+          return !lentDay.isAfter(today) && !dueDay.isBefore(today);
+        }).toList();
+        if (toConfirm.isEmpty) {
+          return const SizedBox.shrink();
+        }
+        toConfirm.sort((a, b) {
+          final aDue = (a['dueAt'] as Timestamp?)?.toDate();
+          final bDue = (b['dueAt'] as Timestamp?)?.toDate();
+          if (aDue == null && bDue == null) return 0;
+          if (aDue == null) return 1;
+          if (bDue == null) return -1;
+          return aDue.compareTo(bDue);
+        });
+        final displayList = toConfirm.take(5).toList();
+        return _infoCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.handshake_outlined, color: ViroColors.warning),
+                  const SizedBox(width: 8),
+                  const Text(
+                    "À confirmer remise",
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                  const SizedBox(width: 8),
+                  Chip(
+                    label: Text(
+                      "${toConfirm.length}",
+                      style: const TextStyle(fontSize: 12, color: Colors.white),
+                    ),
+                    backgroundColor: ViroColors.warning,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              ...displayList.map((loan) {
+                final equipmentName =
+                    loan['equipmentName'] as String? ?? 'Équipement';
+                final quantity = loan['quantity'] as int? ?? 1;
+                final borrowerName =
+                    loan['borrowerName'] as String? ?? 'Joueur';
+                final borrowerId = loan['borrowerId'] as String?;
+                final dueAt = loan['dueAt'] as Timestamp?;
+                final dueDate = dueAt?.toDate();
+                final loanId = loan['id'] as String;
+                return Padding(
+                  key: ValueKey(loanId),
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.orange[50],
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: ViroColors.warning.withOpacity(0.3),
+                        width: 1,
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.inventory_2_outlined,
+                              color: ViroColors.warning,
+                              size: 18,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                "$equipmentName (x$quantity)",
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.grey[900],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        UserDisplayTile(
+                          userId: borrowerId,
+                          fallback: borrowerName,
+                          compact: true,
+                          textStyle: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[700],
+                          ),
+                        ),
+                        if (dueDate != null) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            "Retour le ${DateFormat('dd/MM/yyyy', 'fr_FR').format(dueDate)}",
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[700],
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed: () async {
+                              try {
+                                await FirebaseFirestore.instance
+                                    .collection(FirebaseCollections.clubs)
+                                    .doc(clubId)
+                                    .collection(
+                                      FirebaseCollections.equipmentLoans,
+                                    )
+                                    .doc(loanId)
+                                    .update({'pickupConfirmed': true});
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text("Remise confirmée."),
+                                      backgroundColor: ViroColors.success,
+                                    ),
+                                  );
+                                }
+                              } catch (e) {
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text("Erreur : $e"),
+                                      backgroundColor: Colors.red,
+                                    ),
+                                  );
+                                }
+                              }
+                            },
+                            icon: const Icon(Icons.check, size: 18),
+                            label: const Text("Confirmer remise"),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: ViroColors.warning,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+              if (toConfirm.length > 5) ...[
+                const SizedBox(height: 8),
+                Center(
+                  child: TextButton.icon(
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => AdminLoansPage(
+                            clubId: clubId,
+                            initialTabIndex: 1,
+                          ),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.list, size: 18),
+                    label: const Text("Voir les prêts"),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildUpcomingLoans(String clubId) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
@@ -1402,82 +1952,95 @@ class _AdminHomePageState extends State<AdminHomePage> {
                 return Padding(
                   key: ValueKey(doc.id),
                   padding: const EdgeInsets.only(bottom: 8),
-                  child: Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.blue[50],
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: ViroColors.primary.withOpacity(0.3),
-                        width: 1,
+                  child: InkWell(
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => AdminLoansPage(
+                            clubId: clubId,
+                            initialTabIndex: 1,
+                          ),
+                        ),
+                      );
+                    },
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.blue[50],
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: ViroColors.primary.withOpacity(0.3),
+                          width: 1,
+                        ),
                       ),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.event,
-                              color: ViroColors.primary,
-                              size: 18,
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                "$equipmentName (x$quantity)",
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.grey[900],
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.event,
+                                color: ViroColors.primary,
+                                size: 18,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  "$equipmentName (x$quantity)",
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.grey[900],
+                                  ),
                                 ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          UserDisplayTile(
+                            userId: playerId,
+                            fallback: borrowerName,
+                            compact: true,
+                            textStyle: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[700],
+                            ),
+                          ),
+                          if (pickupDate != null) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              "Récupération: ${DateFormat('dd/MM/yyyy', 'fr_FR').format(pickupDate)}",
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey[700],
+                                fontWeight: FontWeight.w500,
                               ),
                             ),
                           ],
-                        ),
-                        const SizedBox(height: 4),
-                        UserDisplayTile(
-                          userId: playerId,
-                          fallback: borrowerName,
-                          compact: true,
-                          textStyle: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey[700],
-                          ),
-                        ),
-                        if (pickupDate != null) ...[
+                          if (daysUntilPickup != null) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              daysUntilPickup == 1
+                                  ? "Dans 1 jour"
+                                  : "Dans $daysUntilPickup jours",
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: ViroColors.primary,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
                           const SizedBox(height: 4),
                           Text(
-                            "Récupération: ${DateFormat('dd/MM/yyyy', 'fr_FR').format(pickupDate)}",
+                            "Durée: $duration ${durationUnitLabel(durationUnit)}",
                             style: TextStyle(
                               fontSize: 12,
-                              color: Colors.grey[700],
-                              fontWeight: FontWeight.w500,
+                              color: Colors.grey[600],
                             ),
                           ),
                         ],
-                        if (daysUntilPickup != null) ...[
-                          const SizedBox(height: 4),
-                          Text(
-                            daysUntilPickup == 1
-                                ? "Dans 1 jour"
-                                : "Dans $daysUntilPickup jours",
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: ViroColors.primary,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                        const SizedBox(height: 4),
-                        Text(
-                          "Durée: $duration ${durationUnitLabel(durationUnit)}",
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey[600],
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
                   ),
                 );
@@ -1493,6 +2056,8 @@ class _AdminHomePageState extends State<AdminHomePage> {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final tomorrow = today.add(const Duration(days: 1));
+    final todayTs = Timestamp.fromDate(today);
+    final tomorrowTs = Timestamp.fromDate(tomorrow);
 
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
       stream: FirebaseFirestore.instance
@@ -1500,8 +2065,6 @@ class _AdminHomePageState extends State<AdminHomePage> {
           .doc(clubId)
           .collection(FirebaseCollections.equipmentLoans)
           .where('status', isEqualTo: 'active')
-          .where('lentAt', isGreaterThanOrEqualTo: Timestamp.fromDate(today))
-          .where('lentAt', isLessThan: Timestamp.fromDate(tomorrow))
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -1512,7 +2075,25 @@ class _AdminHomePageState extends State<AdminHomePage> {
           return const SizedBox.shrink();
         }
 
-        final loans = snapshot.data!.docs;
+        // Filtrer et trier côté client (évite l'index composite lentAt)
+        final loans =
+            snapshot.data!.docs.where((doc) {
+              final lentAt = doc.data()['lentAt'] as Timestamp?;
+              if (lentAt == null) return false;
+              return lentAt.compareTo(todayTs) >= 0 &&
+                  lentAt.compareTo(tomorrowTs) < 0;
+            }).toList()..sort((a, b) {
+              final aLent = a.data()['lentAt'] as Timestamp?;
+              final bLent = b.data()['lentAt'] as Timestamp?;
+              if (aLent == null && bLent == null) return 0;
+              if (aLent == null) return 1;
+              if (bLent == null) return -1;
+              return aLent.compareTo(bLent);
+            });
+
+        if (loans.isEmpty) {
+          return const SizedBox.shrink();
+        }
 
         return _infoCard(
           child: Column(
@@ -1573,6 +2154,8 @@ class _AdminHomePageState extends State<AdminHomePage> {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final inThreeDays = today.add(const Duration(days: 3));
+    final todayTs = Timestamp.fromDate(today);
+    final inThreeDaysTs = Timestamp.fromDate(inThreeDays);
 
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
       stream: FirebaseFirestore.instance
@@ -1580,8 +2163,6 @@ class _AdminHomePageState extends State<AdminHomePage> {
           .doc(clubId)
           .collection(FirebaseCollections.equipmentLoans)
           .where('status', isEqualTo: 'active')
-          .where('dueAt', isGreaterThanOrEqualTo: Timestamp.fromDate(today))
-          .where('dueAt', isLessThanOrEqualTo: Timestamp.fromDate(inThreeDays))
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -1592,18 +2173,25 @@ class _AdminHomePageState extends State<AdminHomePage> {
           return const SizedBox.shrink();
         }
 
-        final loans = snapshot.data!.docs;
+        // Filtrer et trier côté client (évite l'index composite dueAt)
+        final sortedLoans =
+            snapshot.data!.docs.where((doc) {
+              final dueAt = doc.data()['dueAt'] as Timestamp?;
+              if (dueAt == null) return false;
+              return dueAt.compareTo(todayTs) >= 0 &&
+                  dueAt.compareTo(inThreeDaysTs) <= 0;
+            }).toList()..sort((a, b) {
+              final aDue = a.data()['dueAt'] as Timestamp?;
+              final bDue = b.data()['dueAt'] as Timestamp?;
+              if (aDue == null && bDue == null) return 0;
+              if (aDue == null) return 1;
+              if (bDue == null) return -1;
+              return aDue.compareTo(bDue); // Ascendant
+            });
 
-        // Trier côté client par dueAt (ascendant)
-        final sortedLoans = loans.toList()
-          ..sort((a, b) {
-            final aDue = a.data()['dueAt'] as Timestamp?;
-            final bDue = b.data()['dueAt'] as Timestamp?;
-            if (aDue == null && bDue == null) return 0;
-            if (aDue == null) return 1;
-            if (bDue == null) return -1;
-            return aDue.compareTo(bDue); // Ascendant
-          });
+        if (sortedLoans.isEmpty) {
+          return const SizedBox.shrink();
+        }
 
         return _infoCard(
           child: Column(

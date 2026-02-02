@@ -13,20 +13,53 @@ import '../../widget/viro_loader.dart';
 class AdminLoansPage extends StatefulWidget {
   final String clubId;
 
-  const AdminLoansPage({super.key, required this.clubId});
+  /// Onglet à afficher à l'ouverture : 0 = Catalogue, 1 = Prêt
+  final int initialTabIndex;
+
+  const AdminLoansPage({
+    super.key,
+    required this.clubId,
+    this.initialTabIndex = 0,
+  });
 
   @override
   State<AdminLoansPage> createState() => _AdminLoansPageState();
 }
 
+/// True si l'utilisateur est admin (ou admin_fondateur) du club, false pour coach.
+bool _isAdminForClub(Map<String, dynamic>? userData, String clubId) {
+  if (userData == null) return false;
+  final roles = userData['roles'] as Map<String, dynamic>? ?? {};
+  if (roles['admin'] is List) {
+    final adminClubIds = (roles['admin'] as List).whereType<String>();
+    if (adminClubIds.contains(clubId)) return true;
+  }
+  final activeContext = userData['activeContext'] as Map<String, dynamic>?;
+  final activeRole = activeContext?['role'] as String?;
+  final activeClubId = activeContext?['clubId'] as String?;
+  if (activeClubId == clubId &&
+      (activeRole == 'admin' || activeRole == 'admin_fondateur')) {
+    return true;
+  }
+  final legacyRole = userData['role'] as String?;
+  final legacyClubId = userData['clubId'] as String?;
+  if (legacyClubId == clubId &&
+      (legacyRole == 'admin' || legacyRole == 'admin_fondateur')) {
+    return true;
+  }
+  return false;
+}
+
 class _AdminLoansPageState extends State<AdminLoansPage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  bool _editMode = false;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    final index = widget.initialTabIndex.clamp(0, 1);
+    _tabController = TabController(length: 2, vsync: this, initialIndex: index);
   }
 
   @override
@@ -37,117 +70,164 @@ class _AdminLoansPageState extends State<AdminLoansPage>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: ViroColors.background,
-      appBar: AppBar(
-        title: const Text("Prêts"),
-        centerTitle: true,
-        bottom: TabBar(
-          controller: _tabController,
-          tabs: const [
-            Tab(text: "Catalogue"),
-            Tab(text: "Prêt"),
-          ],
-        ),
-      ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: _LoanCatalogSection(clubId: widget.clubId),
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId == null) {
+      return Scaffold(
+        backgroundColor: ViroColors.background,
+        appBar: AppBar(title: const Text("Prêts"), centerTitle: true),
+        body: const Center(child: Text("Non connecté")),
+      );
+    }
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .snapshots(),
+      builder: (context, userSnap) {
+        final userData = userSnap.data?.data();
+        final isAdmin = _isAdminForClub(userData, widget.clubId);
+        final showCancelButtons = _editMode && isAdmin;
+        return Scaffold(
+          backgroundColor: ViroColors.background,
+          appBar: AppBar(
+            title: const Text("Prêts"),
+            centerTitle: true,
+            actions: [
+              if (isAdmin)
+                IconButton(
+                  icon: Icon(
+                    _editMode ? Icons.edit_off : Icons.edit,
+                    color: _editMode ? ViroColors.primary : null,
+                  ),
+                  onPressed: () => setState(() => _editMode = !_editMode),
+                  tooltip: 'Édition',
+                ),
+            ],
+            bottom: TabBar(
+              controller: _tabController,
+              tabs: const [
+                Tab(text: "Catalogue"),
+                Tab(text: "Prêt"),
+              ],
+            ),
           ),
-          StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-            stream: FirebaseFirestore.instance
-                .collection(FirebaseCollections.clubs)
-                .doc(widget.clubId)
-                .collection(FirebaseCollections.equipmentLoans)
-                .snapshots(),
-            builder: (context, snap) {
-              if (snap.connectionState == ConnectionState.waiting) {
-                return const Center(child: ViroLoader(size: 60));
-              }
-              if (snap.hasError) {
-                return FirebaseErrorHandler.buildErrorWidget(
-                  context,
-                  snap.error,
-                );
-              }
-              final docs = snap.data?.docs ?? [];
-              final allLoans = docs
-                  .map((d) => {'id': d.id, ...d.data()})
-                  .cast<Map<String, dynamic>>()
-                  .toList();
-              final history =
-                  allLoans
-                      .where(
-                        (l) =>
-                            l['status'] == 'returned' || l['status'] == 'lost',
-                      )
-                      .toList()
-                    ..sort((a, b) {
-                      final ra =
-                          a['returnedAt'] as Timestamp? ??
-                          a['lentAt'] as Timestamp? ??
-                          Timestamp.now();
-                      final rb =
-                          b['returnedAt'] as Timestamp? ??
-                          b['lentAt'] as Timestamp? ??
-                          Timestamp.now();
-                      return rb.compareTo(ra);
-                    });
-
-              return SingleChildScrollView(
+          body: TabBarView(
+            controller: _tabController,
+            children: [
+              SingleChildScrollView(
                 padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _LoansSummaryCard(
-                      clubId: widget.clubId,
-                      allLoans: allLoans,
-                    ),
-                    const SizedBox(height: 24),
-                    _ActiveLoansSection(
-                      clubId: widget.clubId,
-                      allLoans: allLoans,
-                    ),
-                    const SizedBox(height: 24),
-                    _OverdueLoansSection(
-                      clubId: widget.clubId,
-                      allLoans: allLoans,
-                    ),
-                    const SizedBox(height: 24),
-                    _UpcomingLoansSection(clubId: widget.clubId),
-                    const SizedBox(height: 24),
-                    _LoanRequestsSection(clubId: widget.clubId),
-                    const SizedBox(height: 24),
-                    const Text(
-                      "Historique d'utilisation",
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    if (history.isEmpty)
-                      Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Text(
-                            "Aucun historique.",
-                            style: TextStyle(color: Colors.grey[600]),
+                child: _LoanCatalogSection(clubId: widget.clubId),
+              ),
+              StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                stream: FirebaseFirestore.instance
+                    .collection(FirebaseCollections.clubs)
+                    .doc(widget.clubId)
+                    .collection(FirebaseCollections.equipmentLoans)
+                    .snapshots(),
+                builder: (context, snap) {
+                  if (snap.connectionState == ConnectionState.waiting) {
+                    return const Center(child: ViroLoader(size: 60));
+                  }
+                  if (snap.hasError) {
+                    return FirebaseErrorHandler.buildErrorWidget(
+                      context,
+                      snap.error,
+                    );
+                  }
+                  final docs = snap.data?.docs ?? [];
+                  final allLoans = docs
+                      .map((d) => {'id': d.id, ...d.data()})
+                      .cast<Map<String, dynamic>>()
+                      .toList();
+                  final history =
+                      allLoans
+                          .where(
+                            (l) =>
+                                l['status'] == 'returned' ||
+                                l['status'] == 'lost' ||
+                                l['status'] == 'cancelled',
+                          )
+                          .toList()
+                        ..sort((a, b) {
+                          final ra =
+                              a['returnedAt'] as Timestamp? ??
+                              a['lentAt'] as Timestamp? ??
+                              Timestamp.now();
+                          final rb =
+                              b['returnedAt'] as Timestamp? ??
+                              b['lentAt'] as Timestamp? ??
+                              Timestamp.now();
+                          return rb.compareTo(ra);
+                        });
+
+                  return SingleChildScrollView(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _LoansSummaryCard(
+                          clubId: widget.clubId,
+                          allLoans: allLoans,
+                        ),
+                        const SizedBox(height: 24),
+                        _ActiveLoansSection(
+                          clubId: widget.clubId,
+                          allLoans: allLoans,
+                          showCancelButtons: showCancelButtons,
+                        ),
+                        const SizedBox(height: 24),
+                        _PickupToConfirmSection(
+                          clubId: widget.clubId,
+                          allLoans: allLoans,
+                          showCancelButtons: showCancelButtons,
+                        ),
+                        const SizedBox(height: 24),
+                        _OverdueLoansSection(
+                          clubId: widget.clubId,
+                          allLoans: allLoans,
+                          showCancelButtons: showCancelButtons,
+                        ),
+                        const SizedBox(height: 24),
+                        _UpcomingLoansSection(
+                          clubId: widget.clubId,
+                          showCancelButtons: showCancelButtons,
+                        ),
+                        const SizedBox(height: 24),
+                        _LoanRequestsSection(clubId: widget.clubId),
+                        const SizedBox(height: 24),
+                        _LoanChangeRequestsSection(clubId: widget.clubId),
+                        const SizedBox(height: 24),
+                        const Text(
+                          "Historique d'utilisation",
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
                           ),
                         ),
-                      )
-                    else
-                      ...history.take(30).map((l) => _LoanHistoryTile(data: l)),
-                  ],
-                ),
-              );
-            },
+                        const SizedBox(height: 10),
+                        if (history.isEmpty)
+                          Card(
+                            child: Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Text(
+                                "Aucun historique.",
+                                style: TextStyle(color: Colors.grey[600]),
+                              ),
+                            ),
+                          )
+                        else
+                          ...history
+                              .take(30)
+                              .map((l) => _LoanHistoryTile(data: l)),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -1550,8 +1630,14 @@ class _LoanHistoryTile extends StatelessWidget {
         ? DateFormat('d MMM yyyy', 'fr_FR').format(returnedAt.toDate())
         : '—';
     final isLost = status == 'lost';
+    final isCancelled = status == 'cancelled';
     final penalty = data['penaltyAmount'] as num?;
     final penaltyPaid = data['penaltyPaid'] as bool? ?? false;
+    final statusLabel = isLost
+        ? "Perdu"
+        : isCancelled
+        ? "Annulé le $returnedStr"
+        : "Retour $returnedStr";
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
@@ -1565,7 +1651,7 @@ class _LoanHistoryTile extends StatelessWidget {
           children: [
             Text('$borrowerName • $quantity prêté(s)'),
             Text(
-              'Du $lentStr → ${isLost ? "Perdu" : "Retour $returnedStr"}',
+              'Du $lentStr → $statusLabel',
               style: TextStyle(fontSize: 12, color: Colors.grey[600]),
             ),
             if (loanUnitPrice != null)
@@ -1585,11 +1671,17 @@ class _LoanHistoryTile extends StatelessWidget {
         ),
         trailing: Chip(
           label: Text(
-            isLost ? "Perdu" : "Retourné",
+            isLost
+                ? "Perdu"
+                : isCancelled
+                ? "Annulé"
+                : "Retourné",
             style: const TextStyle(fontSize: 12),
           ),
           backgroundColor: isLost
               ? ViroColors.error.withOpacity(0.15)
+              : isCancelled
+              ? ViroColors.warning.withOpacity(0.15)
               : ViroColors.success.withOpacity(0.15),
         ),
       ),
@@ -1704,6 +1796,672 @@ class _LoanRequestsSection extends StatelessWidget {
   }
 }
 
+/// Section des demandes de modification/annulation de prêt
+class _LoanChangeRequestsSection extends StatelessWidget {
+  final String clubId;
+
+  const _LoanChangeRequestsSection({required this.clubId});
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection(FirebaseCollections.clubs)
+          .doc(clubId)
+          .collection(FirebaseCollections.equipmentLoanChangeRequests)
+          .where('status', isEqualTo: 'pending')
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Card(
+            child: Padding(
+              padding: EdgeInsets.all(16),
+              child: Center(child: ViroLoader(size: 60)),
+            ),
+          );
+        }
+        if (snapshot.hasError) {
+          return Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: FirebaseErrorHandler.buildErrorWidget(
+                context,
+                snapshot.error,
+              ),
+            ),
+          );
+        }
+        final requests = snapshot.data?.docs ?? [];
+        final sortedRequests = requests.toList()
+          ..sort((a, b) {
+            final aCreated = a.data()['createdAt'] as Timestamp?;
+            final bCreated = b.data()['createdAt'] as Timestamp?;
+            if (aCreated == null && bCreated == null) return 0;
+            if (aCreated == null) return 1;
+            if (bCreated == null) return -1;
+            return aCreated.compareTo(bCreated);
+          });
+        return Card(
+          color: Colors.orange.shade50,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.edit_calendar, color: Colors.orange.shade700),
+                    const SizedBox(width: 8),
+                    const Text(
+                      "Modification / Annulation",
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    if (sortedRequests.isNotEmpty)
+                      Chip(
+                        label: Text(
+                          "${sortedRequests.length}",
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Colors.white,
+                          ),
+                        ),
+                        backgroundColor: Colors.orange.shade700,
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                if (sortedRequests.isEmpty)
+                  Text(
+                    "Aucune demande en attente.",
+                    style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                  )
+                else
+                  ...sortedRequests.map((doc) {
+                    final requestData = doc.data();
+                    return _LoanChangeRequestCard(
+                      clubId: clubId,
+                      requestId: doc.id,
+                      requestData: requestData,
+                    );
+                  }),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Carte pour une demande de modification/annulation
+class _LoanChangeRequestCard extends StatelessWidget {
+  final String clubId;
+  final String requestId;
+  final Map<String, dynamic> requestData;
+
+  const _LoanChangeRequestCard({
+    required this.clubId,
+    required this.requestId,
+    required this.requestData,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final type = requestData['type'] as String? ?? '';
+    final reason = requestData['reason'] as String? ?? '';
+    final loanId = requestData['loanId'] as String?;
+    final playerId = requestData['requestedBy'] as String?;
+    final playerName = requestData['playerName'] as String? ?? 'Joueur';
+    final newDueAt = requestData['newDueAt'] as Timestamp?;
+    final newQuantity = requestData['newQuantity'] as int?;
+    final newRequestedPickupDate =
+        requestData['newRequestedPickupDate'] as Timestamp?;
+    final createdAt = requestData['createdAt'] as Timestamp?;
+    final typeLabel = type == 'cancellation' ? 'Annulation' : 'Modification';
+    return FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      future: loanId != null
+          ? FirebaseFirestore.instance
+                .collection(FirebaseCollections.clubs)
+                .doc(clubId)
+                .collection(FirebaseCollections.equipmentLoans)
+                .doc(loanId)
+                .get()
+          : null,
+      builder: (context, loanSnap) {
+        final loanData = loanSnap.data?.data();
+        final equipmentName =
+            loanData?['equipmentName'] as String? ?? 'Équipement';
+        final quantity = loanData?['quantity'] as int? ?? 1;
+        final dueAt = loanData?['dueAt'] as Timestamp?;
+        final dueDate = dueAt?.toDate();
+        return Card(
+          margin: const EdgeInsets.only(bottom: 12),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        "$equipmentName (x$quantity)",
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                    Chip(
+                      label: Text(
+                        typeLabel,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.white,
+                        ),
+                      ),
+                      backgroundColor: type == 'cancellation'
+                          ? ViroColors.error
+                          : ViroColors.primary,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                UserDisplayTile(
+                  userId: playerId,
+                  fallback: playerName,
+                  compact: true,
+                  textStyle: TextStyle(fontSize: 13, color: Colors.grey[700]),
+                ),
+                if (dueDate != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    "Retour actuel: ${DateFormat('dd/MM/yyyy', 'fr_FR').format(dueDate)}",
+                    style: TextStyle(fontSize: 13, color: Colors.grey[700]),
+                  ),
+                ],
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[100],
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "Raison:",
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.grey[700],
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        reason,
+                        style: TextStyle(fontSize: 13, color: Colors.grey[800]),
+                      ),
+                    ],
+                  ),
+                ),
+                if (type == 'modification' &&
+                    (newDueAt != null ||
+                        newQuantity != null ||
+                        newRequestedPickupDate != null)) ...[
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 4,
+                    children: [
+                      if (newRequestedPickupDate != null)
+                        Text(
+                          "Nouvelle date récup.: ${DateFormat('dd/MM/yyyy', 'fr_FR').format(newRequestedPickupDate.toDate())}",
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: ViroColors.primary,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      if (newDueAt != null)
+                        Text(
+                          "Nouvelle date retour: ${DateFormat('dd/MM/yyyy', 'fr_FR').format(newDueAt.toDate())}",
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: ViroColors.primary,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      if (newQuantity != null)
+                        Text(
+                          "Nouvelle quantité: $newQuantity",
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: ViroColors.primary,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+                if (createdAt != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    "Demandé le: ${DateFormat('dd/MM/yyyy à HH:mm', 'fr_FR').format(createdAt.toDate())}",
+                    style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                  ),
+                ],
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () =>
+                            _refuseChangeRequest(context, clubId, requestId),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: ViroColors.error,
+                          side: const BorderSide(color: ViroColors.error),
+                        ),
+                        child: const Text("Refuser"),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () => _acceptChangeRequest(
+                          context,
+                          clubId,
+                          requestId,
+                          requestData,
+                        ),
+                        child: const Text("Accepter"),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+Future<void> _acceptChangeRequest(
+  BuildContext context,
+  String clubId,
+  String requestId,
+  Map<String, dynamic> requestData,
+) async {
+  final responseController = TextEditingController();
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (_) => AlertDialog(
+      title: const Text("Accepter la demande"),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            "Voulez-vous accepter cette demande ? Un message optionnel peut être envoyé au joueur.",
+            style: TextStyle(fontSize: 14),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: responseController,
+            maxLines: 3,
+            decoration: const InputDecoration(
+              labelText: "Message (optionnel)",
+              hintText: "Message pour le joueur",
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text("Annuler"),
+        ),
+        ElevatedButton(
+          onPressed: () => Navigator.of(context).pop(true),
+          child: const Text("Accepter"),
+        ),
+      ],
+    ),
+  );
+  if (confirmed != true) return;
+  try {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    final type = requestData['type'] as String? ?? '';
+    final loanId = requestData['loanId'] as String?;
+    if (loanId == null) {
+      throw Exception("Prêt introuvable");
+    }
+    final loanRef = FirebaseFirestore.instance
+        .collection(FirebaseCollections.clubs)
+        .doc(clubId)
+        .collection(FirebaseCollections.equipmentLoans)
+        .doc(loanId);
+    final changeRequestRef = FirebaseFirestore.instance
+        .collection(FirebaseCollections.clubs)
+        .doc(clubId)
+        .collection(FirebaseCollections.equipmentLoanChangeRequests)
+        .doc(requestId);
+    if (type == 'cancellation') {
+      await loanRef.update({
+        'status': 'returned',
+        'returnedAt': FieldValue.serverTimestamp(),
+      });
+    } else if (type == 'modification') {
+      final updates = <String, dynamic>{};
+      final newDueAt = requestData['newDueAt'] as Timestamp?;
+      final newQuantity = requestData['newQuantity'] as int?;
+      final newRequestedPickupDate =
+          requestData['newRequestedPickupDate'] as Timestamp?;
+      if (newRequestedPickupDate != null)
+        updates['lentAt'] = newRequestedPickupDate;
+      if (newDueAt != null) updates['dueAt'] = newDueAt;
+      if (newQuantity != null) updates['quantity'] = newQuantity;
+      if (updates.isNotEmpty) {
+        await loanRef.update(updates);
+      }
+    }
+    await changeRequestRef.update({
+      'status': 'accepted',
+      'adminResponse': responseController.text.trim().isNotEmpty
+          ? responseController.text.trim()
+          : null,
+      'respondedAt': FieldValue.serverTimestamp(),
+      'respondedBy': currentUser?.uid,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Demande acceptée."),
+          backgroundColor: ViroColors.success,
+        ),
+      );
+    }
+  } catch (e) {
+    if (context.mounted) {
+      FirebaseErrorHandler.showErrorSnackBar(context, e);
+    }
+  }
+}
+
+Future<void> _refuseChangeRequest(
+  BuildContext context,
+  String clubId,
+  String requestId,
+) async {
+  final responseController = TextEditingController();
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => StatefulBuilder(
+      builder: (context, setState) => AlertDialog(
+        title: const Text("Refuser la demande"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              "Voulez-vous refuser cette demande ? Indiquez une raison (recommandé pour le joueur).",
+              style: TextStyle(fontSize: 14),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: responseController,
+              maxLines: 3,
+              decoration: const InputDecoration(
+                labelText: "Raison du refus",
+                hintText: "Expliquez pourquoi la demande est refusée",
+              ),
+              onChanged: (_) => setState(() {}),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text("Annuler"),
+          ),
+          ElevatedButton(
+            onPressed: responseController.text.trim().isEmpty
+                ? null
+                : () => Navigator.of(dialogContext).pop(true),
+            style: ElevatedButton.styleFrom(backgroundColor: ViroColors.error),
+            child: const Text("Refuser"),
+          ),
+        ],
+      ),
+    ),
+  );
+  if (confirmed != true) return;
+  try {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    await FirebaseFirestore.instance
+        .collection(FirebaseCollections.clubs)
+        .doc(clubId)
+        .collection(FirebaseCollections.equipmentLoanChangeRequests)
+        .doc(requestId)
+        .update({
+          'status': 'refused',
+          'adminResponse': responseController.text.trim().isNotEmpty
+              ? responseController.text.trim()
+              : null,
+          'respondedAt': FieldValue.serverTimestamp(),
+          'respondedBy': currentUser?.uid,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Demande refusée."),
+          backgroundColor: ViroColors.error,
+        ),
+      );
+    }
+  } catch (e) {
+    if (context.mounted) {
+      FirebaseErrorHandler.showErrorSnackBar(context, e);
+    }
+  }
+}
+
+/// Confirme que le matériel a été remis au joueur.
+Future<void> _confirmPickup(
+  BuildContext context,
+  String clubId,
+  String loanId,
+) async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (_) => AlertDialog(
+      title: const Text("Confirmer la remise"),
+      content: const Text(
+        "Confirmer que le matériel a bien été remis au joueur ?",
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text("Annuler"),
+        ),
+        ElevatedButton(
+          onPressed: () => Navigator.of(context).pop(true),
+          child: const Text("Confirmer remise"),
+        ),
+      ],
+    ),
+  );
+  if (confirmed != true) return;
+  try {
+    await FirebaseFirestore.instance
+        .collection(FirebaseCollections.clubs)
+        .doc(clubId)
+        .collection(FirebaseCollections.equipmentLoans)
+        .doc(loanId)
+        .update({'pickupConfirmed': true});
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Remise confirmée."),
+          backgroundColor: ViroColors.success,
+        ),
+      );
+    }
+  } catch (e) {
+    if (context.mounted) {
+      FirebaseErrorHandler.showErrorSnackBar(context, e);
+    }
+  }
+}
+
+/// Annule un prêt à tout moment (clôture par l'admin).
+Future<void> _cancelLoan(
+  BuildContext context,
+  String clubId,
+  String loanId,
+) async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (_) => AlertDialog(
+      title: const Text("Annuler le prêt"),
+      content: const Text(
+        "Voulez-vous annuler ce prêt ? Le prêt sera clôturé et disparaîtra des listes actives.",
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text("Non"),
+        ),
+        ElevatedButton(
+          onPressed: () => Navigator.of(context).pop(true),
+          style: ElevatedButton.styleFrom(backgroundColor: ViroColors.warning),
+          child: const Text("Oui, annuler"),
+        ),
+      ],
+    ),
+  );
+  if (confirmed != true) return;
+  try {
+    await FirebaseFirestore.instance
+        .collection(FirebaseCollections.clubs)
+        .doc(clubId)
+        .collection(FirebaseCollections.equipmentLoans)
+        .doc(loanId)
+        .update({
+          'status': 'cancelled',
+          'returnedAt': FieldValue.serverTimestamp(),
+        });
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Prêt annulé."),
+          backgroundColor: ViroColors.warning,
+        ),
+      );
+    }
+  } catch (e) {
+    if (context.mounted) {
+      FirebaseErrorHandler.showErrorSnackBar(context, e);
+    }
+  }
+}
+
+/// Annule un prêt à venir (demande acceptée, récupération future).
+Future<void> _cancelUpcomingLoan(
+  BuildContext context,
+  String clubId,
+  String requestId,
+) async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (_) => AlertDialog(
+      title: const Text("Annuler le prêt à venir"),
+      content: const Text(
+        "Voulez-vous annuler ce prêt à venir ? La demande sera clôturée et disparaîtra des prochains prêts.",
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text("Non"),
+        ),
+        ElevatedButton(
+          onPressed: () => Navigator.of(context).pop(true),
+          style: ElevatedButton.styleFrom(backgroundColor: ViroColors.warning),
+          child: const Text("Oui, annuler"),
+        ),
+      ],
+    ),
+  );
+  if (confirmed != true) return;
+  try {
+    final requestDoc = await FirebaseFirestore.instance
+        .collection(FirebaseCollections.clubs)
+        .doc(clubId)
+        .collection(FirebaseCollections.equipmentLoanRequests)
+        .doc(requestId)
+        .get();
+    final requestData = requestDoc.data();
+    final loanId = requestData?['loanId'] as String?;
+
+    await FirebaseFirestore.instance
+        .collection(FirebaseCollections.clubs)
+        .doc(clubId)
+        .collection(FirebaseCollections.equipmentLoanRequests)
+        .doc(requestId)
+        .update({
+          'status': 'cancelled',
+          'cancelledAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+
+    String? loanIdToCancel = loanId;
+    if (loanIdToCancel == null || loanIdToCancel.isEmpty) {
+      final loanSnap = await FirebaseFirestore.instance
+          .collection(FirebaseCollections.clubs)
+          .doc(clubId)
+          .collection(FirebaseCollections.equipmentLoans)
+          .where('requestId', isEqualTo: requestId)
+          .limit(1)
+          .get();
+      loanIdToCancel = loanSnap.docs.isNotEmpty ? loanSnap.docs.first.id : null;
+    }
+    if (loanIdToCancel != null) {
+      await FirebaseFirestore.instance
+          .collection(FirebaseCollections.clubs)
+          .doc(clubId)
+          .collection(FirebaseCollections.equipmentLoans)
+          .doc(loanIdToCancel)
+          .update({
+            'status': 'cancelled',
+            'returnedAt': FieldValue.serverTimestamp(),
+          });
+    }
+
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Prêt à venir annulé."),
+          backgroundColor: ViroColors.warning,
+        ),
+      );
+    }
+  } catch (e) {
+    if (context.mounted) {
+      FirebaseErrorHandler.showErrorSnackBar(context, e);
+    }
+  }
+}
+
 /// Affiche un dialog de confirmation puis marque le prêt comme retourné.
 Future<void> _markLoanReturned(
   BuildContext context,
@@ -1804,8 +2562,13 @@ Future<void> _markLoanLost(
 class _OverdueLoansSection extends StatelessWidget {
   final String clubId;
   final List<Map<String, dynamic>> allLoans;
+  final bool showCancelButtons;
 
-  const _OverdueLoansSection({required this.clubId, required this.allLoans});
+  const _OverdueLoansSection({
+    required this.clubId,
+    required this.allLoans,
+    this.showCancelButtons = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1914,6 +2677,25 @@ class _OverdueLoansSection extends StatelessWidget {
                               ),
                             ),
                           ),
+                          if (showCancelButtons)
+                            IconButton(
+                              onPressed: () => _cancelLoan(
+                                context,
+                                clubId,
+                                loan['id'] as String,
+                              ),
+                              icon: Icon(
+                                Icons.delete_outline,
+                                size: 20,
+                                color: ViroColors.warning,
+                              ),
+                              tooltip: 'Supprimer',
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(
+                                minWidth: 32,
+                                minHeight: 32,
+                              ),
+                            ),
                         ],
                       ),
                       const SizedBox(height: 4),
@@ -2019,12 +2801,24 @@ class _OverdueLoansSection extends StatelessWidget {
   }
 }
 
-/// Section des prêts en cours (lentAt <= aujourd'hui <= dueAt)
+/// Rétrocompatibilité : prêts sans champ pickupConfirmed = considérés comme confirmés.
+bool _isPickupConfirmed(Map<String, dynamic> loan) {
+  final v = loan['pickupConfirmed'];
+  if (v == null) return true;
+  return v == true;
+}
+
+/// Section des prêts en cours (lentAt <= aujourd'hui <= dueAt, remise confirmée).
 class _ActiveLoansSection extends StatelessWidget {
   final String clubId;
   final List<Map<String, dynamic>> allLoans;
+  final bool showCancelButtons;
 
-  const _ActiveLoansSection({required this.clubId, required this.allLoans});
+  const _ActiveLoansSection({
+    required this.clubId,
+    required this.allLoans,
+    this.showCancelButtons = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -2033,6 +2827,7 @@ class _ActiveLoansSection extends StatelessWidget {
 
     final activeLoans = allLoans.where((loan) {
       if (loan['status'] != 'active') return false;
+      if (!_isPickupConfirmed(loan)) return false;
       final lentAt = loan['lentAt'] as Timestamp?;
       final dueAt = loan['dueAt'] as Timestamp?;
       if (lentAt == null || dueAt == null) return false;
@@ -2145,6 +2940,25 @@ class _ActiveLoansSection extends StatelessWidget {
                                 ),
                               ),
                             ),
+                            if (showCancelButtons)
+                              IconButton(
+                                onPressed: () => _cancelLoan(
+                                  context,
+                                  clubId,
+                                  loan['id'] as String,
+                                ),
+                                icon: Icon(
+                                  Icons.delete_outline,
+                                  size: 20,
+                                  color: ViroColors.warning,
+                                ),
+                                tooltip: 'Supprimer',
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(
+                                  minWidth: 32,
+                                  minHeight: 32,
+                                ),
+                              ),
                           ],
                         ),
                         const SizedBox(height: 4),
@@ -2244,11 +3058,214 @@ class _ActiveLoansSection extends StatelessWidget {
   }
 }
 
+/// Section des prêts à confirmer remise (jour J et pendant la durée, remise non confirmée).
+class _PickupToConfirmSection extends StatelessWidget {
+  final String clubId;
+  final List<Map<String, dynamic>> allLoans;
+  final bool showCancelButtons;
+
+  const _PickupToConfirmSection({
+    required this.clubId,
+    required this.allLoans,
+    this.showCancelButtons = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    final toConfirm = allLoans.where((loan) {
+      if (loan['status'] != 'active') return false;
+      if (loan['pickupConfirmed'] != false) return false;
+      final lentAt = loan['lentAt'] as Timestamp?;
+      final dueAt = loan['dueAt'] as Timestamp?;
+      if (lentAt == null || dueAt == null) return false;
+      final lentDay = DateTime(
+        lentAt.toDate().year,
+        lentAt.toDate().month,
+        lentAt.toDate().day,
+      );
+      final dueDay = DateTime(
+        dueAt.toDate().year,
+        dueAt.toDate().month,
+        dueAt.toDate().day,
+      );
+      return !lentDay.isAfter(today) && !dueDay.isBefore(today);
+    }).toList();
+
+    toConfirm.sort((a, b) {
+      final aDue = (a['dueAt'] as Timestamp?)?.toDate();
+      final bDue = (b['dueAt'] as Timestamp?)?.toDate();
+      if (aDue == null && bDue == null) return 0;
+      if (aDue == null) return 1;
+      if (bDue == null) return -1;
+      return aDue.compareTo(bDue);
+    });
+
+    if (toConfirm.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Card(
+      color: ViroColors.warning.withOpacity(0.1),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.handshake_outlined, color: ViroColors.warning),
+                const SizedBox(width: 8),
+                const Text(
+                  "À confirmer remise",
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+                const SizedBox(width: 8),
+                Chip(
+                  label: Text(
+                    "${toConfirm.length}",
+                    style: const TextStyle(fontSize: 12, color: Colors.white),
+                  ),
+                  backgroundColor: ViroColors.warning,
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            ...toConfirm.map((loan) {
+              final equipmentName =
+                  loan['equipmentName'] as String? ?? 'Équipement';
+              final quantity = loan['quantity'] as int? ?? 1;
+              final borrowerName = loan['borrowerName'] as String? ?? 'Joueur';
+              final borrowerId = loan['borrowerId'] as String?;
+              final lentAt = loan['lentAt'] as Timestamp?;
+              final dueAt = loan['dueAt'] as Timestamp?;
+              return Padding(
+                key: ValueKey(loan['id']),
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: ViroColors.warning.withOpacity(0.3),
+                      width: 1,
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.inventory_2_outlined,
+                            color: ViroColors.warning,
+                            size: 18,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              "$equipmentName (x$quantity)",
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.grey[900],
+                              ),
+                            ),
+                          ),
+                          if (showCancelButtons)
+                            IconButton(
+                              onPressed: () => _cancelLoan(
+                                context,
+                                clubId,
+                                loan['id'] as String,
+                              ),
+                              icon: Icon(
+                                Icons.delete_outline,
+                                size: 20,
+                                color: ViroColors.warning,
+                              ),
+                              tooltip: 'Supprimer',
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(
+                                minWidth: 32,
+                                minHeight: 32,
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      UserDisplayTile(
+                        userId: borrowerId,
+                        fallback: borrowerName,
+                        compact: true,
+                        textStyle: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[700],
+                        ),
+                      ),
+                      if (lentAt != null) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          "Récup prévue: ${DateFormat('dd/MM/yyyy', 'fr_FR').format(lentAt.toDate())}",
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[700],
+                          ),
+                        ),
+                      ],
+                      if (dueAt != null) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          "Retour: ${DateFormat('dd/MM/yyyy', 'fr_FR').format(dueAt.toDate())}",
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[700],
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: () => _confirmPickup(
+                                context,
+                                clubId,
+                                loan['id'] as String,
+                              ),
+                              icon: const Icon(Icons.check, size: 18),
+                              label: const Text("Confirmer remise"),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: ViroColors.warning,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// Section des prochains prêts (acceptés mais pas encore récupérés)
 class _UpcomingLoansSection extends StatelessWidget {
   final String clubId;
+  final bool showCancelButtons;
 
-  const _UpcomingLoansSection({required this.clubId});
+  const _UpcomingLoansSection({
+    required this.clubId,
+    required this.showCancelButtons,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -2416,6 +3433,25 @@ class _UpcomingLoansSection extends StatelessWidget {
                                   ),
                                 ),
                               ),
+                              if (showCancelButtons)
+                                IconButton(
+                                  onPressed: () => _cancelUpcomingLoan(
+                                    context,
+                                    clubId,
+                                    doc.id,
+                                  ),
+                                  icon: Icon(
+                                    Icons.delete_outline,
+                                    size: 20,
+                                    color: ViroColors.warning,
+                                  ),
+                                  tooltip: 'Supprimer',
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(
+                                    minWidth: 32,
+                                    minHeight: 32,
+                                  ),
+                                ),
                             ],
                           ),
                           const SizedBox(height: 4),
@@ -2763,7 +3799,7 @@ class _LoanRequestCard extends StatelessWidget {
       }
       final returnDate = pickupDate.add(Duration(days: durationDays));
 
-      await FirebaseFirestore.instance
+      final loanRef = await FirebaseFirestore.instance
           .collection(FirebaseCollections.clubs)
           .doc(clubId)
           .collection(FirebaseCollections.equipmentLoans)
@@ -2776,6 +3812,7 @@ class _LoanRequestCard extends StatelessWidget {
             'lentAt': requestedPickupDate,
             'dueAt': Timestamp.fromDate(returnDate),
             'status': 'active',
+            'pickupConfirmed': false,
             'requestId': requestId,
             'createdAt': FieldValue.serverTimestamp(),
             if (totalPrice != null) 'totalPrice': totalPrice,
@@ -2789,6 +3826,7 @@ class _LoanRequestCard extends StatelessWidget {
           .doc(requestId)
           .update({
             'status': 'accepted',
+            'loanId': loanRef.id,
             'adminResponse': responseController.text.trim().isNotEmpty
                 ? responseController.text.trim()
                 : null,

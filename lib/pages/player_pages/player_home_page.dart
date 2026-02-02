@@ -303,6 +303,9 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
                     _buildActionRequiredBloc(clubId, allClubIds, userData),
                     const SizedBox(height: 28),
 
+                    _buildActiveLoansSection(clubId, allClubIds),
+                    const SizedBox(height: 28),
+
                     _buildTodaySection(clubId, allClubIds, userData),
                     const SizedBox(height: 28),
 
@@ -982,13 +985,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
     List<String> allClubIds,
     Map<String, dynamic>? userData,
   ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildSectionTitleLarge("À faire maintenant"),
-        _buildActionRequiredBlocBody(clubId, allClubIds, userData),
-      ],
-    );
+    return _buildActionRequiredBlocBody(clubId, allClubIds, userData);
   }
 
   Widget _buildActionRequiredBlocBody(
@@ -1000,9 +997,6 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
     final startOfDay = DateTime(now.year, now.month, now.day);
     final nextSunday = startOfDay.add(Duration(days: 7 - now.weekday + 1));
     final oneDayAgo = now.subtract(const Duration(days: 1));
-    final today = DateTime(now.year, now.month, now.day);
-    final tomorrow = today.add(const Duration(days: 1));
-    final inThreeDays = today.add(const Duration(days: 3));
 
     final eventStream = allClubIds.isEmpty
         ? null
@@ -1032,14 +1026,13 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
         .limit(10)
         .snapshots();
 
+    // Requête sans plage sur lentAt/dueAt pour éviter les index composites
     final preparationStream = FirebaseFirestore.instance
         .collection(FirebaseCollections.clubs)
         .doc(clubId)
         .collection(FirebaseCollections.equipmentLoans)
         .where('borrowerId', isEqualTo: _currentUserId)
         .where('status', isEqualTo: 'active')
-        .where('lentAt', isGreaterThanOrEqualTo: Timestamp.fromDate(today))
-        .where('lentAt', isLessThan: Timestamp.fromDate(tomorrow))
         .snapshots();
 
     final returnStream = FirebaseFirestore.instance
@@ -1048,8 +1041,6 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
         .collection(FirebaseCollections.equipmentLoans)
         .where('borrowerId', isEqualTo: _currentUserId)
         .where('status', isEqualTo: 'active')
-        .where('dueAt', isGreaterThanOrEqualTo: Timestamp.fromDate(today))
-        .where('dueAt', isLessThanOrEqualTo: Timestamp.fromDate(inThreeDays))
         .snapshots();
 
     if (eventStream == null) {
@@ -1062,7 +1053,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
               return StreamBuilder<QuerySnapshot>(
                 stream: returnStream,
                 builder: (context, returnSnap) {
-                  return _buildActionRequiredList(
+                  final result = _buildActionRequiredList(
                     null,
                     loanReqSnap.data,
                     prepSnap.data,
@@ -1070,6 +1061,14 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
                     clubId,
                     allClubIds,
                     userData,
+                  );
+                  if (result.isEmpty) return const SizedBox.shrink();
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildSectionTitleLarge("À faire maintenant"),
+                      result.widget,
+                    ],
                   );
                 },
               );
@@ -1091,7 +1090,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
                 return StreamBuilder<QuerySnapshot>(
                   stream: returnStream,
                   builder: (context, returnSnap) {
-                    return _buildActionRequiredList(
+                    final result = _buildActionRequiredList(
                       eventSnap.data,
                       loanReqSnap.data,
                       prepSnap.data,
@@ -1099,6 +1098,14 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
                       clubId,
                       allClubIds,
                       userData,
+                    );
+                    if (result.isEmpty) return const SizedBox.shrink();
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildSectionTitleLarge("À faire maintenant"),
+                        result.widget,
+                      ],
                     );
                   },
                 );
@@ -1110,7 +1117,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
     );
   }
 
-  Widget _buildActionRequiredList(
+  ({bool isEmpty, Widget widget}) _buildActionRequiredList(
     QuerySnapshot? eventSnapshot,
     QuerySnapshot? loanRequestSnapshot,
     QuerySnapshot? preparationSnapshot,
@@ -1121,6 +1128,13 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
   ) {
     final List<Widget> items = [];
     final primaryClubId = allClubIds.isNotEmpty ? allClubIds.first : clubId;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final tomorrow = today.add(const Duration(days: 1));
+    final inThreeDays = today.add(const Duration(days: 3));
+    final todayTs = Timestamp.fromDate(today);
+    final tomorrowTs = Timestamp.fromDate(tomorrow);
+    final inThreeDaysTs = Timestamp.fromDate(inThreeDays);
 
     final pendingEvents = eventSnapshot == null
         ? <Map<String, dynamic>>[]
@@ -1164,6 +1178,8 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
       final equipmentName = data['equipmentName'] as String? ?? 'Équipement';
       final isAccepted = status == 'accepted';
       final statusLabel = isAccepted ? 'Acceptée' : 'Refusée';
+      // Refusé → ouvrir Mes demandes (onglet 1) pour voir la carte et "Refaire une demande"
+      final tabIndex = isAccepted ? 2 : 1;
       items.add(
         _buildActionRequiredItem(
           icon: isAccepted ? Icons.check_circle : Icons.cancel,
@@ -1173,14 +1189,24 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
           onTap: () => Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => PlayerLoanCatalogPage(clubId: clubId),
+              builder: (_) => PlayerLoanCatalogPage(
+                clubId: clubId,
+                initialTabIndex: tabIndex,
+              ),
             ),
           ),
         ),
       );
     }
 
-    final preparationDocs = preparationSnapshot?.docs ?? [];
+    // Filtrer côté client : prêts à récupérer aujourd'hui (lentAt dans [today, tomorrow))
+    final preparationDocs = (preparationSnapshot?.docs ?? []).where((doc) {
+      final data = doc.data() as Map<String, dynamic>?;
+      if (data == null) return false;
+      final lentAt = data['lentAt'] as Timestamp?;
+      if (lentAt == null) return false;
+      return lentAt.compareTo(todayTs) >= 0 && lentAt.compareTo(tomorrowTs) < 0;
+    }).toList();
     for (final doc in preparationDocs) {
       final data = doc.data() as Map<String, dynamic>;
       final equipmentName = data['equipmentName'] as String? ?? 'Équipement';
@@ -1194,14 +1220,21 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
           onTap: () => Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => PlayerLoanCatalogPage(clubId: clubId),
+              builder: (_) =>
+                  PlayerLoanCatalogPage(clubId: clubId, initialTabIndex: 2),
             ),
           ),
         ),
       );
     }
 
-    final returnDocs = returnSnapshot?.docs ?? [];
+    // Filtrer et trier côté client : retours à venir (dueAt dans [today, inThreeDays])
+    final returnDocs = (returnSnapshot?.docs ?? []).where((doc) {
+      final dueAt = (doc.data() as Map)['dueAt'] as Timestamp?;
+      if (dueAt == null) return false;
+      return dueAt.compareTo(todayTs) >= 0 &&
+          dueAt.compareTo(inThreeDaysTs) <= 0;
+    }).toList();
     final sortedReturn = returnDocs.toList()
       ..sort((a, b) {
         final aDue = (a.data() as Map)['dueAt'] as Timestamp?;
@@ -1239,7 +1272,8 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
           onTap: () => Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => PlayerLoanCatalogPage(clubId: clubId),
+              builder: (_) =>
+                  PlayerLoanCatalogPage(clubId: clubId, initialTabIndex: 2),
             ),
           ),
         ),
@@ -1247,56 +1281,32 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
     }
 
     if (items.isEmpty) {
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
+      return (isEmpty: true, widget: const SizedBox.shrink());
+    }
+
+    return (
+      isEmpty: false,
+      widget: Container(
         decoration: BoxDecoration(
-          color: ViroColors.success.withOpacity(0.08),
+          color: Colors.white,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: ViroColors.success.withOpacity(0.25),
-            width: 1,
-          ),
-        ),
-        child: Row(
-          children: [
-            Icon(Icons.check_circle, color: ViroColors.success, size: 32),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Text(
-                "Tu es à jour !",
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: ViroColors.success,
-                ),
-              ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
             ),
           ],
         ),
-      );
-    }
-
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          for (int i = 0; i < items.length; i++) ...[
-            items[i],
-            if (i < items.length - 1)
-              Divider(height: 1, color: Colors.grey[200]),
+        child: Column(
+          children: [
+            for (int i = 0; i < items.length; i++) ...[
+              items[i],
+              if (i < items.length - 1)
+                Divider(height: 1, color: Colors.grey[200]),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -1446,6 +1456,385 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
             label: const Text("Voir le planning"),
           ),
         ],
+      ),
+    );
+  }
+
+  /// Prêts actifs du joueur : on interroge tous les clubs du joueur pour
+  /// afficher tous les prêts (évite qu'un prêt soit invisible si le club actif
+  /// n'est pas celui du prêt).
+  Widget _buildActiveLoansSection(String clubId, List<String> allClubIds) {
+    final clubIdsToQuery = allClubIds.isNotEmpty ? allClubIds : [clubId];
+    if (clubIdsToQuery.length == 1) {
+      return _buildActiveLoansSectionSingleClub(clubIdsToQuery.first);
+    }
+    return _buildActiveLoansSectionMultipleClubs(clubId, clubIdsToQuery);
+  }
+
+  Widget _buildActiveLoansSectionSingleClub(String clubId) {
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection(FirebaseCollections.clubs)
+          .doc(clubId)
+          .collection(FirebaseCollections.equipmentLoans)
+          .where('borrowerId', isEqualTo: _currentUserId)
+          .where('status', isEqualTo: 'active')
+          .snapshots(),
+      builder: (context, snapshot) {
+        final docs = snapshot.data?.docs ?? [];
+        final pairs = docs.map((d) => (clubId: clubId, doc: d)).toList();
+        return _buildActiveLoansSectionBody(
+          currentClubId: clubId,
+          loanPairs: pairs,
+          connectionState: snapshot.connectionState,
+          error: snapshot.hasError ? snapshot.error : null,
+        );
+      },
+    );
+  }
+
+  Widget _buildActiveLoansSectionMultipleClubs(
+    String currentClubId,
+    List<String> clubIdsToQuery,
+  ) {
+    return _buildActiveLoansNestedStream(
+      clubIds: clubIdsToQuery,
+      index: 0,
+      snapshots: [],
+      currentClubId: currentClubId,
+    );
+  }
+
+  Widget _buildActiveLoansNestedStream({
+    required List<String> clubIds,
+    required int index,
+    required List<QuerySnapshot<Map<String, dynamic>>?> snapshots,
+    required String currentClubId,
+  }) {
+    if (index >= clubIds.length) {
+      final pairs =
+          <
+            ({String clubId, QueryDocumentSnapshot<Map<String, dynamic>> doc})
+          >[];
+      for (var i = 0; i < clubIds.length && i < snapshots.length; i++) {
+        final snap = snapshots[i];
+        if (snap != null) {
+          for (final doc in snap.docs) {
+            pairs.add((clubId: clubIds[i], doc: doc));
+          }
+        }
+      }
+      pairs.sort((a, b) {
+        final aDue = a.doc.data()['dueAt'] as Timestamp?;
+        final bDue = b.doc.data()['dueAt'] as Timestamp?;
+        if (aDue == null && bDue == null) return 0;
+        if (aDue == null) return 1;
+        if (bDue == null) return -1;
+        return aDue.compareTo(bDue);
+      });
+      final waiting = snapshots.any((s) => s == null);
+      return _buildActiveLoansSectionBody(
+        currentClubId: currentClubId,
+        loanPairs: pairs,
+        connectionState: waiting
+            ? ConnectionState.waiting
+            : ConnectionState.active,
+        error: null,
+      );
+    }
+    final clubId = clubIds[index];
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection(FirebaseCollections.clubs)
+          .doc(clubId)
+          .collection(FirebaseCollections.equipmentLoans)
+          .where('borrowerId', isEqualTo: _currentUserId)
+          .where('status', isEqualTo: 'active')
+          .snapshots(),
+      builder: (context, snapshot) {
+        final newSnapshots = List<QuerySnapshot<Map<String, dynamic>>?>.from(
+          snapshots,
+        )..add(snapshot.hasData ? snapshot.data : null);
+        return _buildActiveLoansNestedStream(
+          clubIds: clubIds,
+          index: index + 1,
+          snapshots: newSnapshots,
+          currentClubId: currentClubId,
+        );
+      },
+    );
+  }
+
+  Widget _buildActiveLoansSectionBody({
+    required String currentClubId,
+    required List<
+      ({String clubId, QueryDocumentSnapshot<Map<String, dynamic>> doc})
+    >
+    loanPairs,
+    required ConnectionState connectionState,
+    Object? error,
+  }) {
+    final today = DateTime(
+      DateTime.now().year,
+      DateTime.now().month,
+      DateTime.now().day,
+    );
+
+    // Séparer : prêts en cours (lentAt <= aujourd'hui <= dueAt) et prochains (lentAt > aujourd'hui)
+    final activeNow =
+        <({String clubId, QueryDocumentSnapshot<Map<String, dynamic>> doc})>[];
+    final upcoming =
+        <({String clubId, QueryDocumentSnapshot<Map<String, dynamic>> doc})>[];
+    for (final pair in loanPairs) {
+      final data = pair.doc.data();
+      final lentAt = data['lentAt'] as Timestamp?;
+      final dueAt = data['dueAt'] as Timestamp?;
+      if (lentAt == null || dueAt == null) continue;
+      final lentDay = DateTime(
+        lentAt.toDate().year,
+        lentAt.toDate().month,
+        lentAt.toDate().day,
+      );
+      final dueDay = DateTime(
+        dueAt.toDate().year,
+        dueAt.toDate().month,
+        dueAt.toDate().day,
+      );
+      if (!lentDay.isAfter(today) && !dueDay.isBefore(today)) {
+        activeNow.add(pair);
+      } else if (lentDay.isAfter(today)) {
+        upcoming.add(pair);
+      }
+    }
+    activeNow.sort((a, b) {
+      final aDue = a.doc.data()['dueAt'] as Timestamp?;
+      final bDue = b.doc.data()['dueAt'] as Timestamp?;
+      if (aDue == null && bDue == null) return 0;
+      if (aDue == null) return 1;
+      if (bDue == null) return -1;
+      return aDue.compareTo(bDue);
+    });
+    upcoming.sort((a, b) {
+      final aLent = a.doc.data()['lentAt'] as Timestamp?;
+      final bLent = b.doc.data()['lentAt'] as Timestamp?;
+      if (aLent == null && bLent == null) return 0;
+      if (aLent == null) return 1;
+      if (bLent == null) return -1;
+      return aLent.compareTo(bLent);
+    });
+
+    if (connectionState == ConnectionState.waiting && loanPairs.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    if (error != null) {
+      return const SizedBox.shrink();
+    }
+
+    if (activeNow.isEmpty && upcoming.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (activeNow.isNotEmpty)
+          _buildOneLoanBlock(
+            currentClubId: currentClubId,
+            title: "Prêts en cours",
+            pairs: activeNow,
+            today: today,
+            isUpcoming: false,
+          ),
+        if (activeNow.isNotEmpty && upcoming.isNotEmpty)
+          const SizedBox(height: 12),
+        if (upcoming.isNotEmpty)
+          _buildOneLoanBlock(
+            currentClubId: currentClubId,
+            title: "Prochains prêts",
+            pairs: upcoming,
+            today: today,
+            isUpcoming: true,
+          ),
+      ],
+    );
+  }
+
+  Widget _buildOneLoanBlock({
+    required String currentClubId,
+    required String title,
+    required List<
+      ({String clubId, QueryDocumentSnapshot<Map<String, dynamic>> doc})
+    >
+    pairs,
+    required DateTime today,
+    required bool isUpcoming,
+  }) {
+    return InkWell(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => PlayerLoanCatalogPage(
+              clubId: currentClubId,
+              initialTabIndex: 2,
+            ),
+          ),
+        );
+      },
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: ViroColors.primary.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: ViroColors.primary.withOpacity(0.3),
+            width: 1.5,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  isUpcoming ? Icons.calendar_today : Icons.inventory_2_rounded,
+                  color: ViroColors.primary,
+                  size: 20,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      color: ViroColors.primary,
+                    ),
+                  ),
+                ),
+                if (pairs.isNotEmpty)
+                  Chip(
+                    label: Text(
+                      "${pairs.length}",
+                      style: const TextStyle(fontSize: 12, color: Colors.white),
+                    ),
+                    backgroundColor: ViroColors.primary,
+                  ),
+                const SizedBox(width: 4),
+                Icon(Icons.chevron_right, color: Colors.grey[600], size: 20),
+              ],
+            ),
+            if (pairs.isEmpty) ...[
+              const SizedBox(height: 6),
+              Text(
+                isUpcoming ? "Aucun prêt à venir" : "Aucun prêt en cours",
+                style: TextStyle(fontSize: 13, color: Colors.grey[700]),
+              ),
+            ] else ...[
+              const SizedBox(height: 10),
+              ...pairs.map((pair) {
+                final data = pair.doc.data();
+                final equipmentName =
+                    data['equipmentName'] as String? ?? 'Équipement';
+                final quantity = data['quantity'] as int? ?? 1;
+                if (isUpcoming) {
+                  final lentAt = data['lentAt'] as Timestamp?;
+                  final pickupDate = lentAt?.toDate();
+                  return Padding(
+                    key: ValueKey('up_${pair.clubId}_${pair.doc.id}'),
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.event_available,
+                          color: ViroColors.primary,
+                          size: 18,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                "$equipmentName (x$quantity)",
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.grey[900],
+                                ),
+                              ),
+                              if (pickupDate != null)
+                                Text(
+                                  "Récup prévue le ${DateFormat('dd/MM/yyyy', 'fr_FR').format(pickupDate)}",
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey[700],
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+                final dueAt = data['dueAt'] as Timestamp?;
+                final dueDate = dueAt?.toDate();
+                final isToday =
+                    dueDate != null &&
+                    DateTime(dueDate.year, dueDate.month, dueDate.day) == today;
+                return Padding(
+                  key: ValueKey('${pair.clubId}_${pair.doc.id}'),
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Row(
+                    children: [
+                      Icon(
+                        isToday
+                            ? Icons.warning_amber_rounded
+                            : Icons.check_circle_outline,
+                        color: isToday ? ViroColors.error : ViroColors.primary,
+                        size: 18,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              "$equipmentName (x$quantity)",
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.grey[900],
+                              ),
+                            ),
+                            if (dueDate != null)
+                              Text(
+                                isToday
+                                    ? "Retour aujourd'hui"
+                                    : "Retour le ${DateFormat('dd/MM/yyyy', 'fr_FR').format(dueDate)}",
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: isToday
+                                      ? ViroColors.error
+                                      : Colors.grey[700],
+                                  fontWeight: isToday
+                                      ? FontWeight.bold
+                                      : FontWeight.normal,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+            ],
+          ],
+        ),
       ),
     );
   }

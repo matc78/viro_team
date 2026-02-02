@@ -12,7 +12,14 @@ import '../../widget/viro_loader.dart';
 class PlayerLoanCatalogPage extends StatefulWidget {
   final String clubId;
 
-  const PlayerLoanCatalogPage({super.key, required this.clubId});
+  /// Onglet à afficher à l'ouverture : 0 = Catalogue, 1 = Mes demandes, 2 = Mes prêts
+  final int initialTabIndex;
+
+  const PlayerLoanCatalogPage({
+    super.key,
+    required this.clubId,
+    this.initialTabIndex = 0,
+  });
 
   @override
   State<PlayerLoanCatalogPage> createState() => _PlayerLoanCatalogPageState();
@@ -113,7 +120,13 @@ class _PlayerLoanCatalogPageState extends State<PlayerLoanCatalogPage>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
+    final index = widget.initialTabIndex;
+    if (index >= 0 && index < 3) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _tabController.animateTo(index);
+      });
+    }
   }
 
   @override
@@ -194,6 +207,7 @@ class _PlayerLoanCatalogPageState extends State<PlayerLoanCatalogPage>
               tabs: const [
                 Tab(text: "Catalogue"),
                 Tab(text: "Mes demandes"),
+                Tab(text: "Mes prêts"),
               ],
             ),
           ),
@@ -209,6 +223,11 @@ class _PlayerLoanCatalogPageState extends State<PlayerLoanCatalogPage>
                       currentUserId: _currentUserId,
                     ),
                     _MyRequestsTab(
+                      clubId: selectedClubId,
+                      currentUserId: _currentUserId,
+                      onRefaireDemande: () => _tabController.animateTo(0),
+                    ),
+                    _MyLoansTab(
                       clubId: selectedClubId,
                       currentUserId: _currentUserId,
                     ),
@@ -757,7 +776,7 @@ class _EquipmentCard extends StatelessWidget {
   }
 }
 
-/// Dialog pour créer une demande de prêt
+/// Dialog pour créer une demande de prêt ou une demande de modification
 class _RequestLoanDialog extends StatefulWidget {
   final String clubId;
   final String equipmentId;
@@ -767,6 +786,10 @@ class _RequestLoanDialog extends StatefulWidget {
   final String currentUserId;
   final Set<int> allowedWeekdays;
 
+  /// Si fourni, mode "demande de modification" : formulaire prérempli, envoi vers equipment_loan_change_requests
+  final Map<String, dynamic>? initialLoanData;
+  final String? loanId;
+
   const _RequestLoanDialog({
     required this.clubId,
     required this.equipmentId,
@@ -775,6 +798,8 @@ class _RequestLoanDialog extends StatefulWidget {
     required this.maxQuantity,
     required this.currentUserId,
     required this.allowedWeekdays,
+    this.initialLoanData,
+    this.loanId,
   });
 
   @override
@@ -795,9 +820,25 @@ class _RequestLoanDialogState extends State<_RequestLoanDialog> {
   final Map<DateTime, bool> _pickupDayAvailability =
       {}; // Disponibilité par jour pour la quantité sélectionnée (mode récup.)
 
+  bool get _isModificationMode =>
+      widget.initialLoanData != null && widget.loanId != null;
+
   @override
   void initState() {
     super.initState();
+    if (_isModificationMode) {
+      final data = widget.initialLoanData!;
+      _selectedQuantity = data['quantity'] as int? ?? 1;
+      final lentAt = data['lentAt'] as Timestamp?;
+      final dueAt = data['dueAt'] as Timestamp?;
+      _selectedPickupDate = lentAt?.toDate();
+      _selectedReturnDate = dueAt?.toDate();
+      if (_selectedReturnDate != null) {
+        _focusedDay = _selectedReturnDate!;
+      } else if (_selectedPickupDate != null) {
+        _focusedDay = _selectedPickupDate!;
+      }
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadPickupMonthAvailability();
     });
@@ -1217,7 +1258,6 @@ class _RequestLoanDialogState extends State<_RequestLoanDialog> {
     setState(() => _isSubmitting = true);
 
     try {
-      // Récupérer les informations du joueur
       final userDoc = await FirebaseFirestore.instance
           .collection('users')
           .doc(widget.currentUserId)
@@ -1230,39 +1270,74 @@ class _RequestLoanDialogState extends State<_RequestLoanDialog> {
         playerName = userData['email'] as String? ?? 'Joueur';
       }
 
-      await FirebaseFirestore.instance
-          .collection(FirebaseCollections.clubs)
-          .doc(widget.clubId)
-          .collection(FirebaseCollections.equipmentLoanRequests)
-          .add({
-            'equipmentId': widget.equipmentId,
-            'equipmentName': widget.equipmentName,
-            'playerId': widget.currentUserId,
-            'playerName': playerName,
-            'quantity': quantity,
-            'duration': duration,
-            'durationUnit': priceUnit,
-            'reason': reason,
-            'requestedPickupDate': Timestamp.fromDate(_selectedPickupDate!),
-            'status': 'pending',
-            'createdAt': FieldValue.serverTimestamp(),
-            'updatedAt': FieldValue.serverTimestamp(),
-            if (catalogPrice != null) 'price': catalogPrice,
-            'priceUnit': priceUnit,
-            if (totalCaution != null) 'caution': totalCaution,
-            if (totalPrice != null) 'totalPrice': totalPrice,
-          });
-
-      if (mounted) {
-        Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              "Demande envoyée. Consultez l'onglet Mes demandes pour suivre votre demande.",
+      if (_isModificationMode && widget.loanId != null) {
+        // Demande de modification : envoi vers equipment_loan_change_requests
+        await FirebaseFirestore.instance
+            .collection(FirebaseCollections.clubs)
+            .doc(widget.clubId)
+            .collection(FirebaseCollections.equipmentLoanChangeRequests)
+            .add({
+              'loanId': widget.loanId,
+              'type': 'modification',
+              'reason': reason,
+              'requestedBy': widget.currentUserId,
+              'playerName': playerName,
+              'status': 'pending',
+              'createdAt': FieldValue.serverTimestamp(),
+              'updatedAt': FieldValue.serverTimestamp(),
+              'newDueAt': Timestamp.fromDate(_selectedReturnDate!),
+              'newQuantity': quantity,
+              if (_selectedPickupDate != null)
+                'newRequestedPickupDate': Timestamp.fromDate(
+                  _selectedPickupDate!,
+                ),
+            });
+        if (mounted) {
+          Navigator.of(context).pop();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                "Demande de modification envoyée. Consultez Mes demandes pour le suivi.",
+              ),
+              backgroundColor: ViroColors.success,
             ),
-            duration: Duration(seconds: 4),
-          ),
-        );
+          );
+        }
+      } else {
+        // Nouvelle demande de prêt
+        await FirebaseFirestore.instance
+            .collection(FirebaseCollections.clubs)
+            .doc(widget.clubId)
+            .collection(FirebaseCollections.equipmentLoanRequests)
+            .add({
+              'equipmentId': widget.equipmentId,
+              'equipmentName': widget.equipmentName,
+              'playerId': widget.currentUserId,
+              'playerName': playerName,
+              'quantity': quantity,
+              'duration': duration,
+              'durationUnit': priceUnit,
+              'reason': reason,
+              'requestedPickupDate': Timestamp.fromDate(_selectedPickupDate!),
+              'status': 'pending',
+              'createdAt': FieldValue.serverTimestamp(),
+              'updatedAt': FieldValue.serverTimestamp(),
+              if (catalogPrice != null) 'price': catalogPrice,
+              'priceUnit': priceUnit,
+              if (totalCaution != null) 'caution': totalCaution,
+              if (totalPrice != null) 'totalPrice': totalPrice,
+            });
+        if (mounted) {
+          Navigator.of(context).pop();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                "Demande envoyée. Consultez l'onglet Mes demandes pour suivre votre demande.",
+              ),
+              duration: Duration(seconds: 4),
+            ),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -1618,10 +1693,12 @@ class _RequestLoanDialogState extends State<_RequestLoanDialog> {
               ),
               child: Row(
                 children: [
-                  const Expanded(
+                  Expanded(
                     child: Text(
-                      "Demande de prêt",
-                      style: TextStyle(
+                      _isModificationMode
+                          ? "Demande de modification du prêt"
+                          : "Demande de prêt",
+                      style: const TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
                       ),
@@ -1662,15 +1739,54 @@ class _RequestLoanDialogState extends State<_RequestLoanDialog> {
                             child: Text('${i + 1}'),
                           ),
                         ),
-                        onChanged: (value) {
+                        onChanged: (value) async {
                           if (value == null) return;
+                          final previousPickup = _selectedPickupDate;
+                          final previousReturn = _selectedReturnDate;
                           setState(() {
                             _selectedQuantity = value;
                             _pickupDayAvailability.clear();
-                            _selectedPickupDate = null;
-                            _selectedReturnDate = null;
-                            _calendarMode = 'pickup';
+                            _availabilityCache.clear();
                           });
+                          // Ne réinitialiser les dates que si la nouvelle quantité excède la dispo
+                          if (previousPickup != null &&
+                              previousReturn != null) {
+                            final availPickup = await _checkAvailabilityForDate(
+                              previousPickup,
+                              value,
+                            );
+                            final availReturn = await _checkAvailabilityForDate(
+                              previousReturn,
+                              value,
+                            );
+                            final currentLoanQty = _isModificationMode
+                                ? (widget.initialLoanData!['quantity']
+                                          as int? ??
+                                      1)
+                                : 0;
+                            final effectivePickup =
+                                availPickup + currentLoanQty;
+                            final effectiveReturn =
+                                availReturn + currentLoanQty;
+                            final keepDates =
+                                effectivePickup >= value &&
+                                effectiveReturn >= value;
+                            if (mounted) {
+                              setState(() {
+                                if (!keepDates) {
+                                  _selectedPickupDate = null;
+                                  _selectedReturnDate = null;
+                                  _calendarMode = 'pickup';
+                                }
+                              });
+                            }
+                          } else {
+                            setState(() {
+                              _selectedPickupDate = null;
+                              _selectedReturnDate = null;
+                              _calendarMode = 'pickup';
+                            });
+                          }
                           _loadPickupMonthAvailability();
                         },
                       ),
@@ -1945,12 +2061,770 @@ class _RequestLoanDialogState extends State<_RequestLoanDialog> {
   }
 }
 
-/// Onglet Mes demandes : affiche l'historique des demandes
+/// Onglet Mes prêts : 4 sections — Prêt en retard, Prêt en cours, Prochain prêt, Prêt fini
+class _MyLoansTab extends StatelessWidget {
+  final String clubId;
+  final String currentUserId;
+
+  const _MyLoansTab({required this.clubId, required this.currentUserId});
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection(FirebaseCollections.clubs)
+          .doc(clubId)
+          .collection(FirebaseCollections.equipmentLoans)
+          .where('borrowerId', isEqualTo: currentUserId)
+          .snapshots(),
+      builder: (context, loansSnap) {
+        if (loansSnap.connectionState == ConnectionState.waiting) {
+          return const Center(child: ViroLoader(size: 60));
+        }
+        if (loansSnap.hasError) {
+          return Center(
+            child: FirebaseErrorHandler.buildErrorWidget(
+              context,
+              loansSnap.error,
+            ),
+          );
+        }
+        final loanDocs = loansSnap.data?.docs ?? [];
+        return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+          stream: FirebaseFirestore.instance
+              .collection(FirebaseCollections.clubs)
+              .doc(clubId)
+              .collection(FirebaseCollections.equipmentLoanChangeRequests)
+              .where('requestedBy', isEqualTo: currentUserId)
+              .where('status', isEqualTo: 'pending')
+              .snapshots(),
+          builder: (context, pendingSnap) {
+            final pendingLoanIds = <String>{};
+            if (pendingSnap.hasData && pendingSnap.data != null) {
+              for (final doc in pendingSnap.data!.docs) {
+                final loanId = doc.data()['loanId'] as String?;
+                if (loanId != null) pendingLoanIds.add(loanId);
+              }
+            }
+            final today = DateTime(
+              DateTime.now().year,
+              DateTime.now().month,
+              DateTime.now().day,
+            );
+            final overdue = <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+            final current = <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+            final upcoming = <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+            final finished = <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+            for (final doc in loanDocs) {
+              final data = doc.data();
+              final status = data['status'] as String? ?? '';
+              final dueAt = data['dueAt'] as Timestamp?;
+              final lentAt = data['lentAt'] as Timestamp?;
+              final dueDate = dueAt?.toDate();
+              final lentDate = lentAt?.toDate();
+              if (status == 'active') {
+                if (dueDate != null && dueDate.isBefore(today)) {
+                  overdue.add(doc);
+                } else if (lentDate != null && !lentDate.isAfter(today)) {
+                  current.add(doc);
+                } else {
+                  upcoming.add(doc);
+                }
+              } else {
+                finished.add(doc);
+              }
+            }
+            void sortByDue(
+              List<QueryDocumentSnapshot<Map<String, dynamic>>> list,
+            ) {
+              list.sort((a, b) {
+                final aDue = a.data()['dueAt'] as Timestamp?;
+                final bDue = b.data()['dueAt'] as Timestamp?;
+                if (aDue == null && bDue == null) return 0;
+                if (aDue == null) return 1;
+                if (bDue == null) return -1;
+                return aDue.compareTo(bDue);
+              });
+            }
+
+            void sortFinishedByReturned(
+              List<QueryDocumentSnapshot<Map<String, dynamic>>> list,
+            ) {
+              list.sort((a, b) {
+                final aRet = a.data()['returnedAt'] as Timestamp?;
+                final bRet = b.data()['returnedAt'] as Timestamp?;
+                if (aRet == null && bRet == null) return 0;
+                if (aRet == null) return 1;
+                if (bRet == null) return -1;
+                return bRet.compareTo(aRet);
+              });
+            }
+
+            sortByDue(overdue);
+            sortByDue(current);
+            sortByDue(upcoming);
+            sortFinishedByReturned(finished);
+            final hasAny =
+                overdue.isNotEmpty ||
+                current.isNotEmpty ||
+                upcoming.isNotEmpty ||
+                finished.isNotEmpty;
+            if (!hasAny) {
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.inventory_2_outlined,
+                      size: 64,
+                      color: Colors.grey[400],
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      "Aucun prêt",
+                      style: TextStyle(color: Colors.grey[600], fontSize: 16),
+                    ),
+                  ],
+                ),
+              );
+            }
+            return ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                _MyLoansSection(
+                  title: "Prêt en retard",
+                  icon: Icons.warning_amber_rounded,
+                  iconColor: ViroColors.error,
+                  loans: overdue,
+                  clubId: clubId,
+                  currentUserId: currentUserId,
+                  pendingLoanIds: pendingLoanIds,
+                  isActiveCard: true,
+                ),
+                _MyLoansSection(
+                  title: "Prêt en cours",
+                  icon: Icons.inventory_2_rounded,
+                  iconColor: ViroColors.primary,
+                  loans: current,
+                  clubId: clubId,
+                  currentUserId: currentUserId,
+                  pendingLoanIds: pendingLoanIds,
+                  isActiveCard: true,
+                ),
+                _MyLoansSection(
+                  title: "Prochain prêt",
+                  icon: Icons.schedule,
+                  iconColor: Colors.orange,
+                  loans: upcoming,
+                  clubId: clubId,
+                  currentUserId: currentUserId,
+                  pendingLoanIds: pendingLoanIds,
+                  isActiveCard: true,
+                ),
+                _MyLoansSection(
+                  title: "Prêt fini",
+                  icon: Icons.check_circle_outline,
+                  iconColor: Colors.grey,
+                  loans: finished,
+                  clubId: clubId,
+                  currentUserId: currentUserId,
+                  pendingLoanIds: pendingLoanIds,
+                  isActiveCard: false,
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+/// Une section de l’onglet Mes prêts (titre + liste de cartes)
+class _MyLoansSection extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final Color iconColor;
+  final List<QueryDocumentSnapshot<Map<String, dynamic>>> loans;
+  final String clubId;
+  final String currentUserId;
+  final Set<String> pendingLoanIds;
+  final bool isActiveCard;
+
+  const _MyLoansSection({
+    required this.title,
+    required this.icon,
+    required this.iconColor,
+    required this.loans,
+    required this.clubId,
+    required this.currentUserId,
+    required this.pendingLoanIds,
+    required this.isActiveCard,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (loans.isEmpty) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 8),
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 8),
+          child: Row(
+            children: [
+              Icon(icon, size: 20, color: iconColor),
+              const SizedBox(width: 8),
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: iconColor,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: iconColor.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  "${loans.length}",
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: iconColor,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        ...loans.map((doc) {
+          final data = doc.data();
+          final loanId = doc.id;
+          final loanData = <String, dynamic>{'id': loanId, ...data};
+          final hasPendingRequest = pendingLoanIds.contains(loanId);
+          if (isActiveCard) {
+            return _ActiveLoanCard(
+              clubId: clubId,
+              loanData: loanData,
+              currentUserId: currentUserId,
+              hasPendingRequest: hasPendingRequest,
+              onRequestCancellation: () => _showLoanCancellationRequestDialog(
+                context,
+                clubId,
+                loanData,
+                currentUserId,
+              ),
+              onRequestModification: () => _showLoanModificationRequestDialog(
+                context,
+                clubId,
+                loanData,
+                currentUserId,
+              ),
+            );
+          }
+          return _ReturnedLoanCard(clubId: clubId, loanData: loanData);
+        }),
+      ],
+    );
+  }
+}
+
+/// Carte d’un prêt terminé (retourné ou perdu)
+class _ReturnedLoanCard extends StatelessWidget {
+  final String clubId;
+  final Map<String, dynamic> loanData;
+
+  const _ReturnedLoanCard({required this.clubId, required this.loanData});
+
+  @override
+  Widget build(BuildContext context) {
+    final equipmentName = loanData['equipmentName'] as String? ?? 'Équipement';
+    final quantity = loanData['quantity'] as int? ?? 1;
+    final lentAt = loanData['lentAt'] as Timestamp?;
+    final dueAt = loanData['dueAt'] as Timestamp?;
+    final returnedAt = loanData['returnedAt'] as Timestamp?;
+    final isLost = loanData['status'] == 'lost';
+    final lentDate = lentAt?.toDate();
+    final dueDate = dueAt?.toDate();
+    final returnedDate = returnedAt?.toDate();
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      color: Colors.grey[50],
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  isLost
+                      ? Icons.warning_amber_rounded
+                      : Icons.check_circle_outline,
+                  color: isLost ? ViroColors.error : Colors.grey[700],
+                  size: 22,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    "$equipmentName (x$quantity)",
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            if (lentDate != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                "Prêté le: ${DateFormat('dd/MM/yyyy', 'fr_FR').format(lentDate)}",
+                style: TextStyle(fontSize: 13, color: Colors.grey[700]),
+              ),
+            ],
+            if (dueDate != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                "Retour prévu le: ${DateFormat('dd/MM/yyyy', 'fr_FR').format(dueDate)}",
+                style: TextStyle(fontSize: 13, color: Colors.grey[700]),
+              ),
+            ],
+            if (returnedDate != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                isLost
+                    ? "Marqué perdu"
+                    : "Retourné le: ${DateFormat('dd/MM/yyyy', 'fr_FR').format(returnedDate)}",
+                style: TextStyle(
+                  fontSize: 13,
+                  color: isLost ? ViroColors.error : Colors.grey[700],
+                  fontWeight: isLost ? FontWeight.w600 : FontWeight.normal,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Carte d'un prêt actif avec boutons Demander annulation / modification
+class _ActiveLoanCard extends StatelessWidget {
+  final String clubId;
+  final Map<String, dynamic> loanData;
+  final String currentUserId;
+  final bool hasPendingRequest;
+  final VoidCallback onRequestCancellation;
+  final VoidCallback onRequestModification;
+
+  const _ActiveLoanCard({
+    required this.clubId,
+    required this.loanData,
+    required this.currentUserId,
+    required this.hasPendingRequest,
+    required this.onRequestCancellation,
+    required this.onRequestModification,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final equipmentName = loanData['equipmentName'] as String? ?? 'Équipement';
+    final quantity = loanData['quantity'] as int? ?? 1;
+    final dueAt = loanData['dueAt'] as Timestamp?;
+    final lentAt = loanData['lentAt'] as Timestamp?;
+    final dueDate = dueAt?.toDate();
+    final lentDate = lentAt?.toDate();
+    final today = DateTime(
+      DateTime.now().year,
+      DateTime.now().month,
+      DateTime.now().day,
+    );
+    final loanStartDate = lentAt != null
+        ? DateTime(
+            lentAt.toDate().year,
+            lentAt.toDate().month,
+            lentAt.toDate().day,
+          )
+        : null;
+    final isLoanStarted =
+        loanStartDate != null &&
+        (loanStartDate.isBefore(today) ||
+            loanStartDate.isAtSameMomentAs(today));
+    // Modif./annulation possibles jusqu'à 24h avant la date de récupération
+    final now = DateTime.now();
+    final atLeast24hBeforePickup =
+        lentAt != null &&
+        now.isBefore(lentAt.toDate().subtract(const Duration(hours: 24)));
+    final canRequestChange = !isLoanStarted && atLeast24hBeforePickup;
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.inventory_2_rounded, color: ViroColors.primary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    "$equipmentName (x$quantity)",
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            if (lentDate != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                "Prêté le: ${DateFormat('dd/MM/yyyy', 'fr_FR').format(lentDate)}",
+                style: TextStyle(fontSize: 13, color: Colors.grey[700]),
+              ),
+            ],
+            if (dueDate != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                "Retour prévu le: ${DateFormat('dd/MM/yyyy', 'fr_FR').format(dueDate)}",
+                style: TextStyle(fontSize: 13, color: Colors.grey[700]),
+              ),
+            ],
+            const SizedBox(height: 12),
+            if (hasPendingRequest)
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  vertical: 8,
+                  horizontal: 12,
+                ),
+                decoration: BoxDecoration(
+                  color: ViroColors.warning.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.schedule, size: 18, color: ViroColors.warning),
+                    const SizedBox(width: 8),
+                    Text(
+                      "Demande de modification/annulation en attente",
+                      style: TextStyle(fontSize: 13, color: Colors.grey[800]),
+                    ),
+                  ],
+                ),
+              )
+            else if (!canRequestChange && !isLoanStarted)
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  vertical: 8,
+                  horizontal: 12,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.grey.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  "Modif./annulation possible jusqu'à 24h avant la date de récupération.",
+                  style: TextStyle(fontSize: 13, color: Colors.grey[700]),
+                ),
+              )
+            else
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: canRequestChange
+                          ? onRequestCancellation
+                          : null,
+                      icon: const Icon(Icons.cancel_outlined, size: 18),
+                      label: const Text("Demander annulation"),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: ViroColors.error,
+                        side: const BorderSide(color: ViroColors.error),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Tooltip(
+                      message: isLoanStarted
+                          ? "Le prêt a déjà commencé, la modification n'est plus possible."
+                          : !atLeast24hBeforePickup
+                          ? "Modif./annulation possible jusqu'à 24h avant la date de récupération."
+                          : "Demander une modification (dates, quantité)",
+                      child: OutlinedButton.icon(
+                        onPressed: canRequestChange
+                            ? onRequestModification
+                            : null,
+                        icon: const Icon(Icons.edit_calendar, size: 18),
+                        label: const Text("Demander modification"),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Dialog pour envoyer une demande d'annulation de prêt
+Future<void> _showLoanCancellationRequestDialog(
+  BuildContext context,
+  String clubId,
+  Map<String, dynamic> loanData,
+  String currentUserId,
+) async {
+  final reasonController = TextEditingController();
+  final result = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => StatefulBuilder(
+      builder: (context, setState) => AlertDialog(
+        title: const Text("Demander l'annulation du prêt"),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                loanData['equipmentName'] as String? ?? 'Équipement',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 15,
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                "Indiquez la raison de votre demande d'annulation (obligatoire) :",
+                style: TextStyle(fontSize: 13),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: reasonController,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  hintText: "Ex. changement de planning, blessure...",
+                  border: OutlineInputBorder(),
+                ),
+                onChanged: (_) => setState(() {}),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text("Annuler"),
+          ),
+          ElevatedButton(
+            onPressed: reasonController.text.trim().isEmpty
+                ? null
+                : () => Navigator.of(ctx).pop(true),
+            child: const Text("Envoyer la demande"),
+          ),
+        ],
+      ),
+    ),
+  );
+  if (result != true) return;
+  final reason = reasonController.text.trim();
+  if (reason.isEmpty) return;
+  try {
+    final existing = await FirebaseFirestore.instance
+        .collection(FirebaseCollections.clubs)
+        .doc(clubId)
+        .collection(FirebaseCollections.equipmentLoanChangeRequests)
+        .where('loanId', isEqualTo: loanData['id'] as String)
+        .where('status', isEqualTo: 'pending')
+        .get();
+    if (existing.docs.isNotEmpty) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Une demande est déjà en attente pour ce prêt."),
+            backgroundColor: ViroColors.warning,
+          ),
+        );
+      }
+      return;
+    }
+    final userDoc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(currentUserId)
+        .get();
+    final userData = userDoc.data() ?? {};
+    final firstName = userData['firstName'] as String? ?? '';
+    final lastName = userData['lastName'] as String? ?? '';
+    var playerName = "$firstName $lastName".trim();
+    if (playerName.isEmpty) {
+      playerName = userData['email'] as String? ?? 'Joueur';
+    }
+    await FirebaseFirestore.instance
+        .collection(FirebaseCollections.clubs)
+        .doc(clubId)
+        .collection(FirebaseCollections.equipmentLoanChangeRequests)
+        .add({
+          'loanId': loanData['id'] as String,
+          'type': 'cancellation',
+          'reason': reason,
+          'requestedBy': currentUserId,
+          'playerName': playerName,
+          'status': 'pending',
+          'createdAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            "Demande d'annulation envoyée. Consultez Mes demandes pour le suivi.",
+          ),
+          backgroundColor: ViroColors.success,
+        ),
+      );
+    }
+  } catch (e) {
+    if (context.mounted) {
+      FirebaseErrorHandler.showErrorSnackBar(context, e);
+    }
+  }
+}
+
+/// Ouvre le même formulaire que la demande de prêt, prérempli avec les infos du prêt (modification).
+/// Si le prêt est déjà en cours (lentAt <= aujourd'hui), ne fait rien et affiche un message.
+Future<void> _showLoanModificationRequestDialog(
+  BuildContext context,
+  String clubId,
+  Map<String, dynamic> loanData,
+  String currentUserId,
+) async {
+  final lentAt = loanData['lentAt'] as Timestamp?;
+  final today = DateTime(
+    DateTime.now().year,
+    DateTime.now().month,
+    DateTime.now().day,
+  );
+  final loanStartDate = lentAt != null
+      ? DateTime(
+          lentAt.toDate().year,
+          lentAt.toDate().month,
+          lentAt.toDate().day,
+        )
+      : null;
+  final isLoanStarted =
+      loanStartDate != null &&
+      (loanStartDate.isBefore(today) || loanStartDate.isAtSameMomentAs(today));
+  if (isLoanStarted) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            "Le prêt a déjà commencé, la modification n'est plus possible.",
+          ),
+          backgroundColor: ViroColors.warning,
+        ),
+      );
+    }
+    return;
+  }
+  final loanId = loanData['id'] as String?;
+  final equipmentId = loanData['equipmentId'] as String?;
+  if (loanId == null || equipmentId == null) return;
+  final existing = await FirebaseFirestore.instance
+      .collection(FirebaseCollections.clubs)
+      .doc(clubId)
+      .collection(FirebaseCollections.equipmentLoanChangeRequests)
+      .where('loanId', isEqualTo: loanId)
+      .where('status', isEqualTo: 'pending')
+      .get();
+  if (existing.docs.isNotEmpty && context.mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text("Une demande est déjà en attente pour ce prêt."),
+        backgroundColor: ViroColors.warning,
+      ),
+    );
+    return;
+  }
+  final clubDoc = await FirebaseFirestore.instance
+      .collection(FirebaseCollections.clubs)
+      .doc(clubId)
+      .get();
+  final clubData = clubDoc.data() ?? {};
+  final loanAllowedWeekdays =
+      clubData['loanAllowedWeekdays'] as List<dynamic>? ?? [];
+  final loanScheduleRaw =
+      clubData['loanSchedule'] as Map<String, dynamic>? ?? {};
+  final allowedDaysSet = loanAllowedWeekdays
+      .map((e) => e is int ? e : int.tryParse(e.toString()) ?? 0)
+      .where((e) => e >= 1 && e <= 7)
+      .toSet();
+  final effectiveWeekdays = allowedDaysSet.isNotEmpty
+      ? allowedDaysSet
+      : loanScheduleRaw.keys
+            .map((k) => int.tryParse(k) ?? 0)
+            .where((e) => e >= 1 && e <= 7)
+            .toSet();
+  final catalogDoc = await FirebaseFirestore.instance
+      .collection(FirebaseCollections.clubs)
+      .doc(clubId)
+      .collection(FirebaseCollections.equipmentCatalog)
+      .doc(equipmentId)
+      .get();
+  final catalogData = catalogDoc.data();
+  if (catalogData == null && context.mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text("Équipement introuvable dans le catalogue."),
+        backgroundColor: ViroColors.error,
+      ),
+    );
+    return;
+  }
+  final maxQuantity = (catalogData!['maxQuantity'] as num?)?.toInt() ?? 1;
+  final equipmentName =
+      loanData['equipmentName'] as String? ??
+      catalogData['name'] as String? ??
+      'Équipement';
+  if (!context.mounted) return;
+  showDialog(
+    context: context,
+    builder: (_) => _RequestLoanDialog(
+      clubId: clubId,
+      equipmentId: equipmentId,
+      equipmentName: equipmentName,
+      catalogData: catalogData,
+      maxQuantity: maxQuantity,
+      currentUserId: currentUserId,
+      allowedWeekdays: effectiveWeekdays,
+      initialLoanData: loanData,
+      loanId: loanId,
+    ),
+  );
+}
+
+/// Onglet Mes demandes : demandes de prêt + demandes de modification/annulation
 class _MyRequestsTab extends StatelessWidget {
   final String clubId;
   final String currentUserId;
 
-  const _MyRequestsTab({required this.clubId, required this.currentUserId});
+  final VoidCallback? onRefaireDemande;
+
+  const _MyRequestsTab({
+    required this.clubId,
+    required this.currentUserId,
+    this.onRefaireDemande,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1961,14 +2835,12 @@ class _MyRequestsTab extends StatelessWidget {
           .collection(FirebaseCollections.equipmentLoanRequests)
           .where('playerId', isEqualTo: currentUserId)
           .snapshots(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
+      builder: (context, loanReqSnap) {
+        if (loanReqSnap.connectionState == ConnectionState.waiting) {
           return const Center(child: ViroLoader(size: 60));
         }
-
-        if (snapshot.hasError) {
-          final error = snapshot.error.toString();
-          // Vérifier si c'est une erreur d'index manquant
+        if (loanReqSnap.hasError) {
+          final error = loanReqSnap.error.toString();
           if (error.contains('index') ||
               error.contains('requires an index') ||
               error.contains('Condition requise non remplie')) {
@@ -2012,48 +2884,106 @@ class _MyRequestsTab extends StatelessWidget {
           return Center(
             child: FirebaseErrorHandler.buildErrorWidget(
               context,
-              snapshot.error,
+              loanReqSnap.error,
             ),
           );
         }
-
-        final requests = snapshot.data?.docs ?? [];
-
-        // Trier côté client par createdAt (descendant)
-        final sortedRequests = requests.toList()
+        final loanRequestDocs = loanReqSnap.data?.docs ?? [];
+        final sortedLoanRequests = loanRequestDocs.toList()
           ..sort((a, b) {
             final aCreated = a.data()['createdAt'] as Timestamp?;
             final bCreated = b.data()['createdAt'] as Timestamp?;
             if (aCreated == null && bCreated == null) return 0;
             if (aCreated == null) return 1;
             if (bCreated == null) return -1;
-            return bCreated.compareTo(aCreated); // Descendant
+            return bCreated.compareTo(aCreated);
           });
-
-        if (sortedRequests.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.inbox_outlined, size: 64, color: Colors.grey[400]),
-                const SizedBox(height: 16),
-                Text(
-                  "Aucune demande de prêt",
-                  style: TextStyle(color: Colors.grey[600], fontSize: 16),
+        return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+          stream: FirebaseFirestore.instance
+              .collection(FirebaseCollections.clubs)
+              .doc(clubId)
+              .collection(FirebaseCollections.equipmentLoanChangeRequests)
+              .where('requestedBy', isEqualTo: currentUserId)
+              .snapshots(),
+          builder: (context, changeSnap) {
+            if (changeSnap.connectionState == ConnectionState.waiting) {
+              return const Center(child: ViroLoader(size: 60));
+            }
+            final changeRequestDocs = changeSnap.data?.docs ?? [];
+            final sortedChangeRequests = changeRequestDocs.toList()
+              ..sort((a, b) {
+                final aCreated = a.data()['createdAt'] as Timestamp?;
+                final bCreated = b.data()['createdAt'] as Timestamp?;
+                if (aCreated == null && bCreated == null) return 0;
+                if (aCreated == null) return 1;
+                if (bCreated == null) return -1;
+                return bCreated.compareTo(aCreated);
+              });
+            final isEmpty =
+                sortedLoanRequests.isEmpty && sortedChangeRequests.isEmpty;
+            if (isEmpty) {
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.inbox_outlined,
+                      size: 64,
+                      color: Colors.grey[400],
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      "Aucune demande de prêt",
+                      style: TextStyle(color: Colors.grey[600], fontSize: 16),
+                    ),
+                  ],
                 ),
+              );
+            }
+            return ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                const Text(
+                  "Demandes de prêt",
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+                const SizedBox(height: 8),
+                if (sortedLoanRequests.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 24),
+                    child: Text(
+                      "Aucune demande de prêt.",
+                      style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                    ),
+                  )
+                else
+                  ...sortedLoanRequests.map(
+                    (doc) => _RequestHistoryCard(
+                      requestId: doc.id,
+                      requestData: doc.data(),
+                      clubId: clubId,
+                      onRefaireDemande: onRefaireDemande,
+                    ),
+                  ),
+                const SizedBox(height: 24),
+                const Text(
+                  "Demandes de modification/annulation",
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+                const SizedBox(height: 8),
+                if (sortedChangeRequests.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 24),
+                    child: Text(
+                      "Aucune demande de modification ou d'annulation.",
+                      style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                    ),
+                  )
+                else
+                  ...sortedChangeRequests.map(
+                    (doc) => _ChangeRequestHistoryCard(requestData: doc.data()),
+                  ),
               ],
-            ),
-          );
-        }
-
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: sortedRequests.length,
-          itemBuilder: (context, index) {
-            final requestData = sortedRequests[index].data();
-            return _RequestHistoryCard(
-              requestId: sortedRequests[index].id,
-              requestData: requestData,
             );
           },
         );
@@ -2062,14 +2992,207 @@ class _MyRequestsTab extends StatelessWidget {
   }
 }
 
+/// Carte pour une demande de modification/annulation dans l'historique
+class _ChangeRequestHistoryCard extends StatelessWidget {
+  final Map<String, dynamic> requestData;
+
+  const _ChangeRequestHistoryCard({required this.requestData});
+
+  Color _getStatusColor(String status) {
+    switch (status) {
+      case 'pending':
+        return ViroColors.warning;
+      case 'accepted':
+        return ViroColors.success;
+      case 'refused':
+        return ViroColors.error;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  String _getStatusLabel(String status) {
+    switch (status) {
+      case 'pending':
+        return 'En attente';
+      case 'accepted':
+        return 'Acceptée';
+      case 'refused':
+        return 'Refusée';
+      default:
+        return status;
+    }
+  }
+
+  String _getTypeLabel(String type) {
+    switch (type) {
+      case 'modification':
+        return 'Modification';
+      case 'cancellation':
+        return 'Annulation';
+      default:
+        return type;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final status = requestData['status'] as String? ?? 'pending';
+    final type = requestData['type'] as String? ?? '';
+    final reason = requestData['reason'] as String? ?? '';
+    final loanId = requestData['loanId'] as String?;
+    final adminResponse = requestData['adminResponse'] as String?;
+    final createdAt = requestData['createdAt'] as Timestamp?;
+    final respondedAt = requestData['respondedAt'] as Timestamp?;
+    final newDueAt = requestData['newDueAt'] as Timestamp?;
+    final newQuantity = requestData['newQuantity'] as int?;
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text(
+                    _getTypeLabel(type),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                ),
+                Chip(
+                  label: Text(
+                    _getStatusLabel(status),
+                    style: const TextStyle(fontSize: 12, color: Colors.white),
+                  ),
+                  backgroundColor: _getStatusColor(status),
+                ),
+              ],
+            ),
+            if (loanId != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                "Prêt concerné (ref. $loanId)",
+                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+              ),
+            ],
+            if (reason.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.grey[100],
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "Raison:",
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.grey[700],
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      reason,
+                      style: TextStyle(fontSize: 13, color: Colors.grey[800]),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            if (type == 'modification' &&
+                (newDueAt != null || newQuantity != null)) ...[
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 12,
+                children: [
+                  if (newDueAt != null)
+                    Text(
+                      "Nouvelle date retour: ${DateFormat('dd/MM/yyyy', 'fr_FR').format(newDueAt.toDate())}",
+                      style: TextStyle(fontSize: 13, color: Colors.grey[700]),
+                    ),
+                  if (newQuantity != null)
+                    Text(
+                      "Nouvelle quantité: $newQuantity",
+                      style: TextStyle(fontSize: 13, color: Colors.grey[700]),
+                    ),
+                ],
+              ),
+            ],
+            if (adminResponse != null && adminResponse.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: status == 'accepted'
+                      ? ViroColors.success.withOpacity(0.1)
+                      : ViroColors.error.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      status == 'accepted'
+                          ? "Réponse de l'admin:"
+                          : "Raison du refus:",
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: status == 'accepted'
+                            ? ViroColors.success
+                            : ViroColors.error,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      adminResponse,
+                      style: TextStyle(fontSize: 13, color: Colors.grey[800]),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            if (createdAt != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                "Demandé le: ${DateFormat('dd/MM/yyyy à HH:mm', 'fr_FR').format(createdAt.toDate())}",
+                style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+              ),
+            ],
+            if (respondedAt != null)
+              Text(
+                "Répondu le: ${DateFormat('dd/MM/yyyy à HH:mm', 'fr_FR').format(respondedAt.toDate())}",
+                style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// Carte pour une demande dans l'historique
 class _RequestHistoryCard extends StatelessWidget {
   final String requestId;
   final Map<String, dynamic> requestData;
+  final String clubId;
+  final VoidCallback? onRefaireDemande;
 
   const _RequestHistoryCard({
     required this.requestId,
     required this.requestData,
+    required this.clubId,
+    this.onRefaireDemande,
   });
 
   Color _getStatusColor(String status) {
@@ -2259,6 +3382,21 @@ class _RequestHistoryCard extends StatelessWidget {
               Text(
                 "Répondu le: ${DateFormat('dd/MM/yyyy à HH:mm', 'fr_FR').format(respondedAt.toDate())}",
                 style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+              ),
+            ],
+            if (status == 'refused' && onRefaireDemande != null) ...[
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: onRefaireDemande,
+                  icon: const Icon(Icons.refresh, size: 18),
+                  label: const Text("Refaire une demande"),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: ViroColors.primary,
+                    side: BorderSide(color: ViroColors.primary),
+                  ),
+                ),
               ),
             ],
           ],

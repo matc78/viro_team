@@ -18,4 +18,6 @@ class FirebaseCollections {
   static const String equipmentCatalog = 'equipmentCatalog';
   static const String equipmentLoans = 'equipment_loans';
   static const String equipmentLoanRequests = 'equipment_loan_requests';
+  static const String equipmentLoanChangeRequests =
+      'equipment_loan_change_requests';
 }
