@@ -1,6 +1,12 @@
+import 'dart:io';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+
+import 'package:cached_network_image/cached_network_image.dart';
 
 import '../../constants/firebase_collections.dart';
 import '../../theme/viro_theme.dart';
@@ -257,6 +263,7 @@ class _EquipmentCard extends StatelessWidget {
     final purchaseDate = data['purchaseDate'] as Timestamp?;
     final lastMaintenance = data['lastMaintenance'] as Timestamp?;
     final nextMaintenance = data['nextMaintenance'] as Timestamp?;
+    final imageUrl = data['imageUrl'] as String?;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -268,7 +275,41 @@ class _EquipmentCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  if (imageUrl != null && imageUrl.isNotEmpty) ...[
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: CachedNetworkImage(
+                        imageUrl: imageUrl,
+                        width: 56,
+                        height: 56,
+                        fit: BoxFit.cover,
+                        placeholder: (_, __) => Container(
+                          width: 56,
+                          height: 56,
+                          color: Colors.grey.shade200,
+                          child: const Center(
+                            child: SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          ),
+                        ),
+                        errorWidget: (_, __, ___) => Container(
+                          width: 56,
+                          height: 56,
+                          color: Colors.grey.shade200,
+                          child: Icon(
+                            Icons.inventory_2_outlined,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                  ],
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -529,7 +570,17 @@ class _AddEquipmentDialogState extends State<_AddEquipmentDialog> {
   String? _responsibleUserName;
   String? _assignedTeamId;
   String? _assignedTeamName;
+  XFile? _pickedImage;
   bool _saving = false;
+
+  Future<void> _pickImage() async {
+    final picker = ImagePicker();
+    final file = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 85,
+    );
+    if (file != null) setState(() => _pickedImage = file);
+  }
 
   @override
   void dispose() {
@@ -578,7 +629,7 @@ class _AddEquipmentDialogState extends State<_AddEquipmentDialog> {
 
     setState(() => _saving = true);
     try {
-      await FirebaseFirestore.instance
+      final ref = await FirebaseFirestore.instance
           .collection(FirebaseCollections.clubs)
           .doc(widget.clubId)
           .collection(FirebaseCollections.equipment)
@@ -621,6 +672,19 @@ class _AddEquipmentDialogState extends State<_AddEquipmentDialog> {
             'createdAt': FieldValue.serverTimestamp(),
             'updatedAt': FieldValue.serverTimestamp(),
           });
+      final equipmentId = ref.id;
+      if (_pickedImage != null) {
+        final storageRef = FirebaseStorage.instance
+            .ref()
+            .child('clubs')
+            .child(widget.clubId)
+            .child('equipment')
+            .child(equipmentId)
+            .child('photo_${DateTime.now().millisecondsSinceEpoch}.jpg');
+        await storageRef.putFile(File(_pickedImage!.path));
+        final imageUrl = await storageRef.getDownloadURL();
+        await ref.update({'imageUrl': imageUrl});
+      }
       if (!mounted) return;
       Navigator.of(context).pop();
       widget.onAdded();
@@ -695,6 +759,91 @@ class _AddEquipmentDialogState extends State<_AddEquipmentDialog> {
                     style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
                   ),
                   const SizedBox(height: 8),
+                  // Photo de l'objet
+                  Row(
+                    children: [
+                      InkWell(
+                        onTap: _saving ? null : _pickImage,
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          width: 100,
+                          height: 100,
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade200,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.grey.shade400),
+                          ),
+                          child: _pickedImage != null
+                              ? ClipRRect(
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Image.file(
+                                    File(_pickedImage!.path),
+                                    fit: BoxFit.cover,
+                                    width: 100,
+                                    height: 100,
+                                  ),
+                                )
+                              : Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.add_photo_alternate_outlined,
+                                      size: 36,
+                                      color: Colors.grey.shade600,
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      "Photo",
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey.shade600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              "Photo de l'objet",
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Colors.grey.shade700,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            TextButton.icon(
+                              onPressed: _saving ? null : _pickImage,
+                              icon: const Icon(
+                                Icons.photo_library_outlined,
+                                size: 20,
+                              ),
+                              label: const Text("Choisir une photo"),
+                            ),
+                            if (_pickedImage != null)
+                              TextButton.icon(
+                                onPressed: _saving
+                                    ? null
+                                    : () => setState(() => _pickedImage = null),
+                                icon: const Icon(
+                                  Icons.delete_outline,
+                                  size: 18,
+                                ),
+                                label: const Text("Retirer"),
+                                style: TextButton.styleFrom(
+                                  foregroundColor: ViroColors.error,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
                   TextFormField(
                     controller: _nameController,
                     decoration: const InputDecoration(
@@ -1088,12 +1237,47 @@ class _EditEquipmentSheetState extends State<_EditEquipmentSheet> {
   String? _responsibleUserName;
   String? _assignedTeamId;
   String? _assignedTeamName;
+  String? _imageUrl;
+  XFile? _newPhotoFile;
+  bool _removePhoto = false;
   bool _saving = false;
+
+  Future<void> _pickImage() async {
+    final picker = ImagePicker();
+    final file = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 85,
+    );
+    if (file != null)
+      setState(() {
+        _newPhotoFile = file;
+        _removePhoto = false;
+      });
+  }
+
+  Widget _photoPlaceholder() {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(
+          Icons.add_photo_alternate_outlined,
+          size: 36,
+          color: Colors.grey.shade600,
+        ),
+        const SizedBox(height: 4),
+        Text(
+          "Photo",
+          style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+        ),
+      ],
+    );
+  }
 
   @override
   void initState() {
     super.initState();
     final data = widget.data;
+    _imageUrl = data['imageUrl'] as String?;
     _nameController = TextEditingController(
       text: data['name'] as String? ?? '',
     );
@@ -1239,6 +1423,31 @@ class _EditEquipmentSheetState extends State<_EditEquipmentSheet> {
                 : null,
             'updatedAt': FieldValue.serverTimestamp(),
           });
+      final equipmentId = widget.data['id'] as String;
+      if (_removePhoto) {
+        await FirebaseFirestore.instance
+            .collection(FirebaseCollections.clubs)
+            .doc(widget.clubId)
+            .collection(FirebaseCollections.equipment)
+            .doc(equipmentId)
+            .update({'imageUrl': null});
+      } else if (_newPhotoFile != null) {
+        final storageRef = FirebaseStorage.instance
+            .ref()
+            .child('clubs')
+            .child(widget.clubId)
+            .child('equipment')
+            .child(equipmentId)
+            .child('photo_${DateTime.now().millisecondsSinceEpoch}.jpg');
+        await storageRef.putFile(File(_newPhotoFile!.path));
+        final imageUrl = await storageRef.getDownloadURL();
+        await FirebaseFirestore.instance
+            .collection(FirebaseCollections.clubs)
+            .doc(widget.clubId)
+            .collection(FirebaseCollections.equipment)
+            .doc(equipmentId)
+            .update({'imageUrl': imageUrl});
+      }
       if (!mounted) return;
       Navigator.of(context).pop();
       ScaffoldMessenger.of(
@@ -1295,6 +1504,89 @@ class _EditEquipmentSheetState extends State<_EditEquipmentSheet> {
               style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
             ),
             const SizedBox(height: 8),
+            // Photo de l'objet
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                InkWell(
+                  onTap: _saving ? null : _pickImage,
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    width: 100,
+                    height: 100,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade200,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.grey.shade400),
+                    ),
+                    child: _newPhotoFile != null
+                        ? ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: Image.file(
+                              File(_newPhotoFile!.path),
+                              fit: BoxFit.cover,
+                              width: 100,
+                              height: 100,
+                            ),
+                          )
+                        : (!_removePhoto &&
+                              _imageUrl != null &&
+                              _imageUrl!.isNotEmpty)
+                        ? ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: Image.network(
+                              _imageUrl!,
+                              fit: BoxFit.cover,
+                              width: 100,
+                              height: 100,
+                              errorBuilder: (_, __, ___) => _photoPlaceholder(),
+                            ),
+                          )
+                        : _photoPlaceholder(),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "Photo de l'objet",
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.grey.shade700,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      TextButton.icon(
+                        onPressed: _saving ? null : _pickImage,
+                        icon: const Icon(
+                          Icons.photo_library_outlined,
+                          size: 20,
+                        ),
+                        label: const Text("Choisir une photo"),
+                      ),
+                      if ((_imageUrl != null && _imageUrl!.isNotEmpty) ||
+                          _newPhotoFile != null)
+                        TextButton.icon(
+                          onPressed: _saving
+                              ? null
+                              : () => setState(() {
+                                  _newPhotoFile = null;
+                                  _removePhoto = true;
+                                }),
+                          icon: const Icon(Icons.delete_outline, size: 18),
+                          label: const Text("Retirer"),
+                          style: TextButton.styleFrom(
+                            foregroundColor: ViroColors.error,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
             TextFormField(
               controller: _nameController,
               decoration: const InputDecoration(

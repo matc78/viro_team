@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -522,6 +523,58 @@ class _LoanRecapCard extends StatelessWidget {
   }
 }
 
+void _showImageFullScreen(BuildContext context, String imageUrl) {
+  final size = MediaQuery.sizeOf(context);
+  showDialog<void>(
+    context: context,
+    barrierDismissible: true,
+    barrierColor: Colors.black87,
+    builder: (context) => GestureDetector(
+      onTap: () => Navigator.of(context).pop(),
+      behavior: HitTestBehavior.opaque,
+      child: Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(24),
+        child: Stack(
+          alignment: Alignment.topRight,
+          children: [
+            Center(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: size.width - 48,
+                  maxHeight: size.height * 0.8,
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: CachedNetworkImage(
+                    imageUrl: imageUrl,
+                    fit: BoxFit.contain,
+                    placeholder: (_, __) => const Center(
+                      child: CircularProgressIndicator(color: Colors.white),
+                    ),
+                    errorWidget: (_, __, ___) => const Icon(
+                      Icons.broken_image,
+                      size: 64,
+                      color: Colors.white70,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            IconButton(
+              icon: const CircleAvatar(
+                backgroundColor: Colors.white,
+                child: Icon(Icons.close, color: Colors.black87),
+              ),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
 /// Carte d'un équipement dans le catalogue
 class _EquipmentCard extends StatelessWidget {
   final String clubId;
@@ -576,6 +629,7 @@ class _EquipmentCard extends StatelessWidget {
 
         final equipmentData = equipmentSnap.data!.data() ?? {};
         final name = equipmentData['name'] as String? ?? 'Équipement inconnu';
+        final imageUrl = equipmentData['imageUrl'] as String?;
         final maxQuantity = catalogData['maxQuantity'] as int? ?? 1;
 
         final price = catalogData['price'] as num?;
@@ -622,33 +676,82 @@ class _EquipmentCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: Text(
-                        name,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 18,
+                    if (imageUrl != null && imageUrl.isNotEmpty) ...[
+                      GestureDetector(
+                        onTap: () => _showImageFullScreen(context, imageUrl),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: CachedNetworkImage(
+                            imageUrl: imageUrl,
+                            width: 64,
+                            height: 64,
+                            fit: BoxFit.cover,
+                            placeholder: (_, __) => Container(
+                              width: 64,
+                              height: 64,
+                              color: Colors.grey.shade200,
+                              child: const Center(
+                                child: SizedBox(
+                                  width: 24,
+                                  height: 24,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            errorWidget: (_, __, ___) => Container(
+                              width: 64,
+                              height: 64,
+                              color: Colors.grey.shade200,
+                              child: Icon(
+                                Icons.inventory_2_outlined,
+                                color: Colors.grey.shade600,
+                              ),
+                            ),
+                          ),
                         ),
+                      ),
+                      const SizedBox(width: 12),
+                    ],
+                    Expanded(
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              name,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 18,
+                              ),
+                            ),
+                          ),
+                          if (!isAvailable)
+                            Chip(
+                              label: const Text(
+                                "Indisponible",
+                                style: TextStyle(fontSize: 12),
+                              ),
+                              backgroundColor: ViroColors.error.withOpacity(
+                                0.15,
+                              ),
+                            )
+                          else
+                            Chip(
+                              label: Text(
+                                "$maxQuantity disponible(s)",
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                              backgroundColor: ViroColors.success.withOpacity(
+                                0.15,
+                              ),
+                            ),
+                        ],
                       ),
                     ),
-                    if (!isAvailable)
-                      Chip(
-                        label: const Text(
-                          "Indisponible",
-                          style: TextStyle(fontSize: 12),
-                        ),
-                        backgroundColor: ViroColors.error.withOpacity(0.15),
-                      )
-                    else
-                      Chip(
-                        label: Text(
-                          "$maxQuantity disponible(s)",
-                          style: const TextStyle(fontSize: 12),
-                        ),
-                        backgroundColor: ViroColors.success.withOpacity(0.15),
-                      ),
                   ],
                 ),
                 const SizedBox(height: 12),

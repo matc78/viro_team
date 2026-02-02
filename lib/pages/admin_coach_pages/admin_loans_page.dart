@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -94,13 +95,20 @@ class _AdminLoansPageState extends State<AdminLoansPage>
             centerTitle: true,
             actions: [
               if (isAdmin)
-                IconButton(
-                  icon: Icon(
-                    _editMode ? Icons.edit_off : Icons.edit,
-                    color: _editMode ? ViroColors.primary : null,
-                  ),
-                  onPressed: () => setState(() => _editMode = !_editMode),
-                  tooltip: 'Édition',
+                ListenableBuilder(
+                  listenable: _tabController,
+                  builder: (context, _) {
+                    if (_tabController.index != 1)
+                      return const SizedBox.shrink();
+                    return IconButton(
+                      icon: Icon(
+                        _editMode ? Icons.edit_off : Icons.edit,
+                        color: _editMode ? ViroColors.primary : null,
+                      ),
+                      onPressed: () => setState(() => _editMode = !_editMode),
+                      tooltip: 'Édition',
+                    );
+                  },
                 ),
             ],
             bottom: TabBar(
@@ -950,6 +958,58 @@ class _LoanAllowedDaysDialogState extends State<_LoanAllowedDaysDialog> {
   }
 }
 
+void _showImageFullScreen(BuildContext context, String imageUrl) {
+  final size = MediaQuery.sizeOf(context);
+  showDialog<void>(
+    context: context,
+    barrierDismissible: true,
+    barrierColor: Colors.black87,
+    builder: (context) => GestureDetector(
+      onTap: () => Navigator.of(context).pop(),
+      behavior: HitTestBehavior.opaque,
+      child: Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(24),
+        child: Stack(
+          alignment: Alignment.topRight,
+          children: [
+            Center(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: size.width - 48,
+                  maxHeight: size.height * 0.8,
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: CachedNetworkImage(
+                    imageUrl: imageUrl,
+                    fit: BoxFit.contain,
+                    placeholder: (_, __) => const Center(
+                      child: CircularProgressIndicator(color: Colors.white),
+                    ),
+                    errorWidget: (_, __, ___) => const Icon(
+                      Icons.broken_image,
+                      size: 64,
+                      color: Colors.white70,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            IconButton(
+              icon: const CircleAvatar(
+                backgroundColor: Colors.white,
+                child: Icon(Icons.close, color: Colors.black87),
+              ),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
 /// Carte d'un équipement dans le catalogue
 class _CatalogItemCard extends StatelessWidget {
   final String clubId;
@@ -981,10 +1041,7 @@ class _CatalogItemCard extends StatelessWidget {
         final price = data['price'] as num?;
         final priceUnit = data['priceUnit'] as String? ?? 'jour';
         final maxLoanDuration = data['maxLoanDurationDays'] as int?;
-        final quantityTotal =
-            equipmentData['quantityTotal'] as int? ??
-            equipmentData['quantity'] as int? ??
-            0;
+        final imageUrl = equipmentData['imageUrl'] as String?;
 
         String priceUnitLabel(String unit) {
           switch (unit) {
@@ -1018,32 +1075,115 @@ class _CatalogItemCard extends StatelessWidget {
         return Card(
           margin: const EdgeInsets.only(bottom: 8),
           child: ListTile(
-            title: Text(name),
+            leading: imageUrl != null && imageUrl.isNotEmpty
+                ? GestureDetector(
+                    onTap: () => _showImageFullScreen(context, imageUrl),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: CachedNetworkImage(
+                        imageUrl: imageUrl,
+                        width: 56,
+                        height: 56,
+                        fit: BoxFit.cover,
+                        placeholder: (_, __) => Container(
+                          width: 56,
+                          height: 56,
+                          color: Colors.grey.shade200,
+                          child: const Center(
+                            child: SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          ),
+                        ),
+                        errorWidget: (_, __, ___) => Container(
+                          width: 56,
+                          height: 56,
+                          color: Colors.grey.shade200,
+                          child: Icon(
+                            Icons.inventory_2_outlined,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                      ),
+                    ),
+                  )
+                : null,
+            title: Text(
+              name,
+              style: const TextStyle(
+                color: ViroColors.accent,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
             subtitle: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Max: $maxQuantity unité(s)'),
-                if (price != null)
-                  Text(
-                    'Prix: ${price.toStringAsFixed(2)} €/${priceUnitLabel(priceUnit)}',
-                  ),
-                if (maxLoanDuration != null)
-                  Text(
-                    'Durée max: ${formatMaxLoanDuration(maxLoanDuration, priceUnit)}',
-                  ),
-                if (data['caution'] != null)
-                  Text(
-                    'Caution: ${(data['caution'] as num).toStringAsFixed(2)} € (si perdu ou endommagé)',
-                  ),
-                Text(
-                  'Stock: $quantityTotal',
-                  style: TextStyle(
-                    color: quantityTotal > 0
-                        ? ViroColors.success
-                        : ViroColors.error,
-                    fontWeight: FontWeight.w500,
+                Text.rich(
+                  TextSpan(
+                    style: DefaultTextStyle.of(context).style,
+                    children: [
+                      const TextSpan(
+                        text: 'Max: ',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      TextSpan(text: '$maxQuantity unité(s)'),
+                    ],
                   ),
                 ),
+                if (price != null)
+                  Text.rich(
+                    TextSpan(
+                      style: DefaultTextStyle.of(context).style,
+                      children: [
+                        const TextSpan(
+                          text: 'Prix: ',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        TextSpan(
+                          text:
+                              '${price.toStringAsFixed(2)} €/${priceUnitLabel(priceUnit)}',
+                        ),
+                      ],
+                    ),
+                  ),
+                if (maxLoanDuration != null)
+                  Text.rich(
+                    TextSpan(
+                      style: DefaultTextStyle.of(context).style,
+                      children: [
+                        const TextSpan(
+                          text: 'Durée max: ',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        TextSpan(
+                          text:
+                              formatMaxLoanDuration(
+                                maxLoanDuration,
+                                priceUnit,
+                              ) ??
+                              '',
+                        ),
+                      ],
+                    ),
+                  ),
+                if (data['caution'] != null)
+                  Text.rich(
+                    TextSpan(
+                      style: DefaultTextStyle.of(context).style,
+                      children: [
+                        const TextSpan(
+                          text: 'Caution: ',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        TextSpan(
+                          text:
+                              '${(data['caution'] as num).toStringAsFixed(2)} € (si perdu ou endommagé)',
+                        ),
+                      ],
+                    ),
+                  ),
               ],
             ),
             trailing: IconButton(
@@ -1161,23 +1301,11 @@ class _ManageCatalogDialogState extends State<_ManageCatalogDialog> {
                             final id = doc.id;
                             final name = data['name'] as String? ?? 'Sans nom';
                             final isInCatalog = catalogIds.contains(id);
-                            final quantityTotal =
-                                data['quantityTotal'] as int? ??
-                                data['quantity'] as int? ??
-                                0;
 
                             return Card(
                               margin: const EdgeInsets.only(bottom: 8),
                               child: ListTile(
                                 title: Text(name),
-                                subtitle: Text(
-                                  'Stock: $quantityTotal',
-                                  style: TextStyle(
-                                    color: quantityTotal > 0
-                                        ? ViroColors.success
-                                        : Colors.grey,
-                                  ),
-                                ),
                                 trailing: isInCatalog
                                     ? IconButton(
                                         icon: const Icon(
