@@ -183,19 +183,19 @@ class _AdminLoansPageState extends State<AdminLoansPage>
                           allLoans: allLoans,
                           showCancelButtons: showCancelButtons,
                         ),
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 8),
                         _PickupToConfirmSection(
                           clubId: widget.clubId,
                           allLoans: allLoans,
                           showCancelButtons: showCancelButtons,
                         ),
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 8),
                         _OverdueLoansSection(
                           clubId: widget.clubId,
                           allLoans: allLoans,
                           showCancelButtons: showCancelButtons,
                         ),
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 8),
                         _UpcomingLoansSection(
                           clubId: widget.clubId,
                           showCancelButtons: showCancelButtons,

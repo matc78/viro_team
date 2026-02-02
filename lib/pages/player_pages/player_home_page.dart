@@ -306,6 +306,8 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
                     _buildActiveLoansSection(clubId, allClubIds),
                     const SizedBox(height: 28),
 
+                    _buildNextEventSummaryLine(allClubIds, userData),
+                    const SizedBox(height: 14),
                     _buildTodaySection(clubId, allClubIds, userData),
                     const SizedBox(height: 28),
 
@@ -651,8 +653,6 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
         _buildAllClubsCards(allClubIds),
         const SizedBox(height: 20),
         _buildAnnouncements(allClubIds, userData),
-        const SizedBox(height: 14),
-        _buildNextEventSummaryLine(allClubIds, userData),
       ],
     );
   }
