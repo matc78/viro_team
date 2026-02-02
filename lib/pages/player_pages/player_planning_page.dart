@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../theme/viro_theme.dart';
+import '../../utils/firebase_error_handler.dart';
 import '../../widget/viro_loader.dart';
 import 'player_event_details_page.dart'; // Importation de ta page de détails player
 import 'player_infos_page.dart';
@@ -311,7 +312,7 @@ class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
                   isSeasonCompleted = true;
                 }
               }
-              
+
               allEventsWithClub.add({
                 'eventId': doc.id,
                 'eventData': data,
@@ -427,6 +428,25 @@ class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
     return matchTeam || matchCat;
   }
 
+  Future<void> _updateAttendance(
+    String clubId,
+    String eventId,
+    String status,
+  ) async {
+    try {
+      await FirebaseFirestore.instance
+          .collection('clubs')
+          .doc(clubId)
+          .collection('events')
+          .doc(eventId)
+          .update({'attendance.$_currentUserId': status});
+    } catch (e) {
+      if (mounted) {
+        FirebaseErrorHandler.showErrorSnackBar(context, e);
+      }
+    }
+  }
+
   Widget _buildEventCard(
     String docId,
     Map<String, dynamic> data,
@@ -442,7 +462,13 @@ class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
 
     // On vérifie le statut de présence du joueur actuel pour afficher un indicateur
     final attendance = data['attendance'] as Map<String, dynamic>? ?? {};
-    final myStatus = attendance[_currentUserId] ?? 'none';
+    final myStatus = attendance[_currentUserId]?.toString() ?? 'none';
+    final presentCount = attendance.values.where((v) => v == 'present').length;
+    final absentCount = attendance.values.where((v) => v == 'absent').length;
+    final noResponseCount = attendance.values
+        .where((v) => v != 'present' && v != 'absent')
+        .length;
+    final hasNotResponded = myStatus != 'present' && myStatus != 'absent';
 
     // Récupérer la couleur du club
     final clubColor = _getClubColor(clubId);
@@ -465,8 +491,8 @@ class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
               color: canceled
                   ? Colors.grey
                   : (isSeasonCompleted
-                      ? Colors.grey.shade400
-                      : clubColor.withOpacity(0.5)),
+                        ? Colors.grey.shade400
+                        : clubColor.withOpacity(0.5)),
               width: 2,
             ),
             boxShadow: [
@@ -477,130 +503,234 @@ class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
               ),
             ],
           ),
-          child: ListTile(
-            contentPadding: const EdgeInsets.all(16),
-            leading: Container(
-              width: 50,
-              decoration: BoxDecoration(
-                color: clubColor.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.access_time, size: 16, color: clubColor),
-                  Text(
-                    time,
-                    style: TextStyle(
-                      color: clubColor,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
-                    ),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(16),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        PlayerEventDetailsPage(clubId: clubId, eventId: docId),
                   ),
-                ],
-              ),
-            ),
-            title: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    type.toUpperCase(),
-                    style: TextStyle(
-                      fontWeight: FontWeight.w900,
-                      fontSize: 13,
-                      color: clubColor,
-                    ),
-                  ),
-                ),
-                _buildStatusChip(myStatus),
-              ],
-            ),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+                );
+              },
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      width: 8,
-                      height: 8,
-                      decoration: BoxDecoration(
-                        color: clubColor,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      clubName,
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: clubColor,
-                      ),
-                    ),
-                  ],
-                ),
-                if (canceled)
-                  const Text(
-                    "ANNULÉ",
-                    style: TextStyle(
-                      color: Colors.red,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
-                    ),
-                  ),
-                if (isSeasonCompleted && !canceled)
-                  const Text(
-                    "SAISON TERMINÉE",
-                    style: TextStyle(
-                      color: Colors.orange,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 11,
-                    ),
-                  ),
-                const SizedBox(height: 4),
-                Text(
-                  teamName,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    const Icon(
-                      Icons.location_on_outlined,
-                      size: 14,
-                      color: Colors.grey,
-                    ),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(
-                        location,
-                        style: const TextStyle(
-                          color: Colors.grey,
-                          fontSize: 13,
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          width: 50,
+                          decoration: BoxDecoration(
+                            color: clubColor.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.access_time,
+                                size: 16,
+                                color: clubColor,
+                              ),
+                              Text(
+                                time,
+                                style: TextStyle(
+                                  color: clubColor,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                        overflow: TextOverflow.ellipsis,
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      type.toUpperCase(),
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 13,
+                                        color: clubColor,
+                                      ),
+                                    ),
+                                  ),
+                                  if (canceled)
+                                    _buildStatusChip(myStatus)
+                                  else
+                                    GestureDetector(
+                                      onTap: () {
+                                        final nextStatus = myStatus == 'present'
+                                            ? 'absent'
+                                            : 'present';
+                                        _updateAttendance(
+                                          clubId,
+                                          docId,
+                                          nextStatus,
+                                        );
+                                      },
+                                      child: _buildStatusChip(myStatus),
+                                    ),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  Container(
+                                    width: 8,
+                                    height: 8,
+                                    decoration: BoxDecoration(
+                                      color: clubColor,
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    clubName,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: clubColor,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              if (canceled)
+                                const Text(
+                                  "ANNULÉ",
+                                  style: TextStyle(
+                                    color: Colors.red,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              if (isSeasonCompleted && !canceled)
+                                const Text(
+                                  "SAISON TERMINÉE",
+                                  style: TextStyle(
+                                    color: Colors.orange,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                              const SizedBox(height: 4),
+                              Text(
+                                teamName,
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.black,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  const Icon(
+                                    Icons.location_on_outlined,
+                                    size: 14,
+                                    color: Colors.grey,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Expanded(
+                                    child: Text(
+                                      location,
+                                      style: const TextStyle(
+                                        color: Colors.grey,
+                                        fontSize: 13,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (hasNotResponded && !canceled) ...[
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: () =>
+                                  _updateAttendance(clubId, docId, 'present'),
+                              icon: const Icon(
+                                Icons.check_circle_outline,
+                                size: 18,
+                              ),
+                              label: const Text("Présent"),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: ViroColors.success,
+                                side: BorderSide(color: ViroColors.success),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: () =>
+                                  _updateAttendance(clubId, docId, 'absent'),
+                              icon: const Icon(Icons.cancel_outlined, size: 18),
+                              label: const Text("Absent"),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Colors.red.shade700,
+                                side: BorderSide(color: Colors.red.shade700),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
+                    ],
+                    const SizedBox(height: 10),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _buildPresenceNumber(presentCount, ViroColors.primary),
+                        const SizedBox(width: 16),
+                        _buildPresenceNumber(absentCount, Colors.red),
+                        const SizedBox(width: 16),
+                        _buildPresenceNumber(noResponseCount, Colors.orange),
+                      ],
                     ),
                   ],
                 ),
-              ],
+              ),
             ),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) =>
-                      PlayerEventDetailsPage(clubId: clubId, eventId: docId),
-                ),
-              );
-            },
           ),
         );
       },
+    );
+  }
+
+  Widget _buildPresenceNumber(int count, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        '$count',
+        style: TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.bold,
+          color: color,
+        ),
+      ),
     );
   }
 
@@ -609,7 +739,7 @@ class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
     IconData icon;
 
     if (status == 'present') {
-      color = Colors.green;
+      color = ViroColors.primary;
       icon = Icons.check_circle;
     } else if (status == 'absent') {
       color = Colors.red;
