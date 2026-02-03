@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../services/user_session.dart';
@@ -17,6 +18,7 @@ class _ProfileSwitcherDialogState extends State<ProfileSwitcherDialog> {
   final UserSession _session = UserSession();
   bool _isSwitching = false;
   Map<String, String> _clubNamesCache = {};
+  Map<String, String> _clubLogosCache = {};
 
   @override
   void initState() {
@@ -35,22 +37,28 @@ class _ProfileSwitcherDialogState extends State<ProfileSwitcherDialog> {
     if (clubIds.isEmpty) return;
 
     final Map<String, String> names = {};
-    
+    final Map<String, String> logos = {};
+
     // Charger par batch de 10 (limite Firestore whereIn)
     for (var i = 0; i < clubIds.length; i += 10) {
       final batch = clubIds.sublist(
         i,
         i + 10 > clubIds.length ? clubIds.length : i + 10,
       );
-      
+
       try {
         final snapshot = await FirebaseFirestore.instance
             .collection('clubs')
             .where(FieldPath.documentId, whereIn: batch)
             .get();
-        
+
         for (var doc in snapshot.docs) {
-          names[doc.id] = doc.data()['name'] as String? ?? doc.id;
+          final data = doc.data();
+          names[doc.id] = data['name'] as String? ?? doc.id;
+          final logoUrl = data['logoUrl'] as String? ?? '';
+          if (logoUrl.isNotEmpty) {
+            logos[doc.id] = logoUrl;
+          }
         }
       } catch (e) {
         // En cas d'erreur, utiliser l'ID comme nom
@@ -63,12 +71,108 @@ class _ProfileSwitcherDialogState extends State<ProfileSwitcherDialog> {
     if (mounted) {
       setState(() {
         _clubNamesCache = names;
+        _clubLogosCache = logos;
       });
     }
   }
 
   String _getClubName(String clubId) {
     return _clubNamesCache[clubId] ?? clubId;
+  }
+
+  String? _getClubLogo(String clubId) {
+    final url = _clubLogosCache[clubId];
+    return (url != null && url.isNotEmpty) ? url : null;
+  }
+
+  Widget _buildProfileLeading({
+    String? clubLogoUrl,
+    List<String>? clubIds,
+    required String role,
+    required bool isCurrent,
+  }) {
+    final defaultAvatar = CircleAvatar(
+      backgroundColor:
+          isCurrent ? ViroColors.primary : Colors.grey.shade300,
+      child: Icon(
+        _getRoleIcon(role),
+        color: isCurrent ? Colors.white : Colors.grey,
+      ),
+    );
+
+    // Plusieurs clubs : logos côte à côte sans espacement
+    if (clubIds != null && clubIds.length > 1) {
+      final count = clubIds.length;
+      final size = (40 / count).clamp(10.0, 20.0);
+      return SizedBox(
+        width: 40,
+        height: 40,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.start,
+          children: clubIds.map((clubId) {
+            final logoUrl = _getClubLogo(clubId);
+            return _buildSingleClubLogo(
+              logoUrl: logoUrl,
+              role: role,
+              isCurrent: isCurrent,
+              size: size,
+              defaultAvatar: defaultAvatar,
+            );
+          }).toList(),
+        ),
+      );
+    }
+
+    if (clubLogoUrl == null) return defaultAvatar;
+    return ClipOval(
+      child: SizedBox(
+        width: 40,
+        height: 40,
+        child: CachedNetworkImage(
+          imageUrl: clubLogoUrl,
+          fit: BoxFit.cover,
+          placeholder: (_, __) => defaultAvatar,
+          errorWidget: (_, __, ___) => defaultAvatar,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSingleClubLogo({
+    required String? logoUrl,
+    required String role,
+    required bool isCurrent,
+    required double size,
+    required Widget defaultAvatar,
+  }) {
+    final smallPlaceholder = SizedBox(
+      width: size,
+      height: size,
+      child: CircleAvatar(
+        radius: size / 2,
+        backgroundColor:
+            isCurrent ? ViroColors.primary : Colors.grey.shade300,
+        child: Icon(
+          _getRoleIcon(role),
+          color: isCurrent ? Colors.white : Colors.grey,
+          size: size * 0.5,
+        ),
+      ),
+    );
+    if (logoUrl == null) return smallPlaceholder;
+    return ClipOval(
+      child: SizedBox(
+        width: size,
+        height: size,
+        child: CachedNetworkImage(
+          imageUrl: logoUrl,
+          fit: BoxFit.cover,
+          placeholder: (_, __) => smallPlaceholder,
+          errorWidget: (_, __, ___) => smallPlaceholder,
+        ),
+      ),
+    );
   }
 
   String _getRoleDisplayName(String role) {
@@ -233,20 +337,24 @@ class _ProfileSwitcherDialogState extends State<ProfileSwitcherDialog> {
                     subtitle = _getClubName(targetClubId);
                   }
 
+                  final clubLogoUrl = _getClubLogo(targetClubId);
+                  final multipleClubIds = (grouped.role == 'player' &&
+                          grouped.clubCount > 1)
+                      ? grouped.profiles.map((p) => p.clubId).toList()
+                      : null;
+
                   return Card(
                     margin: const EdgeInsets.only(bottom: 8),
                     color: isCurrent
                         ? ViroColors.primary.withOpacity(0.1)
                         : Colors.white,
                     child: ListTile(
-                      leading: CircleAvatar(
-                        backgroundColor: isCurrent
-                            ? ViroColors.primary
-                            : Colors.grey.shade300,
-                        child: Icon(
-                          _getRoleIcon(profile.role),
-                          color: isCurrent ? Colors.white : Colors.grey,
-                        ),
+                      leading: _buildProfileLeading(
+                        clubLogoUrl:
+                            multipleClubIds == null ? clubLogoUrl : null,
+                        clubIds: multipleClubIds,
+                        role: profile.role,
+                        isCurrent: isCurrent,
                       ),
                       title: Text(
                         grouped.displayName,
