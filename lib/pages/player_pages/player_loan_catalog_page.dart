@@ -8,6 +8,7 @@ import 'package:table_calendar/table_calendar.dart';
 import '../../constants/firebase_collections.dart';
 import '../../theme/viro_theme.dart';
 import '../../utils/firebase_error_handler.dart';
+import '../../widget/player_bottom_nav.dart';
 import '../../widget/viro_loader.dart';
 
 class PlayerLoanCatalogPage extends StatefulWidget {
@@ -236,6 +237,11 @@ class _PlayerLoanCatalogPageState extends State<PlayerLoanCatalogPage>
                 ),
               ),
             ],
+          ),
+          bottomNavigationBar: PlayerBottomNav(
+            context,
+            currentIndex: 3,
+            clubId: selectedClubId,
           ),
         );
       },

@@ -17,6 +17,7 @@ import 'player_infos_page.dart';
 import 'player_loan_catalog_page.dart';
 
 import '../../theme/viro_theme.dart';
+import '../../widget/player_bottom_nav.dart';
 import '../../widget/profile_switcher_dialog.dart';
 import '../../widget/user_display_tile.dart';
 import '../../widget/viro_loader.dart';
@@ -331,7 +332,11 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
           ],
         ),
       ),
-      bottomNavigationBar: _buildBottomNav(clubId),
+      bottomNavigationBar: PlayerBottomNav(
+        context,
+        currentIndex: 0,
+        clubId: clubId,
+      ),
     );
   }
 
@@ -2098,58 +2103,6 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildBottomNav(String clubId) {
-    return BottomNavigationBar(
-      elevation: 0,
-      backgroundColor: ViroColors.background,
-      selectedItemColor: ViroColors.primary,
-      unselectedItemColor: Colors.grey,
-      type: BottomNavigationBarType.fixed,
-      onTap: (index) {
-        if (index == 1) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => PlayerPlanningPage(clubId: clubId),
-            ),
-          );
-        }
-        if (index == 2) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => PlayerInfosPage(clubId: clubId)),
-          );
-        }
-        if (index == 3) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => PlayerLoanCatalogPage(clubId: clubId),
-            ),
-          );
-        }
-      },
-      items: const [
-        BottomNavigationBarItem(
-          icon: Icon(Icons.home_filled),
-          label: "Accueil",
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.calendar_month),
-          label: "Planning",
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.notifications_none),
-          label: "Infos",
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.inventory_2_outlined),
-          label: "Catalogue prêt",
-        ),
-      ],
     );
   }
 }

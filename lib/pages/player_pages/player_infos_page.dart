@@ -5,12 +5,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../../theme/viro_theme.dart';
 import '../../utils/firebase_helpers.dart';
+import '../../widget/player_bottom_nav.dart';
 import '../../widget/user_display_tile.dart';
 import '../../widget/viro_loader.dart';
 import '../profil_display_page.dart';
-import 'player_planning_page.dart';
-import 'player_home_page.dart';
-import 'player_profil_page.dart';
 
 class PlayerInfosPage extends StatefulWidget {
   final String clubId;
@@ -56,59 +54,6 @@ class _PlayerInfosPageState extends State<PlayerInfosPage> {
         : allClubIds.first;
     setState(() => _selectedClubId = sel);
     _loadClubNames(allClubIds);
-  }
-
-  Widget _buildBottomNav(BuildContext context, String selectedClubId) {
-    return BottomNavigationBar(
-      elevation: 0,
-      backgroundColor: ViroColors.background,
-      selectedItemColor: ViroColors.primary,
-      unselectedItemColor: Colors.grey,
-      type: BottomNavigationBarType.fixed,
-      currentIndex: 2,
-      onTap: (index) {
-        if (index == 0) {
-          Navigator.pushAndRemoveUntil(
-            context,
-            MaterialPageRoute(builder: (_) => const PlayerHomePage()),
-            (route) => false,
-          );
-        }
-        if (index == 1) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => PlayerPlanningPage(clubId: selectedClubId),
-            ),
-          );
-        }
-        if (index == 2) {}
-        if (index == 3) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const PlayerProfilPage()),
-          );
-        }
-      },
-      items: const [
-        BottomNavigationBarItem(
-          icon: Icon(Icons.home_filled),
-          label: "Accueil",
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.calendar_month),
-          label: "Planning",
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.notifications_none),
-          label: "Infos",
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.person_outline),
-          label: "Profil",
-        ),
-      ],
-    );
   }
 
   void _showClubInfos(BuildContext context, String selectedClubId) {
@@ -224,9 +169,10 @@ class _PlayerInfosPageState extends State<PlayerInfosPage> {
           );
         },
       ),
-      bottomNavigationBar: _buildBottomNav(
+      bottomNavigationBar: PlayerBottomNav(
         context,
-        _selectedClubId ?? widget.clubId,
+        currentIndex: 2,
+        clubId: _selectedClubId ?? widget.clubId,
       ),
     );
   }
