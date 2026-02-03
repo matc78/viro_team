@@ -1,1 +1,28 @@
-{"flutter":{"platforms":{"android":{"default":{"projectId":"viroteam-75303","appId":"1:396501317680:android:022270ffcb6477b66fd5f5","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"viroteam-75303","configurations":{"android":"1:396501317680:android:022270ffcb6477b66fd5f5","ios":"1:396501317680:ios:469de638c9a9569a6fd5f5","macos":"1:396501317680:ios:469de638c9a9569a6fd5f5","web":"1:396501317680:web:93d4f0b325ff9c876fd5f5","windows":"1:396501317680:web:b43ba67c475c65db6fd5f5"}}}}}}
+{
+  "functions": {
+    "source": "functions"
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "viroteam-75303",
+          "appId": "1:396501317680:android:022270ffcb6477b66fd5f5",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "viroteam-75303",
+          "configurations": {
+            "android": "1:396501317680:android:022270ffcb6477b66fd5f5",
+            "ios": "1:396501317680:ios:469de638c9a9569a6fd5f5",
+            "macos": "1:396501317680:ios:469de638c9a9569a6fd5f5",
+            "web": "1:396501317680:web:93d4f0b325ff9c876fd5f5",
+            "windows": "1:396501317680:web:b43ba67c475c65db6fd5f5"
+          }
+        }
+      }
+    }
+  }
+}

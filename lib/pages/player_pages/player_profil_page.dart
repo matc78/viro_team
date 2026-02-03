@@ -7,11 +7,14 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import '../../constants/firebase_collections.dart';
 import '../../theme/viro_theme.dart';
 import '../../widget/viro_loader.dart';
 import '../../utils/app_logger.dart';
 import '../auth_page.dart';
 import '../add_profile_page.dart';
+import '../onboarding_page.dart';
+import 'player_home_page.dart';
 
 class PlayerProfilPage extends StatefulWidget {
   const PlayerProfilPage({super.key});
@@ -168,6 +171,11 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
                       builder: (_) => const AddProfilePage(),
                     ),
                   ),
+                ),
+                _buildActionTile(
+                  Icons.exit_to_app,
+                  "Quitter un club",
+                  () => _showLeaveClubDialog(context, data ?? {}, user.uid),
                 ),
                 const SizedBox(height: 30),
 
@@ -758,6 +766,287 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
         ],
       ),
     );
+  }
+
+  static const String _leaveClubLoanMessage =
+      "Impossible de quitter le club : vous avez un prêt d'équipement en cours. Rendez l'équipement avant de quitter le club.";
+
+  Future<void> _showLeaveClubDialog(
+    BuildContext context,
+    Map<String, dynamic> data,
+    String uid,
+  ) async {
+    final clubsWithRoles = await _extractRolesByClub(data);
+    final playerClubs = clubsWithRoles
+        .where((c) => (c['roles'] as List<dynamic>).contains('player'))
+        .toList();
+    if (playerClubs.isEmpty) {
+      if (mounted) _showSnack("Aucun club à quitter.");
+      return;
+    }
+    if (!mounted) return;
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text("Quitter un club"),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: playerClubs.map((clubInfo) {
+              final clubId = clubInfo['clubId'] as String?;
+              final clubName =
+                  clubInfo['clubName'] as String? ?? "Club inconnu";
+              if (clubId == null) return const SizedBox.shrink();
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        clubName,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: _isSaving
+                          ? null
+                          : () async {
+                              final hasActive =
+                                  await _hasActiveLoanForClub(clubId, uid);
+                              if (!dialogContext.mounted) return;
+                              if (hasActive) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(_leaveClubLoanMessage),
+                                  ),
+                                );
+                                return;
+                              }
+                              Navigator.pop(dialogContext);
+                              final confirm = await showDialog<bool>(
+                                context: context,
+                                builder: (ctx) => AlertDialog(
+                                  title: const Text("Quitter le club"),
+                                  content: Text(
+                                    "Quitter le club $clubName ?",
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () =>
+                                          Navigator.pop(ctx, false),
+                                      child: const Text("Annuler"),
+                                    ),
+                                    ElevatedButton(
+                                      onPressed: () =>
+                                          Navigator.pop(ctx, true),
+                                      child: const Text("Quitter"),
+                                    ),
+                                  ],
+                                ),
+                              );
+                              if (confirm == true && mounted) {
+                                await _leaveClub(
+                                  context,
+                                  clubId,
+                                  clubName,
+                                  data,
+                                  uid,
+                                  playerClubs.length > 1,
+                                );
+                              }
+                            },
+                      child: const Text("Quitter ce club"),
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text("Fermer"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<bool> _hasActiveLoanForClub(String clubId, String uid) async {
+    final snap = await FirebaseFirestore.instance
+        .collection(FirebaseCollections.clubs)
+        .doc(clubId)
+        .collection(FirebaseCollections.equipmentLoans)
+        .where('borrowerId', isEqualTo: uid)
+        .where('status', isEqualTo: 'active')
+        .limit(1)
+        .get();
+    return snap.docs.isNotEmpty;
+  }
+
+  Future<void> _leaveClub(
+    BuildContext context,
+    String clubId,
+    String clubName,
+    Map<String, dynamic> data,
+    String uid,
+    bool hasOtherPlayerClubs,
+  ) async {
+    setState(() => _isSaving = true);
+    try {
+      final firestore = FirebaseFirestore.instance;
+
+      // 1. Événements : retirer userId de teamMemberIds et attendance
+      final eventsSnap = await firestore
+          .collection(FirebaseCollections.clubs)
+          .doc(clubId)
+          .collection(FirebaseCollections.events)
+          .get();
+      for (final doc in eventsSnap.docs) {
+        final eventData = doc.data();
+        final memberIds =
+            (eventData['teamMemberIds'] as List<dynamic>?)?.whereType<String>();
+        if (memberIds != null && memberIds.contains(uid)) {
+          await doc.reference.update({
+            'teamMemberIds': FieldValue.arrayRemove([uid]),
+            'attendance.$uid': FieldValue.delete(),
+          });
+        }
+      }
+
+      // 2. Équipes : retirer uid de playerIds
+      final teamsSnap = await firestore
+          .collection(FirebaseCollections.clubs)
+          .doc(clubId)
+          .collection(FirebaseCollections.teams)
+          .get();
+      for (final doc in teamsSnap.docs) {
+        final teamData = doc.data();
+        final playerIds =
+            (teamData['playerIds'] as List<dynamic>?)?.whereType<String>();
+        if (playerIds != null && playerIds.contains(uid)) {
+          await doc.reference.update({
+            'playerIds': FieldValue.arrayRemove([uid]),
+          });
+        }
+      }
+
+      // 3. Club : retirer de members si pas d'autre rôle (coach, admin)
+      final roles = data['roles'] as Map<String, dynamic>? ?? {};
+      bool hasOtherRoleInClub = false;
+      if (roles['coach'] is List) {
+        for (var c in (roles['coach'] as List)) {
+          if (c is Map && c['clubId'] == clubId) {
+            hasOtherRoleInClub = true;
+            break;
+          }
+          if (c == clubId) {
+            hasOtherRoleInClub = true;
+            break;
+          }
+        }
+      } else if (roles['coach'] is Map) {
+        final coachData = roles['coach'] as Map;
+        if (coachData['clubs'] is List) {
+          for (var c in (coachData['clubs'] as List)) {
+            if (c is Map && c['clubId'] == clubId) {
+              hasOtherRoleInClub = true;
+              break;
+            }
+          }
+        }
+      }
+      if (!hasOtherRoleInClub &&
+          (roles['admin'] is List) &&
+          (roles['admin'] as List).contains(clubId)) {
+        hasOtherRoleInClub = true;
+      }
+      if (!hasOtherRoleInClub) {
+        await firestore.collection(FirebaseCollections.clubs).doc(clubId).update({
+          'members': FieldValue.arrayRemove([uid]),
+        });
+      }
+
+      // 4. User : retirer le club de roles.player.clubs et mettre à jour activeContext
+      final rolesData = Map<String, dynamic>.from(roles);
+      final playerData = rolesData['player'] as Map?;
+      List<dynamic> newPlayerClubs = [];
+      if (playerData != null && playerData['clubs'] is List) {
+        final clubs = (playerData['clubs'] as List).whereType<Map>().toList();
+        newPlayerClubs = clubs
+            .where((c) => (c['clubId'] as String?) != clubId)
+            .toList();
+      }
+
+      Map<String, dynamic>? newActiveContext;
+      if (newPlayerClubs.isEmpty) {
+        rolesData['player'] = null;
+      } else {
+        rolesData['player'] = {'clubs': newPlayerClubs};
+        final activeContext =
+            data['activeContext'] as Map<String, dynamic>?;
+        final activeClubId = activeContext?['clubId'] as String?;
+        final activeRole = activeContext?['role'] as String?;
+        if (activeClubId == clubId && activeRole == 'player') {
+          final firstClub = newPlayerClubs.first as Map<String, dynamic>;
+          final firstClubId = firstClub['clubId'] as String?;
+          String? firstClubName;
+          if (firstClubId != null) {
+            final clubDoc = await firestore
+                .collection(FirebaseCollections.clubs)
+                .doc(firstClubId)
+                .get();
+            firstClubName =
+                clubDoc.data()?['name'] as String?;
+          }
+          newActiveContext = {
+            'role': 'player',
+            'clubId': firstClubId,
+            if (firstClubName != null) 'clubName': firstClubName,
+          };
+        }
+      }
+
+      final updates = <String, dynamic>{};
+      if (newPlayerClubs.isEmpty) {
+        rolesData.remove('player');
+        updates['roles'] = rolesData;
+        updates['roles.player'] = FieldValue.delete();
+        updates['activeContext'] = FieldValue.delete();
+      } else {
+        updates['roles'] = rolesData;
+        if (newActiveContext != null) {
+          updates['activeContext'] = newActiveContext;
+        }
+      }
+      await firestore.collection(FirebaseCollections.users).doc(uid).update(updates);
+
+      if (!context.mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute<void>(
+          builder: (_) => hasOtherPlayerClubs
+              ? const PlayerHomePage()
+              : const OnboardingPage(),
+        ),
+        (route) => false,
+      );
+    } catch (e) {
+      AppLogger.instance.error(
+        'Erreur lors de la sortie du club',
+        error: e,
+        context: {'clubId': clubId, 'userId': uid},
+      );
+      if (mounted) {
+        _showSnack("Impossible de quitter le club : $e");
+      }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
   }
 
   Future<void> _showInfoDialog(Map<String, dynamic> data, User user) async {

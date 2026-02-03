@@ -5,16 +5,19 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:viro_team/pages/onboarding_page.dart';
 import 'firebase_options.dart';
+import 'pages/admin_coach_pages/admin_home_page.dart';
+import 'pages/admin_coach_pages/profil_request_page.dart';
 import 'pages/auth_page.dart';
 import 'pages/no_internet_page.dart';
 import 'pages/player_pages/player_home_page.dart';
-import 'pages/admin_coach_pages/admin_home_page.dart';
 import 'pages/splash_page.dart';
+import 'services/notification_service.dart';
 import 'services/user_session.dart';
 import 'theme/viro_theme.dart';
 import 'utils/app_logger.dart';
@@ -23,68 +26,86 @@ import 'utils/firebase_error_handler.dart';
 import 'widget/fatal_error_app.dart';
 import 'widget/viro_loader.dart';
 
+/// Handler pour les messages FCM reçus en arrière-plan (obligatoire sur Android).
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  // La notif est affichée par le système ; le tap est géré par getInitialMessage / onMessageOpenedApp
+}
+
 void main() {
   // Wrapper avec runZonedGuarded pour capturer toutes les erreurs asynchrones
-  runZonedGuarded(() async {
-    // 1. Toujours ajouter cette ligne pour Firebase
-    WidgetsFlutterBinding.ensureInitialized();
+  runZonedGuarded(
+    () async {
+      // 1. Toujours ajouter cette ligne pour Firebase
+      WidgetsFlutterBinding.ensureInitialized();
 
-    try {
-      // 2. Initialiser Firebase avec les options générées
-      await Firebase.initializeApp(
-        options: DefaultFirebaseOptions.currentPlatform,
-      );
-
-      // 2.5. Initialiser le logger
-      AppLogger.instance.init();
-
-      // 3. Configurer Firebase Crashlytics
-      // Passer les erreurs Flutter à Crashlytics
-      FlutterError.onError = (errorDetails) {
-        FirebaseCrashlytics.instance.recordFlutterFatalError(errorDetails);
-      };
-      // Passer les erreurs asynchrones non capturées à Crashlytics
-      PlatformDispatcher.instance.onError = (error, stack) {
-        FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
-        return true;
-      };
-
-      // 4. Initialiser le formatage de date en arrière-plan pour ne pas bloquer le démarrage
-      // La première utilisation attendra que l'initialisation soit terminée
-      unawaited(initializeDateFormatting('fr_FR', null));
-
-      // 5. Lancer l'application principale
-      runApp(const MyApp());
-    } catch (error, stackTrace) {
-      // En cas d'erreur lors de l'initialisation (ex: Firebase échoue)
-      // Essayer d'enregistrer dans Crashlytics si disponible
       try {
-        await FirebaseCrashlytics.instance.recordError(
-          error,
-          stackTrace,
-          fatal: true,
+        // 2. Initialiser Firebase avec les options générées
+        await Firebase.initializeApp(
+          options: DefaultFirebaseOptions.currentPlatform,
         );
-      } catch (_) {
-        // Si Crashlytics n'est pas disponible, on continue quand même
-      }
 
-      // Afficher une page d'erreur fatale au lieu de crasher
-      runApp(FatalErrorApp(error: error, stackTrace: stackTrace));
-    }
-  }, (error, stack) {
-    // Gestionnaire d'erreurs asynchrones non capturées
-    // Ces erreurs se produisent dans des Futures, Streams, etc. qui ne sont pas await
-    try {
-      FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
-    } catch (_) {
-      // Si Crashlytics n'est pas disponible, on log quand même l'erreur
-      AppLogger.instance.error(
-        'Erreur asynchrone non capturée',
-        error: error,
-        stackTrace: stack,
-      );
-    }
-  });
+        // 2.3. Enregistrer le handler FCM en arrière-plan (obligatoire sur Android)
+        FirebaseMessaging.onBackgroundMessage(
+          _firebaseMessagingBackgroundHandler,
+        );
+
+        // 2.5. Initialiser le logger
+        AppLogger.instance.init();
+
+        // 3. Configurer Firebase Crashlytics
+        // Passer les erreurs Flutter à Crashlytics
+        FlutterError.onError = (errorDetails) {
+          FirebaseCrashlytics.instance.recordFlutterFatalError(errorDetails);
+        };
+        // Passer les erreurs asynchrones non capturées à Crashlytics
+        PlatformDispatcher.instance.onError = (error, stack) {
+          FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+          return true;
+        };
+
+        // 4. Initialiser le formatage de date en arrière-plan pour ne pas bloquer le démarrage
+        // La première utilisation attendra que l'initialisation soit terminée
+        unawaited(initializeDateFormatting('fr_FR', null));
+
+        // 5. Initialiser FCM (notifications push)
+        unawaited(NotificationService.instance.init());
+
+        // 6. Lancer l'application principale
+        runApp(const MyApp());
+      } catch (error, stackTrace) {
+        // En cas d'erreur lors de l'initialisation (ex: Firebase échoue)
+        // Essayer d'enregistrer dans Crashlytics si disponible
+        try {
+          await FirebaseCrashlytics.instance.recordError(
+            error,
+            stackTrace,
+            fatal: true,
+          );
+        } catch (_) {
+          // Si Crashlytics n'est pas disponible, on continue quand même
+        }
+
+        // Afficher une page d'erreur fatale au lieu de crasher
+        runApp(FatalErrorApp(error: error, stackTrace: stackTrace));
+      }
+    },
+    (error, stack) {
+      // Gestionnaire d'erreurs asynchrones non capturées
+      // Ces erreurs se produisent dans des Futures, Streams, etc. qui ne sont pas await
+      try {
+        FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+      } catch (_) {
+        // Si Crashlytics n'est pas disponible, on log quand même l'erreur
+        AppLogger.instance.error(
+          'Erreur asynchrone non capturée',
+          error: error,
+          stackTrace: stack,
+        );
+      }
+    },
+  );
 }
 
 class MyApp extends StatefulWidget {
@@ -98,12 +119,38 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   String? _currentUserId;
   final UserSession _session = UserSession();
   bool _hasInternet = true;
+  final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _checkConnection();
+    _setupNotificationHandlers();
+  }
+
+  void _setupNotificationHandlers() {
+    NotificationService.onOpenJoinRequest = (payload) {
+      _navigatorKey.currentState?.push(
+        MaterialPageRoute<void>(
+          builder: (_) => ProfilRequestPage(
+            requestId: payload['requestId'] ?? '',
+            userId: payload['userId'],
+            clubId: payload['clubId'],
+            clubName: payload['clubName'],
+            roleRequested: payload['roleRequested'],
+            firstName: payload['firstName'],
+            lastName: payload['lastName'],
+          ),
+        ),
+      );
+    };
+    NotificationService.onTokenRefreshed = () {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid != null) {
+        NotificationService.instance.updateTokenForUser(uid);
+      }
+    };
   }
 
   @override
@@ -153,6 +200,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       );
     }
     return MaterialApp(
+      navigatorKey: _navigatorKey,
       title: 'ViroTeam',
       theme: ViroTheme.lightTheme, // Ton thème bleu et blanc
       debugShowCheckedModeBanner: false,
@@ -180,6 +228,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
                 // Utiliser un microtask pour éviter d'appeler startListening pendant le build
                 WidgetsBinding.instance.addPostFrameCallback((_) {
                   _session.startListening(user.uid);
+                  NotificationService.instance.updateTokenForUser(user.uid);
+                  NotificationService.instance
+                      .handlePendingNotificationIfNeeded();
                 });
               }
 
@@ -273,6 +324,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
               _currentUserId = null;
               WidgetsBinding.instance.addPostFrameCallback((_) {
                 _session.stopListening();
+                NotificationService.instance.updateTokenForUser(null);
               });
             }
             return const AuthPage(); // Sinon on affiche l'écran d'auth

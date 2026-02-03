@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import '../../constants/firebase_collections.dart';
 import '../../theme/viro_theme.dart';
 import '../../utils/app_logger.dart';
 import '../../widget/user_display_tile.dart';
@@ -33,101 +34,124 @@ class ProfilRequestPage extends StatefulWidget {
 class _ProfilRequestPageState extends State<ProfilRequestPage> {
   bool _isProcessing = false;
 
+  /// Charge le message depuis Firestore si absent (ex. ouverture depuis une notif).
+  Future<String> _loadMessageIfNeeded() async {
+    if (widget.message != null && widget.message!.isNotEmpty) {
+      return widget.message!;
+    }
+    if (widget.requestId.isEmpty) return "";
+    final doc = await FirebaseFirestore.instance
+        .collection(FirebaseCollections.joinRequests)
+        .doc(widget.requestId)
+        .get();
+    final data = doc.data();
+    return (data?['message'] as String?) ?? "";
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text("Demande d'adhésion")),
-      body: FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-        future: FirebaseFirestore.instance
-            .collection('users')
-            .doc(widget.userId)
-            .get(),
-        builder: (context, snap) {
-          if (snap.connectionState == ConnectionState.waiting) {
+      body: FutureBuilder<String>(
+        future: _loadMessageIfNeeded(),
+        builder: (context, messageSnap) {
+          if (messageSnap.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
-          final data = snap.data?.data() ?? {};
-          final email = data['email'] as String? ?? "";
-          final phone = data['phone'] as String? ?? "";
-          final role = widget.roleRequested ?? "player";
-          final message = widget.message ?? "";
+          final message = messageSnap.data ?? widget.message ?? "";
 
-          return Padding(
-            padding: const EdgeInsets.all(20.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                UserDisplayTile(
-                  userId: widget.userId,
-                  firstName: widget.firstName,
-                  lastName: widget.lastName,
-                  avatarUrl: data['avatarUrl'] as String?,
-                  fallback: widget.userId ?? "Membre",
-                  textStyle: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  role == 'coach' ? "Entraîneur" : "Membre",
-                  style: const TextStyle(color: Colors.grey),
-                ),
-                const SizedBox(height: 16),
-                _infoTile(Icons.email, email.isEmpty ? "Email inconnu" : email),
-                _infoTile(
-                  Icons.phone,
-                  phone.isEmpty ? "Téléphone inconnu" : phone,
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  "Message",
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 8),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: ViroColors.borderColor),
-                  ),
-                  child: Text(message.isEmpty ? "Aucun message" : message),
-                ),
-                const Spacer(),
-                Row(
+          return FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+            future: FirebaseFirestore.instance
+                .collection('users')
+                .doc(widget.userId)
+                .get(),
+            builder: (context, snap) {
+              if (snap.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              final data = snap.data?.data() ?? {};
+              final email = data['email'] as String? ?? "";
+              final phone = data['phone'] as String? ?? "";
+              final role = widget.roleRequested ?? "player";
+
+              return Padding(
+                padding: const EdgeInsets.all(20.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: _isProcessing
-                            ? null
-                            : () => _handleRequest(false),
-                        child: const Text("Refuser"),
+                    UserDisplayTile(
+                      userId: widget.userId,
+                      firstName: widget.firstName,
+                      lastName: widget.lastName,
+                      avatarUrl: data['avatarUrl'] as String?,
+                      fallback: widget.userId ?? "Membre",
+                      textStyle: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: _isProcessing
-                            ? null
-                            : () => _handleRequest(true),
-                        child: _isProcessing
-                            ? const SizedBox(
-                                height: 16,
-                                width: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : const Text("Accepter"),
+                    const SizedBox(height: 8),
+                    Text(
+                      role == 'coach' ? "Entraîneur" : "Membre",
+                      style: const TextStyle(color: Colors.grey),
+                    ),
+                    const SizedBox(height: 16),
+                    _infoTile(Icons.email, email.isEmpty ? "Email inconnu" : email),
+                    _infoTile(
+                      Icons.phone,
+                      phone.isEmpty ? "Téléphone inconnu" : phone,
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      "Message",
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: ViroColors.borderColor),
                       ),
+                      child: Text(message.isEmpty ? "Aucun message" : message),
+                    ),
+                    const Spacer(),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: _isProcessing
+                                ? null
+                                : () => _handleRequest(false),
+                            child: const Text("Refuser"),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: _isProcessing
+                                ? null
+                                : () => _handleRequest(true),
+                            child: _isProcessing
+                                ? const SizedBox(
+                                    height: 16,
+                                    width: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : const Text("Accepter"),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
-              ],
-            ),
+              );
+            },
           );
         },
       ),
