@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 import '../../constants/firebase_collections.dart';
 import '../../theme/viro_theme.dart';
 import '../../utils/firebase_error_handler.dart';
+import '../../widget/slide_to_confirm.dart';
 import '../../widget/user_display_tile.dart';
 import '../../widget/viro_loader.dart';
 
@@ -226,7 +227,12 @@ class _AdminLoansPageState extends State<AdminLoansPage>
                         else
                           ...history
                               .take(30)
-                              .map((l) => _LoanHistoryTile(data: l)),
+                              .map(
+                                (l) => _LoanHistoryTile(
+                                  data: l,
+                                  clubId: widget.clubId,
+                                ),
+                              ),
                       ],
                     ),
                   );
@@ -1179,7 +1185,7 @@ class _CatalogItemCard extends StatelessWidget {
                         ),
                         TextSpan(
                           text:
-                              '${(data['caution'] as num).toStringAsFixed(2)} € (si perdu ou endommagé)',
+                              '${(data['caution'] as num).toStringAsFixed(2)} €',
                         ),
                       ],
                     ),
@@ -1634,7 +1640,7 @@ class _CatalogItemDialogState extends State<_CatalogItemDialog> {
               keyboardType: TextInputType.numberWithOptions(decimal: true),
               enabled: !_saving,
               decoration: const InputDecoration(
-                labelText: "Caution (€) si perdu ou endommagé",
+                labelText: "Caution (€)",
                 hintText: "ex. 50",
               ),
             ),
@@ -1736,11 +1742,12 @@ class _CatalogItemDialogState extends State<_CatalogItemDialog> {
   }
 }
 
-/// Tuile read-only pour l'historique des prêts (retournés / perdus).
+/// Tuile read-only pour l'historique des prêts (retournés / annulés).
 class _LoanHistoryTile extends StatelessWidget {
   final Map<String, dynamic> data;
+  final String clubId;
 
-  const _LoanHistoryTile({required this.data});
+  const _LoanHistoryTile({required this.data, required this.clubId});
 
   @override
   Widget build(BuildContext context) {
@@ -1757,15 +1764,13 @@ class _LoanHistoryTile extends StatelessWidget {
     final returnedStr = returnedAt != null
         ? DateFormat('d MMM yyyy', 'fr_FR').format(returnedAt.toDate())
         : '—';
-    final isLost = status == 'lost';
+    final loanId = data['id'] as String?;
     final isCancelled = status == 'cancelled';
-    final penalty = data['penaltyAmount'] as num?;
-    final penaltyPaid = data['penaltyPaid'] as bool? ?? false;
-    final statusLabel = isLost
-        ? "Perdu"
-        : isCancelled
+    final isReturned = status == 'returned';
+    final statusLabel = isCancelled
         ? "Annulé le $returnedStr"
         : "Retour $returnedStr";
+    final canUndoReturn = isReturned && loanId != null;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
@@ -1787,30 +1792,25 @@ class _LoanHistoryTile extends StatelessWidget {
                 'Prix: ${loanUnitPrice.toStringAsFixed(2)} €/unité${quantity > 1 ? ' (Total: ${(loanUnitPrice * quantity).toStringAsFixed(2)} €)' : ''}',
                 style: TextStyle(fontSize: 12, color: Colors.grey[700]),
               ),
-            if (isLost && penalty != null && penalty > 0)
-              Text(
-                'Pénalité ${penalty.toStringAsFixed(0)} €${penaltyPaid ? " (réglée)" : ""}',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: penaltyPaid ? ViroColors.success : ViroColors.error,
-                ),
-              ),
           ],
         ),
-        trailing: Chip(
-          label: Text(
-            isLost
-                ? "Perdu"
-                : isCancelled
-                ? "Annulé"
-                : "Retourné",
-            style: const TextStyle(fontSize: 12),
+        trailing: Tooltip(
+          message: canUndoReturn ? "Annuler le retour" : "",
+          child: InkWell(
+            onTap: canUndoReturn
+                ? () => _undoLoanReturn(context, clubId, loanId)
+                : null,
+            borderRadius: BorderRadius.circular(24),
+            child: Chip(
+              label: Text(
+                isCancelled ? "Annulé" : "Retourné",
+                style: const TextStyle(fontSize: 12),
+              ),
+              backgroundColor: isCancelled
+                  ? ViroColors.warning.withOpacity(0.15)
+                  : ViroColors.success.withOpacity(0.15),
+            ),
           ),
-          backgroundColor: isLost
-              ? ViroColors.error.withOpacity(0.15)
-              : isCancelled
-              ? ViroColors.warning.withOpacity(0.15)
-              : ViroColors.success.withOpacity(0.15),
         ),
       ),
     );
@@ -2410,26 +2410,6 @@ Future<void> _confirmPickup(
   String clubId,
   String loanId,
 ) async {
-  final confirmed = await showDialog<bool>(
-    context: context,
-    builder: (_) => AlertDialog(
-      title: const Text("Confirmer la remise"),
-      content: const Text(
-        "Confirmer que le matériel a bien été remis au joueur ?",
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(false),
-          child: const Text("Annuler"),
-        ),
-        ElevatedButton(
-          onPressed: () => Navigator.of(context).pop(true),
-          child: const Text("Confirmer remise"),
-        ),
-      ],
-    ),
-  );
-  if (confirmed != true) return;
   try {
     await FirebaseFirestore.instance
         .collection(FirebaseCollections.clubs)
@@ -2596,24 +2576,6 @@ Future<void> _markLoanReturned(
   String clubId,
   String loanId,
 ) async {
-  final confirmed = await showDialog<bool>(
-    context: context,
-    builder: (_) => AlertDialog(
-      title: const Text("Confirmer le retour"),
-      content: const Text("Confirmer le retour du matériel ?"),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(false),
-          child: const Text("Annuler"),
-        ),
-        ElevatedButton(
-          onPressed: () => Navigator.of(context).pop(true),
-          child: const Text("Confirmer"),
-        ),
-      ],
-    ),
-  );
-  if (confirmed != true) return;
   try {
     await FirebaseFirestore.instance
         .collection(FirebaseCollections.clubs)
@@ -2639,8 +2601,7 @@ Future<void> _markLoanReturned(
   }
 }
 
-/// Affiche un dialog de confirmation puis marque le prêt comme perdu.
-Future<void> _markLoanLost(
+Future<void> _undoLoanReturn(
   BuildContext context,
   String clubId,
   String loanId,
@@ -2648,8 +2609,8 @@ Future<void> _markLoanLost(
   final confirmed = await showDialog<bool>(
     context: context,
     builder: (_) => AlertDialog(
-      title: const Text("Déclarer comme perdu"),
-      content: const Text("Déclarer ce prêt comme perdu ?"),
+      title: const Text("Annuler le retour"),
+      content: const Text("Repasser ce prêt en cours ?"),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(false),
@@ -2657,8 +2618,7 @@ Future<void> _markLoanLost(
         ),
         ElevatedButton(
           onPressed: () => Navigator.of(context).pop(true),
-          style: ElevatedButton.styleFrom(backgroundColor: ViroColors.error),
-          child: const Text("Déclarer perdu"),
+          child: const Text("Confirmer"),
         ),
       ],
     ),
@@ -2670,12 +2630,12 @@ Future<void> _markLoanLost(
         .doc(clubId)
         .collection(FirebaseCollections.equipmentLoans)
         .doc(loanId)
-        .update({'status': 'lost', 'returnedAt': FieldValue.serverTimestamp()});
+        .update({'status': 'active', 'returnedAt': FieldValue.delete()});
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text("Prêt marqué comme perdu."),
-          backgroundColor: ViroColors.error,
+          content: Text("Retour annulé, prêt repassé en cours."),
+          backgroundColor: ViroColors.warning,
         ),
       );
     }
@@ -2890,32 +2850,15 @@ class _OverdueLoansSection extends StatelessWidget {
                         ),
                       ],
                       const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          OutlinedButton.icon(
-                            onPressed: () => _markLoanReturned(
-                              context,
-                              clubId,
-                              loan['id'] as String,
-                            ),
-                            icon: const Icon(Icons.check, size: 15),
-                            label: const Text("Retourné"),
-                          ),
-                          const SizedBox(width: 8),
-                          OutlinedButton.icon(
-                            onPressed: () => _markLoanLost(
-                              context,
-                              clubId,
-                              loan['id'] as String,
-                            ),
-                            icon: const Icon(Icons.warning_amber, size: 15),
-                            label: const Text("Perdu/Endommagé"),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: ViroColors.error,
-                              side: const BorderSide(color: ViroColors.error),
-                            ),
-                          ),
-                        ],
+                      SlideToConfirm(
+                        label: "Confirmer retour",
+                        color: ViroColors.error,
+                        icon: Icons.error_outline,
+                        onConfirmed: () => _markLoanReturned(
+                          context,
+                          clubId,
+                          loan['id'] as String,
+                        ),
                       ),
                     ],
                   ),
@@ -2978,7 +2921,7 @@ class _ActiveLoansSection extends StatelessWidget {
     });
 
     return Card(
-      color: ViroColors.success.withOpacity(0.1),
+      color: Colors.white,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -2986,7 +2929,7 @@ class _ActiveLoansSection extends StatelessWidget {
           children: [
             Row(
               children: [
-                Icon(Icons.inventory_2_rounded, color: ViroColors.success),
+                Icon(Icons.inventory_2_rounded, color: ViroColors.primary),
                 const SizedBox(width: 8),
                 const Text(
                   "Prêts en cours",
@@ -2999,7 +2942,7 @@ class _ActiveLoansSection extends StatelessWidget {
                       "${activeLoans.length}",
                       style: const TextStyle(fontSize: 12, color: Colors.white),
                     ),
-                    backgroundColor: ViroColors.success,
+                    backgroundColor: ViroColors.primary,
                   ),
               ],
             ),
@@ -3031,6 +2974,12 @@ class _ActiveLoansSection extends StatelessWidget {
                 final isDueToday =
                     dueDate != null &&
                     DateTime(dueDate.year, dueDate.month, dueDate.day) == today;
+                final statusColor = isDueToday
+                    ? ViroColors.primary
+                    : ViroColors.success;
+                final statusIcon = isDueToday
+                    ? Icons.schedule
+                    : Icons.check_circle_outline;
 
                 return Padding(
                   key: ValueKey(loan['id']),
@@ -3041,9 +2990,7 @@ class _ActiveLoansSection extends StatelessWidget {
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
-                        color: isDueToday
-                            ? ViroColors.warning.withOpacity(0.5)
-                            : ViroColors.success.withOpacity(0.3),
+                        color: statusColor.withOpacity(0.4),
                         width: 1,
                       ),
                     ),
@@ -3052,11 +2999,7 @@ class _ActiveLoansSection extends StatelessWidget {
                       children: [
                         Row(
                           children: [
-                            Icon(
-                              Icons.check_circle_outline,
-                              color: ViroColors.success,
-                              size: 18,
-                            ),
+                            Icon(statusIcon, color: statusColor, size: 18),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
@@ -3147,32 +3090,15 @@ class _ActiveLoansSection extends StatelessWidget {
                           ),
                         ],
                         const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            OutlinedButton.icon(
-                              onPressed: () => _markLoanReturned(
-                                context,
-                                clubId,
-                                loan['id'] as String,
-                              ),
-                              icon: const Icon(Icons.check, size: 15),
-                              label: const Text("Retourné"),
-                            ),
-                            const SizedBox(width: 8),
-                            OutlinedButton.icon(
-                              onPressed: () => _markLoanLost(
-                                context,
-                                clubId,
-                                loan['id'] as String,
-                              ),
-                              icon: const Icon(Icons.warning_amber, size: 15),
-                              label: const Text("Perdu/Endommagé"),
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: ViroColors.error,
-                                side: const BorderSide(color: ViroColors.error),
-                              ),
-                            ),
-                          ],
+                        SlideToConfirm(
+                          label: "Confirmer retour",
+                          color: statusColor,
+                          icon: statusIcon,
+                          onConfirmed: () => _markLoanReturned(
+                            context,
+                            clubId,
+                            loan['id'] as String,
+                          ),
                         ),
                       ],
                     ),
@@ -3355,23 +3281,15 @@ class _PickupToConfirmSection extends StatelessWidget {
                         ),
                       ],
                       const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: ElevatedButton.icon(
-                              onPressed: () => _confirmPickup(
-                                context,
-                                clubId,
-                                loan['id'] as String,
-                              ),
-                              icon: const Icon(Icons.check, size: 18),
-                              label: const Text("Confirmer remise"),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: ViroColors.warning,
-                              ),
-                            ),
-                          ),
-                        ],
+                      SlideToConfirm(
+                        label: "Confirmer remise",
+                        color: ViroColors.warning,
+                        icon: Icons.handshake_outlined,
+                        onConfirmed: () => _confirmPickup(
+                          context,
+                          clubId,
+                          loan['id'] as String,
+                        ),
                       ),
                     ],
                   ),

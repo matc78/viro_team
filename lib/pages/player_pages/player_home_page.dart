@@ -1580,7 +1580,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
       DateTime.now().day,
     );
 
-    // Séparer : prêts en cours (lentAt <= aujourd'hui <= dueAt) et prochains (lentAt > aujourd'hui)
+    // Séparer : prêts en cours (lentAt <= aujourd'hui) et prochains (lentAt > aujourd'hui)
     final activeNow =
         <({String clubId, QueryDocumentSnapshot<Map<String, dynamic>> doc})>[];
     final upcoming =
@@ -1595,12 +1595,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
         lentAt.toDate().month,
         lentAt.toDate().day,
       );
-      final dueDay = DateTime(
-        dueAt.toDate().year,
-        dueAt.toDate().month,
-        dueAt.toDate().day,
-      );
-      if (!lentDay.isAfter(today) && !dueDay.isBefore(today)) {
+      if (!lentDay.isAfter(today)) {
         activeNow.add(pair);
       } else if (lentDay.isAfter(today)) {
         upcoming.add(pair);
@@ -1782,21 +1777,25 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
                 }
                 final dueAt = data['dueAt'] as Timestamp?;
                 final dueDate = dueAt?.toDate();
-                final isToday =
-                    dueDate != null &&
-                    DateTime(dueDate.year, dueDate.month, dueDate.day) == today;
+                final dueDay = dueDate != null
+                    ? DateTime(dueDate.year, dueDate.month, dueDate.day)
+                    : null;
+                final isOverdue = dueDay != null && dueDay.isBefore(today);
+                final isToday = dueDay != null && dueDay == today;
+                final statusColor = isOverdue
+                    ? ViroColors.error
+                    : ViroColors.primary;
+                final statusIcon = isOverdue
+                    ? Icons.error_outline
+                    : isToday
+                    ? Icons.warning_amber_rounded
+                    : Icons.check_circle_outline;
                 return Padding(
                   key: ValueKey('${pair.clubId}_${pair.doc.id}'),
                   padding: const EdgeInsets.only(bottom: 6),
                   child: Row(
                     children: [
-                      Icon(
-                        isToday
-                            ? Icons.warning_amber_rounded
-                            : Icons.check_circle_outline,
-                        color: isToday ? ViroColors.error : ViroColors.primary,
-                        size: 18,
-                      ),
+                      Icon(statusIcon, color: statusColor, size: 18),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Column(
@@ -1812,15 +1811,19 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
                             ),
                             if (dueDate != null)
                               Text(
-                                isToday
+                                isOverdue
+                                    ? "En retard depuis le ${DateFormat('dd/MM/yyyy', 'fr_FR').format(dueDate)}"
+                                    : isToday
                                     ? "Retour aujourd'hui"
                                     : "Retour le ${DateFormat('dd/MM/yyyy', 'fr_FR').format(dueDate)}",
                                 style: TextStyle(
                                   fontSize: 12,
-                                  color: isToday
+                                  color: isOverdue
+                                      ? ViroColors.error
+                                      : isToday
                                       ? ViroColors.error
                                       : Colors.grey[700],
-                                  fontWeight: isToday
+                                  fontWeight: isOverdue || isToday
                                       ? FontWeight.bold
                                       : FontWeight.normal,
                                 ),

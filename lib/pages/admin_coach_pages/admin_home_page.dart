@@ -17,6 +17,7 @@ import '../../utils/firebase_helpers.dart';
 import '../../widget/profile_switcher_dialog.dart';
 import '../../widget/sport_score_widget.dart';
 import '../../widget/sport_timer_widget.dart';
+import '../../widget/slide_to_confirm.dart';
 import '../../widget/user_display_tile.dart';
 import '../add_profile_page.dart';
 
@@ -260,8 +261,6 @@ class _AdminHomePageState extends State<AdminHomePage> {
                           _buildActiveLoans(clubId),
                           _buildPickupToConfirmSection(clubId),
                           _buildUpcomingLoans(clubId),
-                          _buildLoanPreparationReminders(clubId),
-                          _buildLoanReturnReminders(clubId),
                           const SizedBox(height: 12),
 
                           // Grille d'actions (cards en bas du body)
@@ -1479,6 +1478,37 @@ class _AdminHomePageState extends State<AdminHomePage> {
     }
   }
 
+  Future<void> _markLoanReturned(String clubId, String loanId) async {
+    try {
+      await FirebaseFirestore.instance
+          .collection(FirebaseCollections.clubs)
+          .doc(clubId)
+          .collection(FirebaseCollections.equipmentLoans)
+          .doc(loanId)
+          .update({
+            'status': 'returned',
+            'returnedAt': FieldValue.serverTimestamp(),
+          });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Prêt marqué comme retourné."),
+            backgroundColor: ViroColors.success,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Erreur : $e"),
+            backgroundColor: ViroColors.error,
+          ),
+        );
+      }
+    }
+  }
+
   Widget _buildActiveLoans(String clubId) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
@@ -1508,10 +1538,8 @@ class _AdminHomePageState extends State<AdminHomePage> {
           final dueAt = loan['dueAt'] as Timestamp?;
           if (lentAt == null || dueAt == null) return false;
           final lentDate = lentAt.toDate();
-          final dueDate = dueAt.toDate();
           final lentDay = DateTime(lentDate.year, lentDate.month, lentDate.day);
-          final dueDay = DateTime(dueDate.year, dueDate.month, dueDate.day);
-          return !lentDay.isAfter(today) && !dueDay.isBefore(today);
+          return !lentDay.isAfter(today);
         }).toList();
         if (activeLoans.isEmpty) {
           return const SizedBox.shrink();
@@ -1530,7 +1558,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
             children: [
               Row(
                 children: [
-                  Icon(Icons.inventory_2_rounded, color: ViroColors.success),
+                  Icon(Icons.inventory_2_rounded, color: ViroColors.primary),
                   const SizedBox(width: 8),
                   const Text(
                     "Prêts en cours",
@@ -1542,7 +1570,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
                       "${activeLoans.length}",
                       style: const TextStyle(fontSize: 12, color: Colors.white),
                     ),
-                    backgroundColor: ViroColors.success,
+                    backgroundColor: ViroColors.primary,
                   ),
                 ],
               ),
@@ -1556,6 +1584,23 @@ class _AdminHomePageState extends State<AdminHomePage> {
                 final borrowerId = loan['borrowerId'] as String?;
                 final dueAt = loan['dueAt'] as Timestamp?;
                 final dueDate = dueAt?.toDate();
+                final dueDay = dueDate != null
+                    ? DateTime(dueDate.year, dueDate.month, dueDate.day)
+                    : null;
+                final isOverdue = dueDay != null && dueDay.isBefore(today);
+                final isDueToday = dueDay != null && dueDay == today;
+                final statusColor = isOverdue
+                    ? ViroColors.error
+                    : isDueToday
+                    ? ViroColors.primary
+                    : ViroColors.success;
+                final statusIcon = isOverdue
+                    ? Icons.error_outline
+                    : isDueToday
+                    ? Icons.schedule
+                    : Icons.check_circle_outline;
+                final cardColor = statusColor.withOpacity(0.08);
+                final borderColor = statusColor.withOpacity(0.35);
                 return Padding(
                   key: ValueKey(loan['id']),
                   padding: const EdgeInsets.only(bottom: 8),
@@ -1574,23 +1619,16 @@ class _AdminHomePageState extends State<AdminHomePage> {
                     child: Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.green[50],
+                        color: cardColor,
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: ViroColors.success.withOpacity(0.3),
-                          width: 1,
-                        ),
+                        border: Border.all(color: borderColor, width: 1),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Row(
                             children: [
-                              Icon(
-                                Icons.check_circle_outline,
-                                color: ViroColors.success,
-                                size: 18,
-                              ),
+                              Icon(statusIcon, color: statusColor, size: 18),
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Text(
@@ -1625,6 +1663,14 @@ class _AdminHomePageState extends State<AdminHomePage> {
                               ),
                             ),
                           ],
+                          const SizedBox(height: 10),
+                          SlideToConfirm(
+                            label: "Confirmer retour",
+                            color: statusColor,
+                            icon: statusIcon,
+                            onConfirmed: () =>
+                                _markLoanReturned(clubId, loan['id'] as String),
+                          ),
                         ],
                       ),
                     ),
@@ -1780,44 +1826,39 @@ class _AdminHomePageState extends State<AdminHomePage> {
                           ),
                         ],
                         const SizedBox(height: 8),
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton.icon(
-                            onPressed: () async {
-                              try {
-                                await FirebaseFirestore.instance
-                                    .collection(FirebaseCollections.clubs)
-                                    .doc(clubId)
-                                    .collection(
-                                      FirebaseCollections.equipmentLoans,
-                                    )
-                                    .doc(loanId)
-                                    .update({'pickupConfirmed': true});
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text("Remise confirmée."),
-                                      backgroundColor: ViroColors.success,
-                                    ),
-                                  );
-                                }
-                              } catch (e) {
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text("Erreur : $e"),
-                                      backgroundColor: Colors.red,
-                                    ),
-                                  );
-                                }
+                        SlideToConfirm(
+                          label: "Confirmer remise",
+                          color: ViroColors.warning,
+                          icon: Icons.handshake_outlined,
+                          onConfirmed: () async {
+                            try {
+                              await FirebaseFirestore.instance
+                                  .collection(FirebaseCollections.clubs)
+                                  .doc(clubId)
+                                  .collection(
+                                    FirebaseCollections.equipmentLoans,
+                                  )
+                                  .doc(loanId)
+                                  .update({'pickupConfirmed': true});
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text("Remise confirmée."),
+                                    backgroundColor: ViroColors.success,
+                                  ),
+                                );
                               }
-                            },
-                            icon: const Icon(Icons.check, size: 18),
-                            label: const Text("Confirmer remise"),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: ViroColors.warning,
-                            ),
-                          ),
+                            } catch (e) {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text("Erreur : $e"),
+                                    backgroundColor: Colors.red,
+                                  ),
+                                );
+                              }
+                            }
+                          },
                         ),
                       ],
                     ),
@@ -2042,230 +2083,6 @@ class _AdminHomePageState extends State<AdminHomePage> {
                         ],
                       ),
                     ),
-                  ),
-                );
-              }),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildLoanPreparationReminders(String clubId) {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final tomorrow = today.add(const Duration(days: 1));
-    final todayTs = Timestamp.fromDate(today);
-    final tomorrowTs = Timestamp.fromDate(tomorrow);
-
-    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance
-          .collection(FirebaseCollections.clubs)
-          .doc(clubId)
-          .collection(FirebaseCollections.equipmentLoans)
-          .where('status', isEqualTo: 'active')
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const SizedBox.shrink();
-        }
-
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return const SizedBox.shrink();
-        }
-
-        // Filtrer et trier côté client (évite l'index composite lentAt)
-        final loans =
-            snapshot.data!.docs.where((doc) {
-              final lentAt = doc.data()['lentAt'] as Timestamp?;
-              if (lentAt == null) return false;
-              return lentAt.compareTo(todayTs) >= 0 &&
-                  lentAt.compareTo(tomorrowTs) < 0;
-            }).toList()..sort((a, b) {
-              final aLent = a.data()['lentAt'] as Timestamp?;
-              final bLent = b.data()['lentAt'] as Timestamp?;
-              if (aLent == null && bLent == null) return 0;
-              if (aLent == null) return 1;
-              if (bLent == null) return -1;
-              return aLent.compareTo(bLent);
-            });
-
-        if (loans.isEmpty) {
-          return const SizedBox.shrink();
-        }
-
-        return _infoCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(Icons.inventory_2_rounded, color: ViroColors.primary),
-                  const SizedBox(width: 8),
-                  const Text(
-                    "Prêts à récupérer aujourd'hui",
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              ...loans.map((doc) {
-                final data = doc.data();
-                final equipmentName =
-                    data['equipmentName'] as String? ?? 'Équipement';
-                final quantity = data['quantity'] as int? ?? 1;
-                final borrowerName =
-                    data['borrowerName'] as String? ?? 'Joueur';
-
-                return Padding(
-                  key: ValueKey(doc.id),
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.check_circle_outline,
-                        color: ViroColors.primary,
-                        size: 18,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          "$equipmentName (x$quantity) - $borrowerName",
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.grey[900],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              }),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildLoanReturnReminders(String clubId) {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final inThreeDays = today.add(const Duration(days: 3));
-    final todayTs = Timestamp.fromDate(today);
-    final inThreeDaysTs = Timestamp.fromDate(inThreeDays);
-
-    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance
-          .collection(FirebaseCollections.clubs)
-          .doc(clubId)
-          .collection(FirebaseCollections.equipmentLoans)
-          .where('status', isEqualTo: 'active')
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const SizedBox.shrink();
-        }
-
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return const SizedBox.shrink();
-        }
-
-        // Filtrer et trier côté client (évite l'index composite dueAt)
-        final sortedLoans =
-            snapshot.data!.docs.where((doc) {
-              final dueAt = doc.data()['dueAt'] as Timestamp?;
-              if (dueAt == null) return false;
-              return dueAt.compareTo(todayTs) >= 0 &&
-                  dueAt.compareTo(inThreeDaysTs) <= 0;
-            }).toList()..sort((a, b) {
-              final aDue = a.data()['dueAt'] as Timestamp?;
-              final bDue = b.data()['dueAt'] as Timestamp?;
-              if (aDue == null && bDue == null) return 0;
-              if (aDue == null) return 1;
-              if (bDue == null) return -1;
-              return aDue.compareTo(bDue); // Ascendant
-            });
-
-        if (sortedLoans.isEmpty) {
-          return const SizedBox.shrink();
-        }
-
-        return _infoCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(Icons.schedule_rounded, color: ViroColors.warning),
-                  const SizedBox(width: 8),
-                  const Text(
-                    "Retours de prêt à venir",
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              ...sortedLoans.map((doc) {
-                final data = doc.data();
-                final equipmentName =
-                    data['equipmentName'] as String? ?? 'Équipement';
-                final quantity = data['quantity'] as int? ?? 1;
-                final borrowerName =
-                    data['borrowerName'] as String? ?? 'Joueur';
-                final dueAt = data['dueAt'] as Timestamp?;
-
-                final dueDate = dueAt?.toDate();
-                final isToday =
-                    dueDate != null &&
-                    DateTime(dueDate.year, dueDate.month, dueDate.day) == today;
-
-                return Padding(
-                  key: ValueKey(doc.id),
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Row(
-                    children: [
-                      Icon(
-                        isToday
-                            ? Icons.warning_amber_rounded
-                            : Icons.calendar_today,
-                        color: isToday ? ViroColors.error : ViroColors.warning,
-                        size: 18,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              "$equipmentName (x$quantity) - $borrowerName",
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.grey[900],
-                              ),
-                            ),
-                            if (dueDate != null)
-                              Text(
-                                isToday
-                                    ? "Retour aujourd'hui"
-                                    : "Retour le ${DateFormat('dd/MM/yyyy', 'fr_FR').format(dueDate)}",
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: isToday
-                                      ? ViroColors.error
-                                      : Colors.grey[700],
-                                  fontWeight: isToday
-                                      ? FontWeight.bold
-                                      : FontWeight.normal,
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ],
                   ),
                 );
               }),
