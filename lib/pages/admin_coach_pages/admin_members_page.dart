@@ -391,7 +391,7 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
                               : Text(
                                   playerHasLicense(data, widget.clubId)
                                       ? "Licencié"
-                                      : "Membre",
+                                      : "Non Licencié",
                                   style: const TextStyle(color: Colors.grey),
                                 ),
                           onTap: () {
