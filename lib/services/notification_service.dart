@@ -90,6 +90,13 @@ final class NotificationService {
     final type = data['type'] as String?;
 
     switch (type) {
+      case AnnouncementNotification.type:
+        if (AnnouncementNotification.onOpen != null) {
+          AnnouncementNotification.onOpen!(
+            AnnouncementNotification.payloadFromData(data),
+          );
+        }
+        break;
       case JoinRequestNotification.type:
         if (JoinRequestNotification.onOpen != null) {
           JoinRequestNotification.onOpen!(
@@ -122,6 +129,20 @@ final class NotificationService {
         if (MemberLeaveNotification.onOpen != null) {
           MemberLeaveNotification.onOpen!(
             MemberLeaveNotification.payloadFromData(data),
+          );
+        }
+        break;
+      case EventNotification.type:
+        if (EventNotification.onOpen != null) {
+          EventNotification.onOpen!(
+            EventNotification.payloadFromData(data),
+          );
+        }
+        break;
+      case LoanReturnNotification.type:
+        if (LoanReturnNotification.onOpen != null) {
+          LoanReturnNotification.onOpen!(
+            LoanReturnNotification.payloadFromData(data),
           );
         }
         break;

@@ -11,11 +11,13 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:viro_team/pages/onboarding_page.dart';
 import 'firebase_options.dart';
+import 'pages/admin_coach_pages/admin_club_communication_page.dart';
 import 'pages/admin_coach_pages/admin_home_page.dart';
 import 'pages/admin_coach_pages/admin_loans_page.dart';
 import 'pages/auth_page.dart';
 import 'pages/no_internet_page.dart';
 import 'pages/player_pages/player_home_page.dart';
+import 'pages/player_pages/player_event_details_page.dart';
 import 'pages/player_pages/player_loan_catalog_page.dart';
 import 'pages/splash_page.dart';
 import 'notifications/notifications.dart';
@@ -170,6 +172,46 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
               clubId: clubId,
               initialTabIndex: 1,
             ),
+          ),
+        );
+      }
+    };
+    LoanReturnNotification.onOpen = (payload) {
+      final clubId = payload['clubId'];
+      if (clubId != null && clubId.isNotEmpty) {
+        _navigatorKey.currentState?.push(
+          MaterialPageRoute<void>(
+            builder: (_) => AdminLoansPage(
+              clubId: clubId,
+              initialTabIndex: 1,
+            ),
+          ),
+        );
+      }
+    };
+    EventNotification.onOpen = (payload) {
+      final clubId = payload['clubId'];
+      final eventId = payload['eventId'];
+      if (clubId != null &&
+          clubId.isNotEmpty &&
+          eventId != null &&
+          eventId.isNotEmpty) {
+        _navigatorKey.currentState?.push(
+          MaterialPageRoute<void>(
+            builder: (_) => PlayerEventDetailsPage(
+              clubId: clubId,
+              eventId: eventId,
+            ),
+          ),
+        );
+      }
+    };
+    AnnouncementNotification.onOpen = (payload) {
+      final clubId = payload['clubId'];
+      if (clubId != null && clubId.isNotEmpty) {
+        _navigatorKey.currentState?.push(
+          MaterialPageRoute<void>(
+            builder: (_) => AdminClubCommunicationPage(clubId: clubId),
           ),
         );
       }
