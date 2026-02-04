@@ -19,6 +19,7 @@ class _ProfileSwitcherDialogState extends State<ProfileSwitcherDialog> {
   bool _isSwitching = false;
   Map<String, String> _clubNamesCache = {};
   Map<String, String> _clubLogosCache = {};
+  Map<String, String> _clubSportsCache = {};
 
   @override
   void initState() {
@@ -38,6 +39,7 @@ class _ProfileSwitcherDialogState extends State<ProfileSwitcherDialog> {
 
     final Map<String, String> names = {};
     final Map<String, String> logos = {};
+    final Map<String, String> sports = {};
 
     // Charger par batch de 10 (limite Firestore whereIn)
     for (var i = 0; i < clubIds.length; i += 10) {
@@ -59,6 +61,10 @@ class _ProfileSwitcherDialogState extends State<ProfileSwitcherDialog> {
           if (logoUrl.isNotEmpty) {
             logos[doc.id] = logoUrl;
           }
+          final sport = data['sport'] as String?;
+          if (sport != null && sport.isNotEmpty) {
+            sports[doc.id] = sport;
+          }
         }
       } catch (e) {
         // En cas d'erreur, utiliser l'ID comme nom
@@ -72,8 +78,43 @@ class _ProfileSwitcherDialogState extends State<ProfileSwitcherDialog> {
       setState(() {
         _clubNamesCache = names;
         _clubLogosCache = logos;
+        _clubSportsCache = sports;
       });
     }
+  }
+
+  /// Émoji selon le sport du club ; "Autre" ou inconnu → ❓
+  static String _sportToEmoji(String? sport) {
+    if (sport == null || sport.isEmpty) return '❓';
+    if (sport.toLowerCase() == 'autre') return '❓';
+    switch (sport) {
+      case 'Football':
+        return '⚽';
+      case 'Basketball':
+        return '🏀';
+      case 'Tennis':
+        return '🎾';
+      case 'Volleyball':
+        return '🏐';
+      case 'Handball':
+        return '🤾';
+      case 'Rugby':
+        return '🏉';
+      case 'Judo':
+        return '🤼';
+      case 'Natation':
+        return '🏊';
+      default:
+        return '❓';
+    }
+  }
+
+  /// Pour un joueur avec plusieurs clubs : chaîne d’émojis (un par club, ordre des clubs).
+  String _playerClubsSportEmojis(List<String> clubIds) {
+    if (clubIds.isEmpty) return '';
+    return clubIds
+        .map((id) => _sportToEmoji(_clubSportsCache[id]))
+        .join(' ');
   }
 
   String _getClubName(String clubId) {
@@ -92,8 +133,7 @@ class _ProfileSwitcherDialogState extends State<ProfileSwitcherDialog> {
     required bool isCurrent,
   }) {
     final defaultAvatar = CircleAvatar(
-      backgroundColor:
-          isCurrent ? ViroColors.primary : Colors.grey.shade300,
+      backgroundColor: isCurrent ? ViroColors.primary : Colors.grey.shade300,
       child: Icon(
         _getRoleIcon(role),
         color: isCurrent ? Colors.white : Colors.grey,
@@ -151,8 +191,7 @@ class _ProfileSwitcherDialogState extends State<ProfileSwitcherDialog> {
       height: size,
       child: CircleAvatar(
         radius: size / 2,
-        backgroundColor:
-            isCurrent ? ViroColors.primary : Colors.grey.shade300,
+        backgroundColor: isCurrent ? ViroColors.primary : Colors.grey.shade300,
         child: Icon(
           _getRoleIcon(role),
           color: isCurrent ? Colors.white : Colors.grey,
@@ -183,6 +222,8 @@ class _ProfileSwitcherDialogState extends State<ProfileSwitcherDialog> {
         return 'Coach';
       case 'admin':
         return 'Administrateur';
+      case 'admin_fondateur':
+        return 'Fondateur';
       default:
         return role;
     }
@@ -195,6 +236,7 @@ class _ProfileSwitcherDialogState extends State<ProfileSwitcherDialog> {
       case 'coach':
         return Icons.psychology;
       case 'admin':
+      case 'admin_fondateur':
         return Icons.admin_panel_settings;
       default:
         return Icons.person;
@@ -218,7 +260,9 @@ class _ProfileSwitcherDialogState extends State<ProfileSwitcherDialog> {
           MaterialPageRoute(builder: (_) => const PlayerHomePage()),
           (route) => false,
         );
-      } else if (role == 'admin' || role == 'coach') {
+      } else if (role == 'admin' ||
+          role == 'coach' ||
+          role == 'admin_fondateur') {
         // Rediriger vers AdminHomePage
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (_) => const AdminHomePage()),
@@ -328,18 +372,23 @@ class _ProfileSwitcherDialogState extends State<ProfileSwitcherDialog> {
 
                   final profile = grouped.profiles.first;
                   final isCurrent = grouped.isCurrent;
-                  
-                  // Pour les players avec plusieurs clubs, afficher le nombre de clubs
+
+                  // Pour les players avec plusieurs clubs : émojis des sports ; sinon nom du club
                   String subtitle;
                   if (grouped.role == 'player' && grouped.clubCount > 1) {
-                    subtitle = '${grouped.clubCount} clubs';
+                    final ids = grouped.profiles
+                        .map((p) => p.clubId)
+                        .where((id) => id.isNotEmpty)
+                        .toList();
+                    subtitle = _playerClubsSportEmojis(ids);
+                    if (subtitle.isEmpty) subtitle = '${grouped.clubCount} clubs';
                   } else {
                     subtitle = _getClubName(targetClubId);
                   }
 
                   final clubLogoUrl = _getClubLogo(targetClubId);
-                  final multipleClubIds = (grouped.role == 'player' &&
-                          grouped.clubCount > 1)
+                  final multipleClubIds =
+                      (grouped.role == 'player' && grouped.clubCount > 1)
                       ? grouped.profiles.map((p) => p.clubId).toList()
                       : null;
 
@@ -350,8 +399,9 @@ class _ProfileSwitcherDialogState extends State<ProfileSwitcherDialog> {
                         : Colors.white,
                     child: ListTile(
                       leading: _buildProfileLeading(
-                        clubLogoUrl:
-                            multipleClubIds == null ? clubLogoUrl : null,
+                        clubLogoUrl: multipleClubIds == null
+                            ? clubLogoUrl
+                            : null,
                         clubIds: multipleClubIds,
                         role: profile.role,
                         isCurrent: isCurrent,

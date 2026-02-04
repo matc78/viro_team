@@ -166,8 +166,22 @@ class UserSession extends ChangeNotifier {
       );
     }
 
-    // Profils Admin
+    // Profils Admin fondateur (priorité : afficher "Administrateur fondateur" pour les clubs fondés)
+    for (var clubId in _currentUser!.roles.adminFondateur) {
+      profiles.add(
+        ProfileOption(
+          role: 'admin_fondateur',
+          clubId: clubId,
+          clubName: null,
+          displayName: 'Administrateur fondateur',
+        ),
+      );
+    }
+
+    // Profils Admin (uniquement les clubs où il n'est pas fondateur, pour éviter doublons)
+    final fondateurClubIds = _currentUser!.roles.adminFondateur.toSet();
     for (var clubId in _currentUser!.roles.admin) {
+      if (fondateurClubIds.contains(clubId)) continue;
       profiles.add(
         ProfileOption(
           role: 'admin',

@@ -116,6 +116,14 @@ class UserModel {
       );
     }
 
+    // Admin fondateur : liste de clubIds (clubs fondés)
+    final List<String> adminFondateurClubIds = [];
+    if (rolesData['admin_fondateur'] is List) {
+      adminFondateurClubIds.addAll(
+        (rolesData['admin_fondateur'] as List).whereType<String>(),
+      );
+    }
+
     return UserModel(
       uid: doc.id,
       email: data['email'] as String?,
@@ -128,6 +136,7 @@ class UserModel {
         player: playerProfile,
         coach: coachProfiles,
         admin: adminClubIds,
+        adminFondateur: adminFondateurClubIds,
       ),
     );
   }
@@ -160,6 +169,11 @@ class UserModel {
       rolesMap['admin'] = roles.admin;
     }
 
+    // Admin fondateur
+    if (roles.adminFondateur.isNotEmpty) {
+      rolesMap['admin_fondateur'] = roles.adminFondateur;
+    }
+
     return {
       'uid': uid,
       if (email != null) 'email': email,
@@ -181,6 +195,7 @@ class UserModel {
     if (roles.player != null) count++;
     count += roles.coach.length;
     count += roles.admin.length;
+    count += roles.adminFondateur.length;
     return count > 1;
   }
 
@@ -195,6 +210,7 @@ class UserModel {
     }
     clubIds.addAll(coachClubIds);
     clubIds.addAll(roles.admin);
+    clubIds.addAll(roles.adminFondateur);
     return clubIds.toList();
   }
 
@@ -207,6 +223,8 @@ class UserModel {
         return roles.coach.any((c) => c.clubId == clubId);
       case 'admin':
         return roles.admin.contains(clubId);
+      case 'admin_fondateur':
+        return roles.adminFondateur.contains(clubId);
       default:
         return false;
     }
@@ -234,10 +252,14 @@ class UserRoles {
   /// Liste illimitée de clubIds Admin
   final List<String> admin;
 
+  /// Liste des clubIds où l'utilisateur est administrateur fondateur
+  final List<String> adminFondateur;
+
   UserRoles({
     this.player,
     this.coach = const [],
     this.admin = const [],
+    this.adminFondateur = const [],
   });
 }
 

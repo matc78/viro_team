@@ -263,7 +263,11 @@ class _AdminHomePageState extends State<AdminHomePage> {
                             ),
                           ),
                           const SizedBox(height: 10),
-                          _buildJoinRequestsSection(clubId, clubName),
+                          _buildJoinRequestsSection(
+                            clubId,
+                            clubName,
+                            userSnapshot.data?.data() ?? {},
+                          ),
                           const SizedBox(height: 12),
                           _buildMemberLeavesSection(clubId),
                           const SizedBox(height: 12),
@@ -407,7 +411,37 @@ class _AdminHomePageState extends State<AdminHomePage> {
     );
   }
 
-  Widget _buildJoinRequestsSection(String clubId, String clubName) {
+  /// Rôle effectif du viewer dans le club (admin_fondateur > admin > coach).
+  String? _viewerRoleInClub(Map<String, dynamic> userData, String clubId) {
+    final rolesInClub = getAllUserRolesInClub(userData, clubId);
+    if (rolesInClub.contains('admin_fondateur')) return 'admin_fondateur';
+    if (rolesInClub.contains('admin')) return 'admin';
+    if (rolesInClub.contains('coach')) return 'coach';
+    return null;
+  }
+
+  /// True si le viewer peut accepter/refuser cette demande (admin fondateur: tout; admin: joueur uniquement; coach: jamais).
+  bool _canRespondToJoinRequest(
+    String? viewerRole,
+    String? roleRequested,
+  ) {
+    if (viewerRole == null) return false;
+    if (viewerRole == 'coach') return false;
+    if (viewerRole == 'admin_fondateur') return true;
+    if (viewerRole == 'admin') {
+      final r = roleRequested ?? 'player';
+      return r == 'player';
+    }
+    return false;
+  }
+
+  Widget _buildJoinRequestsSection(
+    String clubId,
+    String clubName,
+    Map<String, dynamic> userData,
+  ) {
+    final viewerRole = _viewerRoleInClub(userData, clubId);
+
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
       stream: FirebaseFirestore.instance
           .collection('join_requests')
@@ -459,6 +493,15 @@ class _AdminHomePageState extends State<AdminHomePage> {
                 final dateText = createdAt != null
                     ? "${createdAt.toDate().day}/${createdAt.toDate().month}"
                     : "";
+                final canRespond = _canRespondToJoinRequest(
+                  viewerRole,
+                  data['roleRequested'],
+                );
+                final roleLabel = role == 'coach'
+                    ? "Entraîneur"
+                    : (role == 'admin' || role == 'admin_fondateur'
+                        ? "Administrateur"
+                        : "Membre");
                 return InkWell(
                   onTap: () {
                     Navigator.of(context).push(
@@ -472,6 +515,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
                           message: message,
                           firstName: data['firstName'],
                           lastName: data['lastName'],
+                          canRespond: canRespond,
                         ),
                       ),
                     );
@@ -503,7 +547,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
                               ),
                             ),
                             Text(
-                              role == 'coach' ? "Entraîneur" : "Membre",
+                              roleLabel,
                               style: const TextStyle(color: Colors.grey),
                             ),
                           ],
@@ -526,47 +570,62 @@ class _AdminHomePageState extends State<AdminHomePage> {
                           ),
                         ],
                         const SizedBox(height: 10),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: OutlinedButton(
-                                onPressed: _processingRequestId == doc.id
-                                    ? null
-                                    : () => _handleRequest(
-                                        doc.id,
-                                        data['userId'],
-                                        accept: false,
-                                      ),
-                                child: const Text("Refuser"),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: ElevatedButton(
-                                onPressed: _processingRequestId == doc.id
-                                    ? null
-                                    : () => _handleRequest(
-                                        doc.id,
-                                        data['userId'],
-                                        accept: true,
-                                        clubId: clubId,
-                                        clubName: clubName,
-                                        role: data['roleRequested'],
-                                      ),
-                                child: _processingRequestId == doc.id
-                                    ? const SizedBox(
-                                        height: 16,
-                                        width: 16,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          color: Colors.white,
+                        if (canRespond)
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton(
+                                  onPressed: _processingRequestId == doc.id
+                                      ? null
+                                      : () => _handleRequest(
+                                          doc.id,
+                                          data['userId'],
+                                          accept: false,
                                         ),
-                                      )
-                                    : const Text("Accepter"),
+                                  child: const Text("Refuser"),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: ElevatedButton(
+                                  onPressed: _processingRequestId == doc.id
+                                      ? null
+                                      : () => _handleRequest(
+                                          doc.id,
+                                          data['userId'],
+                                          accept: true,
+                                          clubId: clubId,
+                                          clubName: clubName,
+                                          role: data['roleRequested'],
+                                        ),
+                                  child: _processingRequestId == doc.id
+                                      ? const SizedBox(
+                                          height: 16,
+                                          width: 16,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: Colors.white,
+                                          ),
+                                        )
+                                      : const Text("Accepter"),
+                                ),
+                              ),
+                            ],
+                          )
+                        else
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Text(
+                              viewerRole == 'coach'
+                                  ? "Seul un administrateur peut accepter ou refuser."
+                                  : "Réservé à l'administrateur fondateur.",
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey[600],
+                                fontStyle: FontStyle.italic,
                               ),
                             ),
-                          ],
-                        ),
+                          ),
                       ],
                     ),
                   ),

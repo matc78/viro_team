@@ -14,6 +14,8 @@ class ProfilRequestPage extends StatefulWidget {
   final String? message;
   final String? firstName;
   final String? lastName;
+  /// False pour coach ou admin non fondateur (demande coach/admin) : masque Accepter/Refuser.
+  final bool canRespond;
 
   const ProfilRequestPage({
     super.key,
@@ -25,6 +27,7 @@ class ProfilRequestPage extends StatefulWidget {
     this.message,
     this.firstName,
     this.lastName,
+    this.canRespond = true,
   });
 
   @override
@@ -118,36 +121,50 @@ class _ProfilRequestPageState extends State<ProfilRequestPage> {
                       child: Text(message.isEmpty ? "Aucun message" : message),
                     ),
                     const Spacer(),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: _isProcessing
-                                ? null
-                                : () => _handleRequest(false),
-                            child: const Text("Refuser"),
+                    if (widget.canRespond)
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: _isProcessing
+                                  ? null
+                                  : () => _handleRequest(false),
+                              child: const Text("Refuser"),
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: _isProcessing
-                                ? null
-                                : () => _handleRequest(true),
-                            child: _isProcessing
-                                ? const SizedBox(
-                                    height: 16,
-                                    width: 16,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: Colors.white,
-                                    ),
-                                  )
-                                : const Text("Accepter"),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: _isProcessing
+                                  ? null
+                                  : () => _handleRequest(true),
+                              child: _isProcessing
+                                  ? const SizedBox(
+                                      height: 16,
+                                      width: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                  : const Text("Accepter"),
+                            ),
                           ),
+                        ],
+                      )
+                    else
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Text(
+                          "Seul un administrateur (ou l'administrateur fondateur pour coach/admin) peut traiter cette demande.",
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.grey[600],
+                            fontStyle: FontStyle.italic,
+                          ),
+                          textAlign: TextAlign.center,
                         ),
-                      ],
-                    ),
+                      ),
                   ],
                 ),
               );

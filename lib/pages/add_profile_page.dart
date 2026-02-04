@@ -173,12 +173,52 @@ class _AddProfilePageState extends State<AddProfilePage> {
     }
   }
 
-  /// Récupère les clubIds où l'utilisateur a déjà un rôle
-  List<String> _getExcludedClubIds(Map<String, dynamic> userData) {
+  /// Récupère les clubIds à exclure pour le rôle demandé.
+  /// On n'exclut que les clubs où l'utilisateur a DÉJÀ ce rôle,
+  /// pour permettre d'être coach ET joueur dans le même club.
+  List<String> _getExcludedClubIds(
+    Map<String, dynamic> userData, {
+    String? role,
+  }) {
     final List<String> excluded = [];
     final roles = userData['roles'] as Map<String, dynamic>? ?? {};
 
-    // Player clubs
+    // Ne exclure que les clubs pour le rôle sélectionné
+    if (role == 'player') {
+      if (roles['player'] is Map) {
+        final playerData = roles['player'] as Map;
+        if (playerData['clubs'] is List) {
+          final clubs = (playerData['clubs'] as List).whereType<Map>();
+          excluded.addAll(
+            clubs
+                .map((c) => c['clubId'] as String? ?? '')
+                .where((id) => id.isNotEmpty),
+          );
+        }
+      }
+      return excluded;
+    }
+
+    if (role == 'coach') {
+      if (roles['coach'] is List) {
+        final coaches = (roles['coach'] as List).whereType<Map>();
+        excluded.addAll(
+          coaches
+              .map((c) => c['clubId'] as String? ?? '')
+              .where((id) => id.isNotEmpty),
+        );
+      }
+      return excluded;
+    }
+
+    if (role == 'admin') {
+      if (roles['admin'] is List) {
+        excluded.addAll((roles['admin'] as List).whereType<String>());
+      }
+      return excluded;
+    }
+
+    // Pas de rôle sélectionné : exclure tous les clubs (comportement par défaut)
     if (roles['player'] is Map) {
       final playerData = roles['player'] as Map;
       if (playerData['clubs'] is List) {
@@ -190,8 +230,6 @@ class _AddProfilePageState extends State<AddProfilePage> {
         );
       }
     }
-
-    // Coach clubs
     if (roles['coach'] is List) {
       final coaches = (roles['coach'] as List).whereType<Map>();
       excluded.addAll(
@@ -200,12 +238,9 @@ class _AddProfilePageState extends State<AddProfilePage> {
             .where((id) => id.isNotEmpty),
       );
     }
-
-    // Admin clubs
     if (roles['admin'] is List) {
       excluded.addAll((roles['admin'] as List).whereType<String>());
     }
-
     return excluded;
   }
 
@@ -244,7 +279,6 @@ class _AddProfilePageState extends State<AddProfilePage> {
           final userData =
               (userSnapshot.data!.data() as Map<String, dynamic>?) ??
               <String, dynamic>{};
-          final excludedClubIds = _getExcludedClubIds(userData);
 
           return SingleChildScrollView(
             padding: const EdgeInsets.all(20),
@@ -285,7 +319,7 @@ class _AddProfilePageState extends State<AddProfilePage> {
                   subtitle: "Postuler dans un club",
                   icon: Icons.psychology_outlined,
                   roleValue: 'coach',
-                  excludedClubIds: excludedClubIds,
+                  userData: userData,
                 ),
 
                 // OPTION : REJOINDRE LICENCIÉ
@@ -294,7 +328,7 @@ class _AddProfilePageState extends State<AddProfilePage> {
                   subtitle: "Rejoindre un nouveau club",
                   icon: Icons.sports_soccer_rounded,
                   roleValue: 'player',
-                  excludedClubIds: excludedClubIds,
+                  userData: userData,
                 ),
               ],
             ),
@@ -385,9 +419,10 @@ class _AddProfilePageState extends State<AddProfilePage> {
     required String subtitle,
     required IconData icon,
     required String roleValue,
-    required List<String> excludedClubIds,
+    required Map<String, dynamic> userData,
   }) {
     final bool isSelected = _selectedRole == roleValue;
+    final excludedClubIds = _getExcludedClubIds(userData, role: roleValue);
     return Column(
       children: [
         _roleCard(

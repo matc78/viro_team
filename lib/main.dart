@@ -366,12 +366,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
                     return const OnboardingPage();
                   }
 
-                  // 2. Demande en attente
-                  if (hasPending) {
-                    return const PlayerHomePage(); // PlayerPendingPage sera affichée dans PlayerHomePage
-                  }
-
-                  // 3. Profil actif
+                  // 2. Contexte actif : garder la home du rôle actif (coach, admin, joueur)
+                  // Priorité au contexte actif pour que le back depuis AddProfilePage
+                  // renvoie bien à la home (ex: coach reste sur AdminHomePage même avec une demande joueur en attente)
                   if (activeContext != null &&
                       activeRole != null &&
                       activeClubId != null) {
@@ -382,6 +379,11 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
                     } else if (activeRole == 'player') {
                       return const PlayerHomePage();
                     }
+                  }
+
+                  // 3. Demande en attente (sans contexte actif déjà choisi)
+                  if (hasPending) {
+                    return const PlayerHomePage(); // PlayerPendingPage sera affichée dans PlayerHomePage
                   }
 
                   // 4. Profils existants mais pas de contexte actif (cas rare)

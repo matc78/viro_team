@@ -163,9 +163,7 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
                   "Ajouter un profil",
                   () => Navigator.push(
                     context,
-                    MaterialPageRoute(
-                      builder: (_) => const AddProfilePage(),
-                    ),
+                    MaterialPageRoute(builder: (_) => const AddProfilePage()),
                   ),
                 ),
                 _buildActionTile(
@@ -591,20 +589,16 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
                 );
                 await user.reauthenticateWithCredential(credential);
                 await user.updatePassword(newPass);
-                AppLogger.instance.info(
-                  'Mot de passe modifié',
-                  {'userId': user.uid},
-                );
+                AppLogger.instance.info('Mot de passe modifié', {
+                  'userId': user.uid,
+                });
                 if (mounted) Navigator.pop(context);
                 _showSnack("Mot de passe mis à jour");
               } on FirebaseAuthException catch (e) {
                 AppLogger.instance.error(
                   'Erreur lors du changement de mot de passe',
                   error: e,
-                  context: {
-                    'userId': user.uid,
-                    'errorCode': e.code,
-                  },
+                  context: {'userId': user.uid, 'errorCode': e.code},
                 );
                 _showSnack(
                   e.code == 'wrong-password'
@@ -640,10 +634,7 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
             onPressed: () async {
               final userId = FirebaseAuth.instance.currentUser?.uid;
               await FirebaseAuth.instance.signOut();
-              AppLogger.instance.info(
-                'Déconnexion',
-                {'userId': userId},
-              );
+              AppLogger.instance.info('Déconnexion', {'userId': userId});
               if (!context.mounted) return;
               Navigator.pop(context); // close dialog
               _goToAuth(context);
@@ -811,8 +802,10 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
                       onPressed: _isSaving
                           ? null
                           : () async {
-                              final hasActive =
-                                  await _hasActiveLoanForClub(clubId, uid);
+                              final hasActive = await _hasActiveLoanForClub(
+                                clubId,
+                                uid,
+                              );
                               if (!dialogContext.mounted) return;
                               if (hasActive) {
                                 ScaffoldMessenger.of(context).showSnackBar(
@@ -827,9 +820,7 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
                                 context: context,
                                 builder: (ctx) => AlertDialog(
                                   title: const Text("Quitter le club"),
-                                  content: Text(
-                                    "Quitter le club $clubName ?",
-                                  ),
+                                  content: Text("Quitter le club $clubName ?"),
                                   actions: [
                                     TextButton(
                                       onPressed: () =>
@@ -837,8 +828,7 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
                                       child: const Text("Annuler"),
                                     ),
                                     ElevatedButton(
-                                      onPressed: () =>
-                                          Navigator.pop(ctx, true),
+                                      onPressed: () => Navigator.pop(ctx, true),
                                       child: const Text("Quitter"),
                                     ),
                                   ],
@@ -905,8 +895,8 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
           .get();
       for (final doc in eventsSnap.docs) {
         final eventData = doc.data();
-        final memberIds =
-            (eventData['teamMemberIds'] as List<dynamic>?)?.whereType<String>();
+        final memberIds = (eventData['teamMemberIds'] as List<dynamic>?)
+            ?.whereType<String>();
         if (memberIds != null && memberIds.contains(uid)) {
           await doc.reference.update({
             'teamMemberIds': FieldValue.arrayRemove([uid]),
@@ -923,8 +913,8 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
           .get();
       for (final doc in teamsSnap.docs) {
         final teamData = doc.data();
-        final playerIds =
-            (teamData['playerIds'] as List<dynamic>?)?.whereType<String>();
+        final playerIds = (teamData['playerIds'] as List<dynamic>?)
+            ?.whereType<String>();
         if (playerIds != null && playerIds.contains(uid)) {
           await doc.reference.update({
             'playerIds': FieldValue.arrayRemove([uid]),
@@ -963,9 +953,12 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
         hasOtherRoleInClub = true;
       }
       if (!hasOtherRoleInClub) {
-        await firestore.collection(FirebaseCollections.clubs).doc(clubId).update({
-          'members': FieldValue.arrayRemove([uid]),
-        });
+        await firestore
+            .collection(FirebaseCollections.clubs)
+            .doc(clubId)
+            .update({
+              'members': FieldValue.arrayRemove([uid]),
+            });
         // Enregistrer le départ pour la tuile "À ne pas manquer" et la notif aux admins/coachs
         try {
           final firstName = (data['firstName'] as String?)?.trim() ?? '';
@@ -975,12 +968,12 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
               .doc(clubId)
               .collection(FirebaseCollections.memberLeaves)
               .add({
-            'userId': uid,
-            'firstName': firstName,
-            'lastName': lastName,
-            'role': 'player',
-            'leftAt': FieldValue.serverTimestamp(),
-          });
+                'userId': uid,
+                'firstName': firstName,
+                'lastName': lastName,
+                'role': 'player',
+                'leftAt': FieldValue.serverTimestamp(),
+              });
         } catch (e) {
           AppLogger.instance.error(
             'Erreur enregistrement départ club (tuile/notif)',
@@ -1006,8 +999,7 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
         rolesData['player'] = null;
       } else {
         rolesData['player'] = {'clubs': newPlayerClubs};
-        final activeContext =
-            data['activeContext'] as Map<String, dynamic>?;
+        final activeContext = data['activeContext'] as Map<String, dynamic>?;
         final activeClubId = activeContext?['clubId'] as String?;
         final activeRole = activeContext?['role'] as String?;
         if (activeClubId == clubId && activeRole == 'player') {
@@ -1019,8 +1011,7 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
                 .collection(FirebaseCollections.clubs)
                 .doc(firstClubId)
                 .get();
-            firstClubName =
-                clubDoc.data()?['name'] as String?;
+            firstClubName = clubDoc.data()?['name'] as String?;
           }
           newActiveContext = {
             'role': 'player',
@@ -1042,7 +1033,10 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
           updates['activeContext'] = newActiveContext;
         }
       }
-      await firestore.collection(FirebaseCollections.users).doc(uid).update(updates);
+      await firestore
+          .collection(FirebaseCollections.users)
+          .doc(uid)
+          .update(updates);
 
       if (!context.mounted) return;
       Navigator.of(context).pushAndRemoveUntil(
