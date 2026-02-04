@@ -12,6 +12,7 @@ import 'admin_members_page.dart';
 import 'admin_profil_page.dart';
 import 'package:intl/intl.dart';
 import '../../constants/firebase_collections.dart';
+import '../../services/notification_service.dart';
 import '../../theme/viro_theme.dart';
 import '../../utils/firebase_helpers.dart';
 import '../../widget/profile_switcher_dialog.dart';
@@ -33,6 +34,14 @@ class _AdminHomePageState extends State<AdminHomePage> {
   bool _showAllRequests = false;
   String? _processingRequestId;
   String? _processingLoanRequestId;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      NotificationService.instance.requestPermissionIfNeeded(user?.uid);
+    });
+  }
 
   /// Rafraîchit le contenu (scroll vers le bas = pull-to-refresh).
   Future<void> _refreshAdminHome() async {
@@ -614,8 +623,6 @@ class _AdminHomePageState extends State<AdminHomePage> {
             .get();
         final userData = userDoc.data() ?? {};
         final roles = userData['roles'] as Map<String, dynamic>? ?? {};
-        final activeContext =
-            userData['activeContext'] as Map<String, dynamic>?;
 
         // Déterminer le rôle réel (normaliser admin_fondateur en admin)
         final normalizedRole = (role == 'admin_fondateur')
@@ -716,14 +723,11 @@ class _AdminHomePageState extends State<AdminHomePage> {
           }
         }
 
-        // Définir activeContext si c'est le premier profil
-        Map<String, dynamic>? newActiveContext;
-        if (activeContext == null || activeContext.isEmpty) {
-          newActiveContext = {'role': normalizedRole, 'clubId': clubId};
-        } else {
-          // Garder le contexte actuel
-          newActiveContext = Map<String, dynamic>.from(activeContext);
-        }
+        // Toujours définir activeContext sur le club et le rôle acceptés
+        final newActiveContext = <String, dynamic>{
+          'role': normalizedRole,
+          'clubId': clubId,
+        };
 
         // Mettre à jour le document utilisateur
         await FirebaseFirestore.instance.collection('users').doc(userId).set({

@@ -51,11 +51,7 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
         final displayFirst = _formatFirst(rawFirst);
         final displayLast = _formatLast(rawLast);
 
-        // Utiliser activeContext pour le club actuel
-        final activeContext = data?['activeContext'] as Map<String, dynamic>?;
-        final String? clubName =
-            activeContext?['clubName'] as String? ??
-            data?['clubName'] as String?;
+        final String? clubName = data?['clubName'] as String?;
 
         // Construire la liste de tous les clubIds depuis roles
         final roles = data?['roles'] as Map<String, dynamic>? ?? {};

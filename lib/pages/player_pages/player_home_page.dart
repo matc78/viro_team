@@ -16,6 +16,7 @@ import 'player_event_details_page.dart';
 import 'player_infos_page.dart';
 import 'player_loan_catalog_page.dart';
 
+import '../../services/notification_service.dart';
 import '../../theme/viro_theme.dart';
 import '../../widget/player_bottom_nav.dart';
 import '../../widget/profile_switcher_dialog.dart';
@@ -34,6 +35,14 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
   final String _currentUserId = FirebaseAuth.instance.currentUser?.uid ?? "";
   bool _isManualRefreshing = false;
   Map<String, dynamic>? _manualUserData;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      NotificationService.instance.requestPermissionIfNeeded(_currentUserId.isNotEmpty ? _currentUserId : null);
+    });
+  }
 
   // --- LOGIQUE DE FLUX ---
 
@@ -151,9 +160,8 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
 
         // 2. SI MEMBRE D'UN CLUB (VUE NORMALE)
         if (finalClubId != null && finalClubId.isNotEmpty) {
-          // Récupérer le nom du club depuis activeContext ou depuis userData
-          String? clubName = activeContext?['clubName'] as String?;
-          clubName ??= userData?['clubName'] as String? ?? "Mon Club";
+          final String clubName =
+              userData?['clubName'] as String? ?? "Mon Club";
 
           final allClubIds = _extractClubIds(userData);
           // Utiliser le premier clubId pour la compatibilité avec les paramètres existants

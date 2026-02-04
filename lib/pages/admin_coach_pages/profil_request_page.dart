@@ -179,27 +179,113 @@ class _ProfilRequestPageState extends State<ProfilRequestPage> {
           'status': 'accepted',
           'respondedAt': FieldValue.serverTimestamp(),
         });
-        await FirebaseFirestore.instance
+
+        final userId = widget.userId!;
+        final clubId = widget.clubId;
+        final roleRequested = widget.roleRequested ?? 'player';
+
+        final userDoc = await FirebaseFirestore.instance
             .collection('users')
-            .doc(widget.userId)
-            .set({
-              'clubId': widget.clubId,
-              'clubName': widget.clubName,
-              'hasPendingRequest': false,
-              'role': widget.roleRequested ?? 'player',
-            }, SetOptions(merge: true));
-        if (widget.clubId != null) {
-          final field =
-              (widget.roleRequested == 'admin_fondateur' ||
-                  widget.roleRequested == 'coach')
+            .doc(userId)
+            .get();
+        final userData = userDoc.data() ?? {};
+        final roles = userData['roles'] as Map<String, dynamic>? ?? {};
+
+        final normalizedRole = (roleRequested == 'admin_fondateur')
+            ? 'admin'
+            : roleRequested;
+
+        final Map<String, dynamic> updatedRoles =
+            Map<String, dynamic>.from(roles);
+
+        if (normalizedRole == 'player') {
+          final existingPlayer = roles['player'] as Map<String, dynamic>?;
+          if (existingPlayer == null) {
+            final requestData =
+                (await requestRef.get()).data() ?? {};
+            final license = requestData['license'] as String?;
+            updatedRoles['player'] = {
+              'clubs': [
+                {
+                  'clubId': clubId,
+                  'teamIds': [],
+                  if (license != null && license.isNotEmpty) 'license': license,
+                },
+              ],
+            };
+          } else {
+            List<Map<String, dynamic>> clubsList;
+            if (existingPlayer['clubs'] is List) {
+              clubsList = (existingPlayer['clubs'] as List)
+                  .map((e) => e as Map<String, dynamic>)
+                  .toList();
+            } else if (existingPlayer['clubId'] != null) {
+              clubsList = [
+                {
+                  'clubId': existingPlayer['clubId'],
+                  'teamIds': existingPlayer['teamIds'] ?? [],
+                  if (existingPlayer['license'] != null)
+                    'license': existingPlayer['license'],
+                },
+              ];
+            } else {
+              clubsList = [];
+            }
+            if (!clubsList.any((c) => c['clubId'] == clubId)) {
+              final requestData =
+                  (await requestRef.get()).data() ?? {};
+              final license = requestData['license'] as String?;
+              clubsList.add({
+                'clubId': clubId,
+                'teamIds': [],
+                if (license != null && license.isNotEmpty) 'license': license,
+              });
+            }
+            updatedRoles['player'] = {...existingPlayer, 'clubs': clubsList};
+          }
+        } else if (normalizedRole == 'coach') {
+          final existingCoaches =
+              (roles['coach'] as List?)
+                  ?.map((e) => e as Map<String, dynamic>)
+                  .toList() ??
+              [];
+          if (!existingCoaches.any((c) => c['clubId'] == clubId)) {
+            existingCoaches.add({'clubId': clubId, 'teams': []});
+            updatedRoles['coach'] = existingCoaches;
+          }
+        } else if (normalizedRole == 'admin') {
+          final existingAdmins =
+              (roles['admin'] as List?)?.whereType<String>().toList() ?? [];
+          if (clubId != null && !existingAdmins.contains(clubId)) {
+            existingAdmins.add(clubId);
+            updatedRoles['admin'] = existingAdmins;
+          }
+        }
+
+        // Toujours définir activeContext sur le club et le rôle acceptés
+        final newActiveContext = <String, dynamic>{
+          'role': normalizedRole,
+          'clubId': clubId,
+        };
+
+        await FirebaseFirestore.instance.collection('users').doc(userId).set({
+          'hasPendingRequest': false,
+          'roles': updatedRoles,
+          'activeContext': newActiveContext,
+          if (clubId != null) 'clubId': clubId,
+          if (widget.clubName != null) 'clubName': widget.clubName,
+        }, SetOptions(merge: true));
+
+        if (clubId != null) {
+          final field = (normalizedRole == 'admin' || normalizedRole == 'coach')
               ? 'coaches'
               : 'members';
           await FirebaseFirestore.instance
               .collection('clubs')
-              .doc(widget.clubId)
+              .doc(clubId)
               .update({
-                field: FieldValue.arrayUnion([widget.userId]),
-              });
+            field: FieldValue.arrayUnion([userId]),
+          });
         }
       } else {
         await requestRef.update({

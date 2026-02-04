@@ -12,10 +12,12 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:viro_team/pages/onboarding_page.dart';
 import 'firebase_options.dart';
 import 'pages/admin_coach_pages/admin_home_page.dart';
+import 'pages/admin_coach_pages/admin_loans_page.dart';
 import 'pages/admin_coach_pages/profil_request_page.dart';
 import 'pages/auth_page.dart';
 import 'pages/no_internet_page.dart';
 import 'pages/player_pages/player_home_page.dart';
+import 'pages/player_pages/player_loan_catalog_page.dart';
 import 'pages/splash_page.dart';
 import 'services/notification_service.dart';
 import 'services/user_session.dart';
@@ -144,6 +146,40 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           ),
         ),
       );
+    };
+    NotificationService.onOpenLoanRequest = (payload) {
+      final clubId = payload['clubId'];
+      if (clubId != null && clubId.isNotEmpty) {
+        _navigatorKey.currentState?.push(
+          MaterialPageRoute<void>(
+            builder: (_) => AdminLoansPage(
+              clubId: clubId,
+              initialTabIndex: 1,
+            ),
+          ),
+        );
+      }
+    };
+    NotificationService.onOpenJoinRequestResponse = (payload) {
+      _navigatorKey.currentState?.pushAndRemoveUntil(
+        MaterialPageRoute<void>(
+          builder: (_) => const OnboardingPage(),
+        ),
+        (route) => false,
+      );
+    };
+    NotificationService.onOpenLoanRequestResponse = (payload) {
+      final clubId = payload['clubId'];
+      if (clubId != null && clubId.isNotEmpty) {
+        _navigatorKey.currentState?.push(
+          MaterialPageRoute<void>(
+            builder: (_) => PlayerLoanCatalogPage(
+              clubId: clubId,
+              initialTabIndex: 1,
+            ),
+          ),
+        );
+      }
     };
     NotificationService.onTokenRefreshed = () {
       final uid = FirebaseAuth.instance.currentUser?.uid;

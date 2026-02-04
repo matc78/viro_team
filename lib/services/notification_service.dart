@@ -13,6 +13,18 @@ final class NotificationService {
   /// Payload : requestId, userId, clubId, clubName, roleRequested, firstName, lastName.
   static void Function(Map<String, String> payload)? onOpenJoinRequest;
 
+  /// Callback appelé quand l'utilisateur ouvre une notif "demande de prêt".
+  /// Payload : requestId, clubId, clubName, playerId, playerName, equipmentName.
+  static void Function(Map<String, String> payload)? onOpenLoanRequest;
+
+  /// Callback appelé quand l'utilisateur ouvre une notif "réponse demande d'adhésion" (acceptée/refusée).
+  /// Payload : requestId, clubId, clubName, status (accepted|refused), roleRequested.
+  static void Function(Map<String, String> payload)? onOpenJoinRequestResponse;
+
+  /// Callback appelé quand l'utilisateur ouvre une notif "réponse demande de prêt" (acceptée/refusée).
+  /// Payload : requestId, clubId, clubName, status (accepted|refused), equipmentName, adminResponse.
+  static void Function(Map<String, String> payload)? onOpenLoanRequestResponse;
+
   /// Callback appelé quand le token FCM est rafraîchi (pour ré-enregistrer dans Firestore).
   static void Function()? onTokenRefreshed;
 
@@ -20,20 +32,10 @@ final class NotificationService {
   bool _initialized = false;
 
   /// À appeler une fois au démarrage (après Firebase.initializeApp).
+  /// Ne demande pas les permissions ici : utiliser [requestPermissionIfNeeded] depuis une home page.
   Future<void> init() async {
     if (_initialized) return;
     _initialized = true;
-
-    // Demander les permissions (iOS)
-    final settings = await FirebaseMessaging.instance.requestPermission(
-      alert: true,
-      badge: true,
-      sound: true,
-    );
-    if (settings.authorizationStatus == AuthorizationStatus.denied) {
-      AppLogger.instance.info('FCM: permissions refusées');
-      return;
-    }
 
     // Message ouvert depuis une notif (app en arrière-plan)
     FirebaseMessaging.onMessageOpenedApp.listen(_handleMessage);
@@ -57,6 +59,23 @@ final class NotificationService {
       AppLogger.instance.info('FCM: token rafraîchi');
       onTokenRefreshed?.call();
     });
+  }
+
+  /// À appeler lorsque l'utilisateur arrive sur une home page (après choix onboarding).
+  /// Affiche la demande de permission (iOS / Android 13+), puis enregistre le token si [uid] est fourni.
+  Future<void> requestPermissionIfNeeded(String? uid) async {
+    final settings = await FirebaseMessaging.instance.requestPermission(
+      alert: true,
+      badge: true,
+      sound: true,
+    );
+    if (settings.authorizationStatus == AuthorizationStatus.denied) {
+      AppLogger.instance.info('FCM: permissions refusées');
+      return;
+    }
+    if (uid != null && uid.isNotEmpty) {
+      await updateTokenForUser(uid);
+    }
   }
 
   /// Enregistre le token FCM pour l'utilisateur connecté [uid].
@@ -93,6 +112,37 @@ final class NotificationService {
         'lastName': data['lastName'] ?? '',
       };
       onOpenJoinRequest!(payload);
+    } else if (data['type'] == 'loan_request' && onOpenLoanRequest != null) {
+      final payload = <String, String>{
+        'requestId': data['requestId'] ?? '',
+        'clubId': data['clubId'] ?? '',
+        'clubName': data['clubName'] ?? '',
+        'playerId': data['playerId'] ?? '',
+        'playerName': data['playerName'] ?? '',
+        'equipmentName': data['equipmentName'] ?? '',
+      };
+      onOpenLoanRequest!(payload);
+    } else if (data['type'] == 'join_request_response' &&
+        onOpenJoinRequestResponse != null) {
+      final payload = <String, String>{
+        'requestId': data['requestId'] ?? '',
+        'clubId': data['clubId'] ?? '',
+        'clubName': data['clubName'] ?? '',
+        'status': data['status'] ?? '',
+        'roleRequested': data['roleRequested'] ?? '',
+      };
+      onOpenJoinRequestResponse!(payload);
+    } else if (data['type'] == 'loan_request_response' &&
+        onOpenLoanRequestResponse != null) {
+      final payload = <String, String>{
+        'requestId': data['requestId'] ?? '',
+        'clubId': data['clubId'] ?? '',
+        'clubName': data['clubName'] ?? '',
+        'status': data['status'] ?? '',
+        'equipmentName': data['equipmentName'] ?? '',
+        'adminResponse': data['adminResponse'] ?? '',
+      };
+      onOpenLoanRequestResponse!(payload);
     }
   }
 
