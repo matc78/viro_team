@@ -1,29 +1,15 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:viro_team/constants/firebase_collections.dart';
+import 'package:viro_team/notifications/notifications.dart';
 import 'package:viro_team/utils/app_logger.dart';
 
-/// Gère FCM : permissions, token, sauvegarde dans users/{uid}, tap sur notif.
+/// Gère FCM : permissions, token, sauvegarde dans users/{uid}, dispatch du tap sur notif.
+/// Chaque type de notif est défini dans [lib/notifications/] (un fichier par notif).
 final class NotificationService {
   NotificationService._();
 
   static final NotificationService instance = NotificationService._();
-
-  /// Callback appelé quand l'utilisateur ouvre une notif "demande d'adhésion".
-  /// Payload : requestId, userId, clubId, clubName, roleRequested, firstName, lastName.
-  static void Function(Map<String, String> payload)? onOpenJoinRequest;
-
-  /// Callback appelé quand l'utilisateur ouvre une notif "demande de prêt".
-  /// Payload : requestId, clubId, clubName, playerId, playerName, equipmentName.
-  static void Function(Map<String, String> payload)? onOpenLoanRequest;
-
-  /// Callback appelé quand l'utilisateur ouvre une notif "réponse demande d'adhésion" (acceptée/refusée).
-  /// Payload : requestId, clubId, clubName, status (accepted|refused), roleRequested.
-  static void Function(Map<String, String> payload)? onOpenJoinRequestResponse;
-
-  /// Callback appelé quand l'utilisateur ouvre une notif "réponse demande de prêt" (acceptée/refusée).
-  /// Payload : requestId, clubId, clubName, status (accepted|refused), equipmentName, adminResponse.
-  static void Function(Map<String, String> payload)? onOpenLoanRequestResponse;
 
   /// Callback appelé quand le token FCM est rafraîchi (pour ré-enregistrer dans Firestore).
   static void Function()? onTokenRefreshed;
@@ -101,48 +87,41 @@ final class NotificationService {
 
   void _handleMessage(RemoteMessage message) {
     final data = message.data;
-    if (data['type'] == 'join_request' && onOpenJoinRequest != null) {
-      final payload = <String, String>{
-        'requestId': data['requestId'] ?? '',
-        'userId': data['userId'] ?? '',
-        'clubId': data['clubId'] ?? '',
-        'clubName': data['clubName'] ?? '',
-        'roleRequested': data['roleRequested'] ?? '',
-        'firstName': data['firstName'] ?? '',
-        'lastName': data['lastName'] ?? '',
-      };
-      onOpenJoinRequest!(payload);
-    } else if (data['type'] == 'loan_request' && onOpenLoanRequest != null) {
-      final payload = <String, String>{
-        'requestId': data['requestId'] ?? '',
-        'clubId': data['clubId'] ?? '',
-        'clubName': data['clubName'] ?? '',
-        'playerId': data['playerId'] ?? '',
-        'playerName': data['playerName'] ?? '',
-        'equipmentName': data['equipmentName'] ?? '',
-      };
-      onOpenLoanRequest!(payload);
-    } else if (data['type'] == 'join_request_response' &&
-        onOpenJoinRequestResponse != null) {
-      final payload = <String, String>{
-        'requestId': data['requestId'] ?? '',
-        'clubId': data['clubId'] ?? '',
-        'clubName': data['clubName'] ?? '',
-        'status': data['status'] ?? '',
-        'roleRequested': data['roleRequested'] ?? '',
-      };
-      onOpenJoinRequestResponse!(payload);
-    } else if (data['type'] == 'loan_request_response' &&
-        onOpenLoanRequestResponse != null) {
-      final payload = <String, String>{
-        'requestId': data['requestId'] ?? '',
-        'clubId': data['clubId'] ?? '',
-        'clubName': data['clubName'] ?? '',
-        'status': data['status'] ?? '',
-        'equipmentName': data['equipmentName'] ?? '',
-        'adminResponse': data['adminResponse'] ?? '',
-      };
-      onOpenLoanRequestResponse!(payload);
+    final type = data['type'] as String?;
+
+    switch (type) {
+      case JoinRequestNotification.type:
+        if (JoinRequestNotification.onOpen != null) {
+          JoinRequestNotification.onOpen!(
+            JoinRequestNotification.payloadFromData(data),
+          );
+        }
+        break;
+      case LoanRequestNotification.type:
+        if (LoanRequestNotification.onOpen != null) {
+          LoanRequestNotification.onOpen!(
+            LoanRequestNotification.payloadFromData(data),
+          );
+        }
+        break;
+      case JoinRequestResponseNotification.type:
+        if (JoinRequestResponseNotification.onOpen != null) {
+          JoinRequestResponseNotification.onOpen!(
+            JoinRequestResponseNotification.payloadFromData(data),
+          );
+        }
+        break;
+      case LoanRequestResponseNotification.type:
+        if (LoanRequestResponseNotification.onOpen != null) {
+          LoanRequestResponseNotification.onOpen!(
+            LoanRequestResponseNotification.payloadFromData(data),
+          );
+        }
+        break;
+      default:
+        if (type != null && type.isNotEmpty) {
+          AppLogger.instance.info('FCM: type de notif inconnu', {'type': type});
+        }
     }
   }
 

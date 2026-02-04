@@ -19,6 +19,7 @@ import 'pages/no_internet_page.dart';
 import 'pages/player_pages/player_home_page.dart';
 import 'pages/player_pages/player_loan_catalog_page.dart';
 import 'pages/splash_page.dart';
+import 'notifications/notifications.dart';
 import 'services/notification_service.dart';
 import 'services/user_session.dart';
 import 'theme/viro_theme.dart';
@@ -132,7 +133,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   }
 
   void _setupNotificationHandlers() {
-    NotificationService.onOpenJoinRequest = (payload) {
+    JoinRequestNotification.onOpen = (payload) {
       _navigatorKey.currentState?.push(
         MaterialPageRoute<void>(
           builder: (_) => ProfilRequestPage(
@@ -147,7 +148,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         ),
       );
     };
-    NotificationService.onOpenLoanRequest = (payload) {
+    LoanRequestNotification.onOpen = (payload) {
       final clubId = payload['clubId'];
       if (clubId != null && clubId.isNotEmpty) {
         _navigatorKey.currentState?.push(
@@ -160,7 +161,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         );
       }
     };
-    NotificationService.onOpenJoinRequestResponse = (payload) {
+    JoinRequestResponseNotification.onOpen = (payload) {
       _navigatorKey.currentState?.pushAndRemoveUntil(
         MaterialPageRoute<void>(
           builder: (_) => const OnboardingPage(),
@@ -168,7 +169,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         (route) => false,
       );
     };
-    NotificationService.onOpenLoanRequestResponse = (payload) {
+    LoanRequestResponseNotification.onOpen = (payload) {
       final clubId = payload['clubId'];
       if (clubId != null && clubId.isNotEmpty) {
         _navigatorKey.currentState?.push(
