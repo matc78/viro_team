@@ -38,7 +38,7 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
 
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
       stream: FirebaseFirestore.instance
-          .collection('users')
+          .collection(FirebaseCollections.users)
           .doc(user.uid)
           .snapshots(),
       builder: (context, snapshot) {
@@ -265,7 +265,7 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
             children: [
               CircleAvatar(
                 radius: 55,
-                backgroundColor: ViroColors.primary.withOpacity(0.1),
+                backgroundColor: ViroColors.primary.withValues(alpha: 0.1),
                 backgroundImage: (avatarUrl != null && avatarUrl.isNotEmpty)
                     ? CachedNetworkImageProvider(avatarUrl)
                     : null,
@@ -409,13 +409,14 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
               setState(() => _isSaving = true);
               try {
                 await FirebaseFirestore.instance
-                    .collection('users')
+                    .collection(FirebaseCollections.users)
                     .doc(user.uid)
                     .set({
                       'firstName': first,
                       'lastName': last,
                     }, SetOptions(merge: true));
-                if (mounted) Navigator.pop(context);
+                if (!context.mounted) return;
+                Navigator.pop(context);
               } catch (e) {
                 _showSnack("Impossible de mettre à jour le nom : $e");
               } finally {
@@ -454,10 +455,11 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
                 // verifyBeforeUpdateEmail envoie un email de validation puis change l'email
                 await user.verifyBeforeUpdateEmail(newEmail);
                 await FirebaseFirestore.instance
-                    .collection('users')
+                    .collection(FirebaseCollections.users)
                     .doc(user.uid)
                     .set({'email': newEmail}, SetOptions(merge: true));
-                if (mounted) Navigator.pop(context);
+                if (!context.mounted) return;
+                Navigator.pop(context);
                 _showSnack(
                   "Email mis à jour (vérifie ta boîte mail pour confirmer si nécessaire)",
                 );
@@ -502,10 +504,11 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
               setState(() => _isSaving = true);
               try {
                 await FirebaseFirestore.instance
-                    .collection('users')
+                    .collection(FirebaseCollections.users)
                     .doc(user.uid)
                     .set({'phone': newPhone}, SetOptions(merge: true));
-                if (mounted) Navigator.pop(context);
+                if (!context.mounted) return;
+                Navigator.pop(context);
                 _showSnack("Téléphone mis à jour");
               } catch (e) {
                 _showSnack("Erreur lors de la mise à jour : $e");
@@ -592,7 +595,8 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
                 AppLogger.instance.info('Mot de passe modifié', {
                   'userId': user.uid,
                 });
-                if (mounted) Navigator.pop(context);
+                if (!context.mounted) return;
+                Navigator.pop(context);
                 _showSnack("Mot de passe mis à jour");
               } on FirebaseAuthException catch (e) {
                 AppLogger.instance.error(
@@ -678,7 +682,7 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
 
                 // Récupérer les infos pour nettoyer club et demandes
                 final userDoc = await firestore
-                    .collection('users')
+                    .collection(FirebaseCollections.users)
                     .doc(uid)
                     .get();
                 final data = userDoc.data();
@@ -705,7 +709,7 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
                           finalRole == 'coach')
                       ? 'coaches'
                       : 'members';
-                  await firestore.collection('clubs').doc(finalClubId).update({
+                  await firestore.collection(FirebaseCollections.clubs).doc(finalClubId).update({
                     field: FieldValue.arrayRemove([uid]),
                   });
                 }
@@ -714,7 +718,7 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
 
                 // Supprimer les demandes d'adhésion associées
                 final requests = await firestore
-                    .collection('join_requests')
+                    .collection(FirebaseCollections.joinRequests)
                     .where('userId', isEqualTo: uid)
                     .get();
                 for (final doc in requests.docs) {
@@ -722,7 +726,7 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
                 }
 
                 // Supprimer le document utilisateur
-                await firestore.collection('users').doc(uid).delete();
+                await firestore.collection(FirebaseCollections.users).doc(uid).delete();
 
                 // Supprimer le compte Firebase Auth
                 await user.delete();
@@ -764,14 +768,14 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
     String uid,
   ) async {
     final clubsWithRoles = await _extractRolesByClub(data);
+    if (!context.mounted) return;
     final playerClubs = clubsWithRoles
         .where((c) => (c['roles'] as List<dynamic>).contains('player'))
         .toList();
     if (playerClubs.isEmpty) {
-      if (mounted) _showSnack("Aucun club à quitter.");
+      if (context.mounted) _showSnack("Aucun club à quitter.");
       return;
     }
-    if (!mounted) return;
     showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -807,6 +811,7 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
                                 uid,
                               );
                               if (!dialogContext.mounted) return;
+                              if (!context.mounted) return;
                               if (hasActive) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
@@ -1074,6 +1079,7 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
 
     // Extraire tous les clubs et rôles
     final clubsWithRoles = await _extractRolesByClub(data);
+    if (!context.mounted) return;
 
     showDialog(
       context: context,
@@ -1210,7 +1216,7 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
 
       try {
         final clubDoc = await FirebaseFirestore.instance
-            .collection('clubs')
+            .collection(FirebaseCollections.clubs)
             .doc(clubId)
             .get();
         final clubData = clubDoc.data();
@@ -1235,15 +1241,15 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
     try {
       final db = FirebaseFirestore.instance;
       final playerTeams = await db
-          .collection('clubs')
+          .collection(FirebaseCollections.clubs)
           .doc(clubId)
-          .collection('teams')
+          .collection(FirebaseCollections.teams)
           .where('playerIds', arrayContains: userId)
           .get();
       final coachTeams = await db
-          .collection('clubs')
+          .collection(FirebaseCollections.clubs)
           .doc(clubId)
-          .collection('teams')
+          .collection(FirebaseCollections.teams)
           .where('coachIds', arrayContains: userId)
           .get();
 
@@ -1290,7 +1296,7 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
                   _formatRoleName(role),
                   style: const TextStyle(fontSize: 11),
                 ),
-                backgroundColor: _getRoleColor(role).withOpacity(0.1),
+                backgroundColor: _getRoleColor(role).withValues(alpha: 0.1),
                 labelStyle: TextStyle(
                   color: _getRoleColor(role),
                   fontWeight: FontWeight.bold,
@@ -1395,7 +1401,7 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
     final logos = <String>[];
     for (final id in clubIds) {
       final doc = await FirebaseFirestore.instance
-          .collection('clubs')
+          .collection(FirebaseCollections.clubs)
           .doc(id)
           .get();
       final url = doc.data()?['logoUrl'] as String?;
@@ -1427,7 +1433,7 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
       await storageRef.putFile(File(file.path));
       final url = await storageRef.getDownloadURL();
 
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+      await FirebaseFirestore.instance.collection(FirebaseCollections.users).doc(user.uid).set({
         'avatarUrl': url,
       }, SetOptions(merge: true));
     } catch (e) {

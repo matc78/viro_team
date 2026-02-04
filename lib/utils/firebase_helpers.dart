@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:viro_team/constants/firebase_collections.dart';
 
 /// Récupère plusieurs documents utilisateur en batch pour éviter les N+1 queries.
 /// Firestore limite whereIn à 10 éléments, donc on fait plusieurs appels si nécessaire.
@@ -11,7 +12,7 @@ Future<List<DocumentSnapshot<Map<String, dynamic>>>> fetchUsersBatch(List<String
     final batch = userIds.sublist(i, math.min(i + 10, userIds.length));
     batches.add(
       FirebaseFirestore.instance
-          .collection('users')
+          .collection(FirebaseCollections.users)
           .where(FieldPath.documentId, whereIn: batch)
           .get(),
     );
@@ -292,7 +293,7 @@ Future<void> updatePlayerClubsForTeam(
   required String teamName,
   required String teamCategory,
 }) async {
-  final userRef = firestore.collection('users').doc(userId);
+  final userRef = firestore.collection(FirebaseCollections.users).doc(userId);
   final userSnap = await userRef.get();
   final userData = userSnap.data() ?? {};
   final roles = userData['roles'] as Map<String, dynamic>? ?? {};

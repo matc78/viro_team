@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:viro_team/constants/firebase_collections.dart';
 import 'package:viro_team/pages/admin_coach_pages/admin_add_event_page.dart';
 import 'package:viro_team/pages/admin_coach_pages/admin_event_details_page.dart';
 import '../../theme/viro_theme.dart';
@@ -78,7 +79,7 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
       // Récupérer d'abord la date de fin de saison
       return FutureBuilder<DocumentSnapshot>(
         future: FirebaseFirestore.instance
-            .collection('clubs')
+            .collection(FirebaseCollections.clubs)
             .doc(widget.clubId)
             .get(),
         builder: (context, clubSnap) {
@@ -101,9 +102,9 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
           // Utiliser la date de fin de saison comme limite supérieure
           return StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance
-                .collection('clubs')
+                .collection(FirebaseCollections.clubs)
                 .doc(widget.clubId)
-                .collection('events')
+                .collection(FirebaseCollections.events)
                 .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(DateTime.now()))
                 .where('date', isLessThanOrEqualTo: Timestamp.fromDate(seasonEndDate))
                 .snapshots(),
@@ -300,9 +301,9 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
   Widget _buildFilters() {
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
       stream: FirebaseFirestore.instance
-          .collection('clubs')
+          .collection(FirebaseCollections.clubs)
           .doc(widget.clubId)
-          .collection('teams')
+          .collection(FirebaseCollections.teams)
           .snapshots(),
       builder: (context, snapshot) {
         final teamNames = <String>{"Choisir une équipe"};
@@ -396,9 +397,9 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
 
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
-          .collection('clubs')
+          .collection(FirebaseCollections.clubs)
           .doc(widget.clubId)
-          .collection('events')
+          .collection(FirebaseCollections.events)
           .where('dateId', isEqualTo: dateId)
           .snapshots(),
       builder: (context, snapshot) {
@@ -409,7 +410,7 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
         // Récupérer la date de fin de saison du club
         return FutureBuilder<DocumentSnapshot>(
           future: FirebaseFirestore.instance
-              .collection('clubs')
+              .collection(FirebaseCollections.clubs)
               .doc(widget.clubId)
               .get(),
           builder: (context, clubSnap) {
@@ -562,7 +563,7 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
               padding: const EdgeInsets.only(right: 10),
               child: CircleAvatar(
                 radius: 14,
-                backgroundColor: Colors.redAccent.withOpacity(0.9),
+                backgroundColor: Colors.redAccent.withValues(alpha: 0.9),
                 child: const Icon(Icons.remove, color: Colors.white, size: 18),
               ),
             ),
@@ -799,9 +800,9 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
 
   Future<void> _cancelSingle(String docId) async {
     await FirebaseFirestore.instance
-        .collection('clubs')
+        .collection(FirebaseCollections.clubs)
         .doc(widget.clubId)
-        .collection('events')
+        .collection(FirebaseCollections.events)
         .doc(docId)
         .set({'canceled': true}, SetOptions(merge: true));
   }
@@ -811,9 +812,9 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
     final type = data['type'];
     final startTime = data['startTime'];
     final query = await FirebaseFirestore.instance
-        .collection('clubs')
+        .collection(FirebaseCollections.clubs)
         .doc(widget.clubId)
-        .collection('events')
+        .collection(FirebaseCollections.events)
         .where('teamName', isEqualTo: team)
         .where('type', isEqualTo: type)
         .where('startTime', isEqualTo: startTime)
@@ -828,9 +829,9 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
 
   Future<void> _uncancelSingle(String docId) async {
     await FirebaseFirestore.instance
-        .collection('clubs')
+        .collection(FirebaseCollections.clubs)
         .doc(widget.clubId)
-        .collection('events')
+        .collection(FirebaseCollections.events)
         .doc(docId)
         .set({'canceled': false}, SetOptions(merge: true));
   }
@@ -840,9 +841,9 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
     final type = data['type'];
     final startTime = data['startTime'];
     final query = await FirebaseFirestore.instance
-        .collection('clubs')
+        .collection(FirebaseCollections.clubs)
         .doc(widget.clubId)
-        .collection('events')
+        .collection(FirebaseCollections.events)
         .where('teamName', isEqualTo: team)
         .where('type', isEqualTo: type)
         .where('startTime', isEqualTo: startTime)
@@ -857,9 +858,9 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
 
   Future<void> _deleteEvent(String docId) async {
     await FirebaseFirestore.instance
-        .collection('clubs')
+        .collection(FirebaseCollections.clubs)
         .doc(widget.clubId)
-        .collection('events')
+        .collection(FirebaseCollections.events)
         .doc(docId)
         .delete();
   }

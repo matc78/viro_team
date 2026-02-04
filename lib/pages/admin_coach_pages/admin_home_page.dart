@@ -68,7 +68,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
           StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
             stream: user != null
                 ? FirebaseFirestore.instance
-                      .collection('users')
+                      .collection(FirebaseCollections.users)
                       .doc(user!.uid)
                       .snapshots()
                 : null,
@@ -94,16 +94,12 @@ class _AdminHomePageState extends State<AdminHomePage> {
                           imageBuilder: (context, imageProvider) =>
                               CircleAvatar(
                                 radius: 16,
-                                backgroundColor: ViroColors.primary.withOpacity(
-                                  0.1,
-                                ),
+                                backgroundColor: ViroColors.primary.withValues(alpha: 0.1),
                                 backgroundImage: imageProvider,
                               ),
                           placeholder: (context, url) => CircleAvatar(
                             radius: 16,
-                            backgroundColor: ViroColors.primary.withOpacity(
-                              0.1,
-                            ),
+                            backgroundColor: ViroColors.primary.withValues(alpha: 0.1),
                             child: const SizedBox(
                               width: 16,
                               height: 16,
@@ -112,9 +108,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
                           ),
                           errorWidget: (context, url, error) => CircleAvatar(
                             radius: 16,
-                            backgroundColor: ViroColors.primary.withOpacity(
-                              0.1,
-                            ),
+                            backgroundColor: ViroColors.primary.withValues(alpha: 0.1),
                             child: const Icon(
                               Icons.person,
                               color: ViroColors.primary,
@@ -125,7 +119,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
                         )
                       : CircleAvatar(
                           radius: 16,
-                          backgroundColor: ViroColors.primary.withOpacity(0.1),
+                          backgroundColor: ViroColors.primary.withValues(alpha: 0.1),
                           child: const Icon(
                             Icons.person,
                             color: ViroColors.primary,
@@ -140,7 +134,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
       body: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
         stream: user != null
             ? FirebaseFirestore.instance
-                  .collection('users')
+                  .collection(FirebaseCollections.users)
                   .doc(user!.uid)
                   .snapshots()
             : null,
@@ -167,7 +161,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
           // Récupérer les données du club
           return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
             stream: FirebaseFirestore.instance
-                .collection('clubs')
+                .collection(FirebaseCollections.clubs)
                 .doc(clubId)
                 .snapshots(),
             builder: (context, clubSnapshot) {
@@ -183,9 +177,10 @@ class _AdminHomePageState extends State<AdminHomePage> {
               final canManageEquipmentAndLoans =
                   viewerRole == 'admin' || viewerRole == 'admin_fondateur';
 
-              return Stack(
-                children: [
-                  // Logo en arrière-plan avec opacité
+              return RepaintBoundary(
+                child: Stack(
+                  children: [
+                    // Logo en arrière-plan avec opacité
                   Positioned(
                     bottom: 0,
                     left: 0,
@@ -395,7 +390,8 @@ class _AdminHomePageState extends State<AdminHomePage> {
                     ),
                   ),
                 ],
-              );
+              ),
+            );
             },
           );
         },
@@ -452,13 +448,13 @@ class _AdminHomePageState extends State<AdminHomePage> {
 
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
       stream: FirebaseFirestore.instance
-          .collection('join_requests')
+          .collection(FirebaseCollections.joinRequests)
           .where('clubId', isEqualTo: clubId)
           .where('status', isEqualTo: 'pending')
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
-          return _infoCard(
+          return _InfoCard(
             child: const Text(
               "Erreur de chargement des demandes.",
               style: TextStyle(color: Colors.redAccent),
@@ -466,7 +462,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
           );
         }
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const _infoCard(
+          return const _InfoCard(
             child: Center(child: CircularProgressIndicator()),
           );
         }
@@ -480,7 +476,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
         });
 
         if (docs.isEmpty) {
-          return _infoCard(
+          return _InfoCard(
             child: const Padding(
               padding: EdgeInsets.all(12.0),
               child: Text("Aucune demande en attente."),
@@ -489,7 +485,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
         }
 
         final toShow = _showAllRequests ? docs : docs.take(2).toList();
-        return _infoCard(
+        return _InfoCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -693,7 +689,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
           'coach': 'Coach',
           'admin': 'Admin',
         };
-        return _infoCard(
+        return _InfoCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -749,10 +745,10 @@ class _AdminHomePageState extends State<AdminHomePage> {
                   margin: const EdgeInsets.only(bottom: 12),
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: ViroColors.error.withOpacity(0.06),
+                    color: ViroColors.error.withValues(alpha: 0.06),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: ViroColors.error.withOpacity(0.25),
+                      color: ViroColors.error.withValues(alpha: 0.25),
                     ),
                   ),
                   child: Column(
@@ -798,7 +794,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
     setState(() => _processingRequestId = requestId);
     try {
       final requestRef = FirebaseFirestore.instance
-          .collection('join_requests')
+          .collection(FirebaseCollections.joinRequests)
           .doc(requestId);
 
       if (accept) {
@@ -809,7 +805,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
 
         // Récupérer les données utilisateur existantes
         final userDoc = await FirebaseFirestore.instance
-            .collection('users')
+            .collection(FirebaseCollections.users)
             .doc(userId)
             .get();
         final userData = userDoc.data() ?? {};
@@ -833,7 +829,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
             // Premier club : créer la structure avec liste de clubs
             // Récupérer la licence depuis les données de la demande si disponible
             final requestDoc = await FirebaseFirestore.instance
-                .collection('join_requests')
+                .collection(FirebaseCollections.joinRequests)
                 .doc(requestId)
                 .get();
             final requestData = requestDoc.data() ?? {};
@@ -876,7 +872,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
             if (!clubsList.any((c) => c['clubId'] == clubId)) {
               // Récupérer la licence depuis les données de la demande si disponible
               final requestDoc = await FirebaseFirestore.instance
-                  .collection('join_requests')
+                  .collection(FirebaseCollections.joinRequests)
                   .doc(requestId)
                   .get();
               final requestData = requestDoc.data() ?? {};
@@ -921,7 +917,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
         };
 
         // Mettre à jour le document utilisateur
-        await FirebaseFirestore.instance.collection('users').doc(userId).set({
+        await FirebaseFirestore.instance.collection(FirebaseCollections.users).doc(userId).set({
           'hasPendingRequest': false,
           'roles': updatedRoles,
           'activeContext': newActiveContext,
@@ -933,7 +929,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
               ? 'coaches'
               : 'members';
           await FirebaseFirestore.instance
-              .collection('clubs')
+              .collection(FirebaseCollections.clubs)
               .doc(clubId)
               .update({
                 field: FieldValue.arrayUnion([userId]),
@@ -944,7 +940,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
           'status': 'refused',
           'respondedAt': FieldValue.serverTimestamp(),
         });
-        await FirebaseFirestore.instance.collection('users').doc(userId).set({
+        await FirebaseFirestore.instance.collection(FirebaseCollections.users).doc(userId).set({
           'hasPendingRequest': false,
         }, SetOptions(merge: true));
       }
@@ -974,7 +970,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
           final error = snapshot.error.toString();
           // Vérifier si c'est une erreur d'index manquant
           if (error.contains('index') || error.contains('requires an index')) {
-            return _infoCard(
+            return _InfoCard(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -999,7 +995,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
               ),
             );
           }
-          return _infoCard(
+          return _InfoCard(
             child: Text(
               "Erreur de chargement: $error",
               style: const TextStyle(color: Colors.redAccent),
@@ -1007,7 +1003,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
           );
         }
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const _infoCard(
+          return const _InfoCard(
             child: Center(child: CircularProgressIndicator()),
           );
         }
@@ -1029,7 +1025,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
             return bCreated.compareTo(aCreated); // Descendant
           });
 
-        return _infoCard(
+        return _InfoCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1272,7 +1268,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
           return const SizedBox.shrink();
         }
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const _infoCard(
+          return const _InfoCard(
             child: Center(child: CircularProgressIndicator()),
           );
         }
@@ -1289,7 +1285,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
             if (bCreated == null) return -1;
             return aCreated.compareTo(bCreated);
           });
-        return _infoCard(
+        return _InfoCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1747,7 +1743,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
           if (bDue == null) return -1;
           return aDue.compareTo(bDue);
         });
-        return _infoCard(
+        return _InfoCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1794,8 +1790,8 @@ class _AdminHomePageState extends State<AdminHomePage> {
                     : isDueToday
                     ? Icons.schedule
                     : Icons.check_circle_outline;
-                final cardColor = statusColor.withOpacity(0.08);
-                final borderColor = statusColor.withOpacity(0.35);
+                final cardColor = statusColor.withValues(alpha: 0.08);
+                final borderColor = statusColor.withValues(alpha: 0.35);
                 return Padding(
                   key: ValueKey(loan['id']),
                   padding: const EdgeInsets.only(bottom: 8),
@@ -1931,7 +1927,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
           return aDue.compareTo(bDue);
         });
         final displayList = toConfirm.take(5).toList();
-        return _infoCard(
+        return _InfoCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1973,7 +1969,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
                       color: Colors.orange[50],
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
-                        color: ViroColors.warning.withOpacity(0.3),
+                        color: ViroColors.warning.withValues(alpha: 0.3),
                         width: 1,
                       ),
                     ),
@@ -2142,7 +2138,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
           return aDate.compareTo(bDate);
         });
 
-        return _infoCard(
+        return _InfoCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -2206,7 +2202,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
                         color: Colors.blue[50],
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
-                          color: ViroColors.primary.withOpacity(0.3),
+                          color: ViroColors.primary.withValues(alpha: 0.3),
                           width: 1,
                         ),
                       ),
@@ -2315,7 +2311,7 @@ class _AdminCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
+              color: Colors.black.withValues(alpha: 0.05),
               blurRadius: 10,
               offset: const Offset(0, 5),
             ),
@@ -2325,7 +2321,7 @@ class _AdminCard extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             CircleAvatar(
-              backgroundColor: color.withOpacity(0.1),
+              backgroundColor: color.withValues(alpha: 0.1),
               child: Icon(icon, color: color),
             ),
             const SizedBox(height: 12),
@@ -2349,9 +2345,9 @@ class _AdminCard extends StatelessWidget {
   }
 }
 
-class _infoCard extends StatelessWidget {
+class _InfoCard extends StatelessWidget {
   final Widget child;
-  const _infoCard({required this.child});
+  const _InfoCard({required this.child});
 
   @override
   Widget build(BuildContext context) {
@@ -2384,7 +2380,7 @@ class _MembersCountCard extends StatelessWidget {
   Widget build(BuildContext context) {
     if (userId == null) {
       return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: FirebaseFirestore.instance.collection('users').snapshots(),
+        stream: FirebaseFirestore.instance.collection(FirebaseCollections.users).snapshots(),
         builder: (context, snap) {
           final allDocs = snap.data?.docs ?? [];
           final clubMembers = filterUsersByClub(allDocs, clubId);
@@ -2411,7 +2407,7 @@ class _MembersCountCard extends StatelessWidget {
     }
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
       stream: FirebaseFirestore.instance
-          .collection('users')
+          .collection(FirebaseCollections.users)
           .doc(userId)
           .snapshots(),
       builder: (context, userSnap) {
@@ -2424,7 +2420,7 @@ class _MembersCountCard extends StatelessWidget {
                 ? 'admin'
                 : (rolesInClub.contains('coach') ? 'coach' : null));
         return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-          stream: FirebaseFirestore.instance.collection('users').snapshots(),
+          stream: FirebaseFirestore.instance.collection(FirebaseCollections.users).snapshots(),
           builder: (context, snap) {
             final allDocs = snap.data?.docs ?? [];
             final clubMembers = filterUsersByClub(allDocs, clubId);
@@ -2462,9 +2458,9 @@ class _TeamsCountCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
       stream: FirebaseFirestore.instance
-          .collection('clubs')
+          .collection(FirebaseCollections.clubs)
           .doc(clubId)
-          .collection('teams')
+          .collection(FirebaseCollections.teams)
           .snapshots(),
       builder: (context, snap) {
         final teamCount = snap.data?.docs.length ?? 0;

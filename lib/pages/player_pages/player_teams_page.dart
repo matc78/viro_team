@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:viro_team/constants/firebase_collections.dart';
 import '../../theme/viro_theme.dart';
 import '../../utils/firebase_helpers.dart';
 import '../../widget/user_display_tile.dart';
@@ -67,7 +68,7 @@ class _PlayerTeamsPageState extends State<PlayerTeamsPage> {
         children: [
           StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
             stream: FirebaseFirestore.instance
-                .collection('users')
+                .collection(FirebaseCollections.users)
                 .doc(_currentUserId)
                 .snapshots(),
             builder: (context, userSnapshot) {
@@ -124,9 +125,9 @@ class _PlayerTeamsPageState extends State<PlayerTeamsPage> {
     // Créer les streams pour chaque club
     final streams = clubIds.map((clubId) {
       return FirebaseFirestore.instance
-          .collection('clubs')
+          .collection(FirebaseCollections.clubs)
           .doc(clubId)
-          .collection('teams')
+          .collection(FirebaseCollections.teams)
           .where('playerIds', arrayContains: _currentUserId)
           .snapshots();
     }).toList();
@@ -251,7 +252,7 @@ class _PlayerTeamsPageState extends State<PlayerTeamsPage> {
         final clubId = teamInfo['clubId'] as String;
         return FutureBuilder<DocumentSnapshot>(
           future: FirebaseFirestore.instance
-              .collection('clubs')
+              .collection(FirebaseCollections.clubs)
               .doc(clubId)
               .get(),
           builder: (context, clubSnap) {
@@ -304,13 +305,13 @@ class _PlayerTeamsPageState extends State<PlayerTeamsPage> {
       margin: const EdgeInsets.only(bottom: 12),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(15),
-        side: BorderSide(color: clubColor.withOpacity(0.3), width: 2),
+        side: BorderSide(color: clubColor.withValues(alpha: 0.3), width: 2),
       ),
       child: ExpansionTile(
         shape:
             const Border(), // Retire la bordure par défaut de l'ExpansionTile
         leading: CircleAvatar(
-          backgroundColor: clubColor.withOpacity(0.1),
+          backgroundColor: clubColor.withValues(alpha: 0.1),
           backgroundImage: clubLogo.isNotEmpty
               ? CachedNetworkImageProvider(clubLogo)
               : null,

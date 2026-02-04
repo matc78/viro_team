@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:viro_team/constants/firebase_collections.dart';
 import '../theme/viro_theme.dart';
 import '../utils/firebase_error_handler.dart';
 
@@ -113,7 +114,7 @@ class _ClubSearchWidgetState extends State<ClubSearchWidget> {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: ViroColors.primary.withOpacity(0.1),
+              color: ViroColors.primary.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Row(
@@ -151,7 +152,7 @@ class _ClubSearchWidgetState extends State<ClubSearchWidget> {
   }
 
   Widget _buildClubList() {
-    Query query = FirebaseFirestore.instance.collection('clubs');
+    Query query = FirebaseFirestore.instance.collection(FirebaseCollections.clubs);
     if (_sportFilter != 'Tous') {
       query = query.where('sport', isEqualTo: _sportFilter);
     }

@@ -52,7 +52,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
     setState(() => _isManualRefreshing = true);
     try {
       final snap = await FirebaseFirestore.instance
-          .collection('users')
+          .collection(FirebaseCollections.users)
           .doc(_currentUserId)
           .get(const GetOptions(source: Source.server));
       if (!mounted) return;
@@ -94,18 +94,8 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
 
   // Générer une couleur unique par clubId
   Color _getClubColor(String clubId) {
-    final colors = [
-      Colors.blue,
-      Colors.green,
-      Colors.orange,
-      Colors.purple,
-      Colors.teal,
-      Colors.indigo,
-      Colors.pink,
-      Colors.amber,
-    ];
-    final index = clubId.hashCode % colors.length;
-    return colors[index.abs()];
+    final index = clubId.hashCode % ViroColors.clubPalette.length;
+    return ViroColors.clubPalette[index.abs()];
   }
 
   String _getGreeting() {
@@ -119,7 +109,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
   Widget build(BuildContext context) {
     return StreamBuilder<DocumentSnapshot>(
       stream: FirebaseFirestore.instance
-          .collection('users')
+          .collection(FirebaseCollections.users)
           .doc(_currentUserId)
           .snapshots(),
       builder: (context, snapshot) {
@@ -214,7 +204,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
           ),
           StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
             stream: FirebaseFirestore.instance
-                .collection('users')
+                .collection(FirebaseCollections.users)
                 .doc(_currentUserId)
                 .snapshots(),
             builder: (context, snap) {
@@ -238,16 +228,12 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
                           imageBuilder: (context, imageProvider) =>
                               CircleAvatar(
                                 radius: 18,
-                                backgroundColor: ViroColors.primary.withOpacity(
-                                  0.1,
-                                ),
+                                backgroundColor: ViroColors.primary.withValues(alpha: 0.1),
                                 backgroundImage: imageProvider,
                               ),
                           placeholder: (context, url) => CircleAvatar(
                             radius: 18,
-                            backgroundColor: ViroColors.primary.withOpacity(
-                              0.1,
-                            ),
+                            backgroundColor: ViroColors.primary.withValues(alpha: 0.1),
                             child: const SizedBox(
                               width: 18,
                               height: 18,
@@ -256,9 +242,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
                           ),
                           errorWidget: (context, url, error) => CircleAvatar(
                             radius: 18,
-                            backgroundColor: ViroColors.primary.withOpacity(
-                              0.1,
-                            ),
+                            backgroundColor: ViroColors.primary.withValues(alpha: 0.1),
                             child: const Icon(
                               Icons.person,
                               color: ViroColors.primary,
@@ -269,7 +253,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
                         )
                       : CircleAvatar(
                           radius: 18,
-                          backgroundColor: ViroColors.primary.withOpacity(0.1),
+                          backgroundColor: ViroColors.primary.withValues(alpha: 0.1),
                           child: const Icon(
                             Icons.person,
                             color: ViroColors.primary,
@@ -281,10 +265,11 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
           ),
         ],
       ),
-      body: SafeArea(
-        child: Stack(
-          children: [
-            // Logo en arrière-plan avec opacité
+      body: RepaintBoundary(
+        child: SafeArea(
+          child: Stack(
+            children: [
+              // Logo en arrière-plan avec opacité
             Positioned(
               bottom: -150,
               left: 0,
@@ -338,10 +323,11 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
                 ),
               ),
             ),
-          ],
+            ],
+          ),
         ),
       ),
-      bottomNavigationBar: PlayerBottomNav(
+      bottomNavigationBar: playerBottomNav(
         context,
         currentIndex: 0,
         clubId: clubId,
@@ -401,9 +387,9 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
     final clubId = clubIds[currentIndex];
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
-          .collection('clubs')
+          .collection(FirebaseCollections.clubs)
           .doc(clubId)
-          .collection('announcements')
+          .collection(FirebaseCollections.announcements)
           .orderBy('createdAt', descending: true)
           .snapshots(),
       builder: (context, snapshot) {
@@ -487,9 +473,9 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: containerColor.withOpacity(0.08),
+        color: containerColor.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: containerColor.withOpacity(0.3), width: 1.5),
+        border: Border.all(color: containerColor.withValues(alpha: 0.3), width: 1.5),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -577,7 +563,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
                               : senderId != null
                               ? FutureBuilder<DocumentSnapshot>(
                                   future: FirebaseFirestore.instance
-                                      .collection('users')
+                                      .collection(FirebaseCollections.users)
                                       .doc(senderId)
                                       .get(),
                                   builder: (context, userSnap) {
@@ -677,7 +663,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
     if (clubIds.isEmpty) return [];
     final snaps = await Future.wait(
       clubIds.map(
-        (id) => FirebaseFirestore.instance.collection('clubs').doc(id).get(),
+        (id) => FirebaseFirestore.instance.collection(FirebaseCollections.clubs).doc(id).get(),
       ),
     );
     return clubIds.asMap().entries.map((e) {
@@ -736,9 +722,9 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
           decoration: BoxDecoration(
-            color: clubColor.withOpacity(0.1),
+            color: clubColor.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: clubColor.withOpacity(0.3), width: 1),
+            border: Border.all(color: clubColor.withValues(alpha: 0.3), width: 1),
           ),
           child: Row(
             children: [
@@ -800,9 +786,9 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
     final nextSunday = startOfDay.add(Duration(days: 7 - now.weekday + 1));
     final streams = clubIds.map((clubId) {
       return FirebaseFirestore.instance
-          .collection('clubs')
+          .collection(FirebaseCollections.clubs)
           .doc(clubId)
-          .collection('events')
+          .collection(FirebaseCollections.events)
           .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
           .where('date', isLessThan: Timestamp.fromDate(nextSunday))
           .orderBy('date')
@@ -996,9 +982,9 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
     final eventStream = allClubIds.isEmpty
         ? null
         : FirebaseFirestore.instance
-              .collection('clubs')
+              .collection(FirebaseCollections.clubs)
               .doc(allClubIds.first)
-              .collection('events')
+              .collection(FirebaseCollections.events)
               .where(
                 'date',
                 isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay),
@@ -1008,9 +994,9 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
               .snapshots();
 
     final loanRequestStream = FirebaseFirestore.instance
-        .collection('clubs')
+        .collection(FirebaseCollections.clubs)
         .doc(clubId)
-        .collection('equipment_loan_requests')
+        .collection(FirebaseCollections.equipmentLoanRequests)
         .where('playerId', isEqualTo: _currentUserId)
         .where('status', whereIn: ['accepted', 'refused'])
         .where(
@@ -1287,7 +1273,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
           borderRadius: BorderRadius.circular(14),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.04),
+              color: Colors.black.withValues(alpha: 0.04),
               blurRadius: 8,
               offset: const Offset(0, 2),
             ),
@@ -1372,9 +1358,9 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
         .snapshots();
 
     final todayEventsStream = FirebaseFirestore.instance
-        .collection('clubs')
+        .collection(FirebaseCollections.clubs)
         .doc(primaryClubId)
-        .collection('events')
+        .collection(FirebaseCollections.events)
         .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
         .where('date', isLessThan: Timestamp.fromDate(endOfDay))
         .snapshots();
@@ -1676,10 +1662,10 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
         width: double.infinity,
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: ViroColors.primary.withOpacity(0.08),
+          color: ViroColors.primary.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: ViroColors.primary.withOpacity(0.3),
+            color: ViroColors.primary.withValues(alpha: 0.3),
             width: 1.5,
           ),
         ),
@@ -1858,10 +1844,10 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: ViroColors.primary.withOpacity(0.08),
+        color: ViroColors.primary.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: ViroColors.primary.withOpacity(0.3),
+          color: ViroColors.primary.withValues(alpha: 0.3),
           width: 1.5,
         ),
       ),
@@ -1984,14 +1970,14 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: BorderSide(
-          color: canceled ? ViroColors.borderColor : clubColor.withOpacity(0.5),
+          color: canceled ? ViroColors.borderColor : clubColor.withValues(alpha: 0.5),
           width: canceled ? 1 : 2,
         ),
       ),
       color: canceled ? Colors.grey.shade300 : Colors.white,
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: clubColor.withOpacity(0.1),
+          backgroundColor: clubColor.withValues(alpha: 0.1),
           child: Text(
             timeLabel,
             textAlign: TextAlign.center,
@@ -2028,7 +2014,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
           children: [
             FutureBuilder<DocumentSnapshot>(
               future: FirebaseFirestore.instance
-                  .collection('clubs')
+                  .collection(FirebaseCollections.clubs)
                   .doc(clubId)
                   .get(),
               builder: (context, clubSnap) {

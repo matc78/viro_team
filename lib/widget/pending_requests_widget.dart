@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:viro_team/constants/firebase_collections.dart';
 import '../theme/viro_theme.dart';
 
 /// Widget pour afficher les demandes en attente et traitées
@@ -12,7 +13,7 @@ class PendingRequestsWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
-          .collection('join_requests')
+          .collection(FirebaseCollections.joinRequests)
           .where('userId', isEqualTo: userId)
           .snapshots(),
       builder: (context, snapshot) {

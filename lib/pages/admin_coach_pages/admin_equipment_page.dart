@@ -37,7 +37,7 @@ class _AdminEquipmentPageState extends State<AdminEquipmentPage> {
     }
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
       stream: FirebaseFirestore.instance
-          .collection('users')
+          .collection(FirebaseCollections.users)
           .doc(userId)
           .snapshots(),
       builder: (context, userSnap) {
@@ -172,7 +172,7 @@ class _InventoryTab extends StatelessWidget {
             children: [
               if (totalPrice > 0)
                 Card(
-                  color: ViroColors.primary.withOpacity(0.1),
+                  color: ViroColors.primary.withValues(alpha: 0.1),
                   child: Padding(
                     padding: const EdgeInsets.all(16),
                     child: Row(
@@ -239,7 +239,7 @@ class _MaintenanceAlertsSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      color: ViroColors.warning.withOpacity(0.15),
+      color: ViroColors.warning.withValues(alpha: 0.15),
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
@@ -571,7 +571,7 @@ class _EquipmentCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.2),
+        color: color.withValues(alpha: 0.2),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Text(label, style: TextStyle(fontSize: 12, color: color)),
@@ -1107,7 +1107,7 @@ class _AddEquipmentDialogState extends State<_AddEquipmentDialog> {
                   const SizedBox(height: 8),
                   StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                     stream: FirebaseFirestore.instance
-                        .collection('users')
+                        .collection(FirebaseCollections.users)
                         .snapshots(),
                     builder: (context, userSnap) {
                       final allDocs = userSnap.data?.docs ?? [];
@@ -1303,11 +1303,12 @@ class _EditEquipmentSheetState extends State<_EditEquipmentSheet> {
       source: ImageSource.gallery,
       imageQuality: 85,
     );
-    if (file != null)
+    if (file != null) {
       setState(() {
         _newPhotoFile = file;
         _removePhoto = false;
       });
+    }
   }
 
   Widget _photoPlaceholder() {
@@ -1829,7 +1830,7 @@ class _EditEquipmentSheetState extends State<_EditEquipmentSheet> {
             const SizedBox(height: 8),
             StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
               stream: FirebaseFirestore.instance
-                  .collection('users')
+                  .collection(FirebaseCollections.users)
                   .snapshots(),
               builder: (context, userSnap) {
                 final allDocs = userSnap.data?.docs ?? [];

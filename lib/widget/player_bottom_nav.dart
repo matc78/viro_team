@@ -8,7 +8,7 @@ import '../pages/player_pages/player_loan_catalog_page.dart';
 
 /// Barre de navigation du player : Accueil, Planning, Infos, Catalogue prêt.
 /// Utilisée sur les pages d'accueil, planning, infos et catalogue prêt.
-Widget PlayerBottomNav(
+Widget playerBottomNav(
   BuildContext context, {
   required int currentIndex,
   required String clubId,

@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:viro_team/constants/firebase_collections.dart';
 import 'package:viro_team/pages/onboarding_page.dart';
 import '../../theme/viro_theme.dart';
 import '../../widget/viro_loader.dart';
@@ -25,7 +26,7 @@ class _PlayerPendingPageState extends State<PlayerPendingPage> {
   Future<void> _cancelRequest() async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid != null) {
-      await FirebaseFirestore.instance.collection('users').doc(uid).update({
+      await FirebaseFirestore.instance.collection(FirebaseCollections.users).doc(uid).update({
         'hasPendingRequest': false,
         'lastClubRequested': FieldValue.delete(),
       });

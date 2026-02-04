@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:viro_team/constants/firebase_collections.dart';
 import '../../theme/viro_theme.dart';
 import '../../utils/firebase_helpers.dart';
 import '../../widget/player_bottom_nav.dart';
@@ -31,7 +32,7 @@ class _PlayerInfosPageState extends State<PlayerInfosPage> {
       final batch = clubIds.sublist(i, math.min(i + 10, clubIds.length));
       try {
         final snapshot = await FirebaseFirestore.instance
-            .collection('clubs')
+            .collection(FirebaseCollections.clubs)
             .where(FieldPath.documentId, whereIn: batch)
             .get();
         for (var doc in snapshot.docs) {
@@ -87,7 +88,7 @@ class _PlayerInfosPageState extends State<PlayerInfosPage> {
       ),
       body: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
         stream: FirebaseFirestore.instance
-            .collection('users')
+            .collection(FirebaseCollections.users)
             .doc(userId)
             .snapshots(),
         builder: (context, userSnapshot) {
@@ -169,7 +170,7 @@ class _PlayerInfosPageState extends State<PlayerInfosPage> {
           );
         },
       ),
-      bottomNavigationBar: PlayerBottomNav(
+      bottomNavigationBar: playerBottomNav(
         context,
         currentIndex: 2,
         clubId: _selectedClubId ?? widget.clubId,
@@ -258,14 +259,14 @@ class _ClubDetailsPage extends StatelessWidget {
     final db = FirebaseFirestore.instance;
 
     // 1. Infos du club
-    final clubDoc = await db.collection('clubs').doc(clubId).get();
+    final clubDoc = await db.collection(FirebaseCollections.clubs).doc(clubId).get();
 
     // 2. Compteurs (C'est mieux d'avoir des compteurs stockés, mais voici la méthode brute pour l'instant)
-    final usersQuery = await db.collection('users').get();
+    final usersQuery = await db.collection(FirebaseCollections.users).get();
     final teamsQuery = await db
-        .collection('clubs')
+        .collection(FirebaseCollections.clubs)
         .doc(clubId)
-        .collection('teams')
+        .collection(FirebaseCollections.teams)
         .count()
         .get();
 
@@ -498,7 +499,7 @@ class _StaffListPage extends StatelessWidget {
         backgroundColor: ViroColors.background,
       ),
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: FirebaseFirestore.instance.collection('users').snapshots(),
+        stream: FirebaseFirestore.instance.collection(FirebaseCollections.users).snapshots(),
         builder: (context, snapshot) {
           if (!snapshot.hasData) return const Center(child: ViroLoader());
 
@@ -574,7 +575,7 @@ class _StaffListPage extends StatelessWidget {
                       vertical: 4,
                     ),
                     decoration: BoxDecoration(
-                      color: roleColor.withOpacity(0.1),
+                      color: roleColor.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
@@ -616,7 +617,7 @@ class _ClubAnnouncementsList extends StatelessWidget {
   Future<Map<String, Map<String, dynamic>>> _getUserClubsInfo() async {
     try {
       final userDoc = await FirebaseFirestore.instance
-          .collection('users')
+          .collection(FirebaseCollections.users)
           .doc(userId)
           .get();
 
@@ -644,9 +645,9 @@ class _ClubAnnouncementsList extends StatelessWidget {
                 [];
             if (categories.isEmpty && teamIds.isNotEmpty) {
               final teamsSnapshot = await FirebaseFirestore.instance
-                  .collection('clubs')
+                  .collection(FirebaseCollections.clubs)
                   .doc(clubIdFromClub)
-                  .collection('teams')
+                  .collection(FirebaseCollections.teams)
                   .get();
               for (var teamDoc in teamsSnapshot.docs) {
                 if (teamIds.contains(teamDoc.id)) {
@@ -737,18 +738,8 @@ class _ClubAnnouncementsList extends StatelessWidget {
 
   // Générer une couleur unique par clubId (identique au planning)
   Color _getClubColor(String clubId) {
-    final colors = [
-      Colors.blue,
-      Colors.green,
-      Colors.orange,
-      Colors.purple,
-      Colors.teal,
-      Colors.indigo,
-      Colors.pink,
-      Colors.amber,
-    ];
-    final index = clubId.hashCode % colors.length;
-    return colors[index.abs()];
+    final index = clubId.hashCode % ViroColors.clubPalette.length;
+    return ViroColors.clubPalette[index.abs()];
   }
 
   // Formate le nom de la cible pour l'affichage
@@ -810,9 +801,9 @@ class _ClubAnnouncementsList extends StatelessWidget {
 
       return StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
-            .collection('clubs')
+            .collection(FirebaseCollections.clubs)
             .doc(clubId)
-            .collection('announcements')
+            .collection(FirebaseCollections.announcements)
             .orderBy('createdAt', descending: true)
             .snapshots(),
         builder: (context, snapshot) {
@@ -832,9 +823,9 @@ class _ClubAnnouncementsList extends StatelessWidget {
 
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
-          .collection('clubs')
+          .collection(FirebaseCollections.clubs)
           .doc(firstClubId)
-          .collection('announcements')
+          .collection(FirebaseCollections.announcements)
           .orderBy('createdAt', descending: true)
           .snapshots(),
       builder: (context, firstSnapshot) {
@@ -846,9 +837,9 @@ class _ClubAnnouncementsList extends StatelessWidget {
 
           return StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance
-                .collection('clubs')
+                .collection(FirebaseCollections.clubs)
                 .doc(secondClubId)
-                .collection('announcements')
+                .collection(FirebaseCollections.announcements)
                 .orderBy('createdAt', descending: true)
                 .snapshots(),
             builder: (context, secondSnapshot) {
@@ -902,7 +893,7 @@ class _ClubAnnouncementsList extends StatelessWidget {
             Icon(
               Icons.notifications_off_outlined,
               size: 60,
-              color: Colors.grey.withOpacity(0.5),
+              color: Colors.grey.withValues(alpha: 0.5),
             ),
             const SizedBox(height: 16),
             const Text(
@@ -957,7 +948,7 @@ class _ClubAnnouncementsList extends StatelessWidget {
             Icon(
               Icons.notifications_off_outlined,
               size: 60,
-              color: Colors.grey.withOpacity(0.5),
+              color: Colors.grey.withValues(alpha: 0.5),
             ),
             const SizedBox(height: 16),
             const Text(
@@ -1038,7 +1029,7 @@ class _ClubAnnouncementsList extends StatelessWidget {
             Icon(
               Icons.notifications_off_outlined,
               size: 60,
-              color: Colors.grey.withOpacity(0.5),
+              color: Colors.grey.withValues(alpha: 0.5),
             ),
             const SizedBox(height: 16),
             const Text(
@@ -1094,8 +1085,8 @@ class _ClubAnnouncementsList extends StatelessWidget {
             borderRadius: BorderRadius.circular(12),
             side: BorderSide(
               color: isExpiringSoon
-                  ? Colors.orange.withOpacity(0.5)
-                  : clubColor.withOpacity(0.5),
+                  ? Colors.orange.withValues(alpha: 0.5)
+                  : clubColor.withValues(alpha: 0.5),
               width: 2,
             ),
           ),
@@ -1144,8 +1135,8 @@ class _ClubAnnouncementsList extends StatelessWidget {
                       ),
                       decoration: BoxDecoration(
                         color: isExpiringSoon
-                            ? Colors.orange.withOpacity(0.1)
-                            : clubColor.withOpacity(0.1),
+                            ? Colors.orange.withValues(alpha: 0.1)
+                            : clubColor.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
@@ -1181,10 +1172,10 @@ class _ClubAnnouncementsList extends StatelessWidget {
                     vertical: 6,
                   ),
                   decoration: BoxDecoration(
-                    color: clubColor.withOpacity(0.1),
+                    color: clubColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
-                      color: clubColor.withOpacity(0.2),
+                      color: clubColor.withValues(alpha: 0.2),
                       width: 1,
                     ),
                   ),

@@ -65,7 +65,7 @@ class _ProfilRequestPageState extends State<ProfilRequestPage> {
 
           return FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
             future: FirebaseFirestore.instance
-                .collection('users')
+                .collection(FirebaseCollections.users)
                 .doc(widget.userId)
                 .get(),
             builder: (context, snap) {
@@ -188,7 +188,7 @@ class _ProfilRequestPageState extends State<ProfilRequestPage> {
     setState(() => _isProcessing = true);
     try {
       final requestRef = FirebaseFirestore.instance
-          .collection('join_requests')
+          .collection(FirebaseCollections.joinRequests)
           .doc(widget.requestId);
 
       if (accept) {
@@ -202,7 +202,7 @@ class _ProfilRequestPageState extends State<ProfilRequestPage> {
         final roleRequested = widget.roleRequested ?? 'player';
 
         final userDoc = await FirebaseFirestore.instance
-            .collection('users')
+            .collection(FirebaseCollections.users)
             .doc(userId)
             .get();
         final userData = userDoc.data() ?? {};
@@ -285,7 +285,7 @@ class _ProfilRequestPageState extends State<ProfilRequestPage> {
           'clubId': clubId,
         };
 
-        await FirebaseFirestore.instance.collection('users').doc(userId).set({
+        await FirebaseFirestore.instance.collection(FirebaseCollections.users).doc(userId).set({
           'hasPendingRequest': false,
           'roles': updatedRoles,
           'activeContext': newActiveContext,
@@ -298,7 +298,7 @@ class _ProfilRequestPageState extends State<ProfilRequestPage> {
               ? 'coaches'
               : 'members';
           await FirebaseFirestore.instance
-              .collection('clubs')
+              .collection(FirebaseCollections.clubs)
               .doc(clubId)
               .update({
             field: FieldValue.arrayUnion([userId]),
@@ -310,7 +310,7 @@ class _ProfilRequestPageState extends State<ProfilRequestPage> {
           'respondedAt': FieldValue.serverTimestamp(),
         });
         await FirebaseFirestore.instance
-            .collection('users')
+            .collection(FirebaseCollections.users)
             .doc(widget.userId)
             .set({'hasPendingRequest': false}, SetOptions(merge: true));
       }

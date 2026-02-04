@@ -7,6 +7,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:viro_team/constants/firebase_collections.dart';
 import 'package:viro_team/pages/add_profile_page.dart';
 import '../../theme/viro_theme.dart';
 import '../../widget/viro_loader.dart';
@@ -39,7 +40,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
     }
 
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-      stream: _firestore.collection('users').doc(user.uid).snapshots(),
+      stream: _firestore.collection(FirebaseCollections.users).doc(user.uid).snapshots(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           return const Scaffold(
@@ -140,7 +141,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
                 ),
                 StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
                   stream: _firestore
-                      .collection('clubs')
+                      .collection(FirebaseCollections.clubs)
                       .doc(clubId)
                       .snapshots(),
                   builder: (context, clubSnap) {
@@ -181,7 +182,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
                 ).contains('admin_fondateur'))
                   StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
                     stream: _firestore
-                        .collection('clubs')
+                        .collection(FirebaseCollections.clubs)
                         .doc(clubId)
                         .snapshots(),
                     builder: (context, clubSnap) {
@@ -345,7 +346,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
           children: [
             CircleAvatar(
               radius: 55,
-              backgroundColor: ViroColors.primary.withOpacity(0.1),
+              backgroundColor: ViroColors.primary.withValues(alpha: 0.1),
               backgroundImage: avatarUrl != null
                   ? CachedNetworkImageProvider(avatarUrl)
                   : null,
@@ -547,7 +548,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
             ElevatedButton(
               onPressed: () async {
                 try {
-                  await _firestore.collection('clubs').doc(clubId).update({
+                  await _firestore.collection(FirebaseCollections.clubs).doc(clubId).update({
                     'paymentMethods': selectedMethods.toList(),
                   });
                   
@@ -691,11 +692,11 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
 
               // Si tout est bon, on met à jour
               try {
-                await _firestore.collection('clubs').doc(clubId).update({
+                await _firestore.collection(FirebaseCollections.clubs).doc(clubId).update({
                   'name': newNameInput,
                 });
                 await _firestore
-                    .collection('users')
+                    .collection(FirebaseCollections.users)
                     .doc(_auth.currentUser?.uid)
                     .update({'clubName': newNameInput});
 
@@ -927,7 +928,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
     );
 
     try {
-      final usersSnap = await _firestore.collection('users').get();
+      final usersSnap = await _firestore.collection(FirebaseCollections.users).get();
       final affected = usersSnap.docs.where((d) {
         final data = d.data();
         return userBelongsToClub(data, clubId);
@@ -974,7 +975,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
           if (other != null) {
             updates['clubId'] = other.clubId;
             final clubDoc = await _firestore
-                .collection('clubs')
+                .collection(FirebaseCollections.clubs)
                 .doc(other.clubId)
                 .get();
             final name = clubDoc.data()?['name'] as String?;
@@ -991,7 +992,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
       await batch.commit();
 
       final joinRequests = await _firestore
-          .collection('join_requests')
+          .collection(FirebaseCollections.joinRequests)
           .where('clubId', isEqualTo: clubId)
           .get();
       final jrBatch = _firestore.batch();
@@ -1001,9 +1002,9 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
       if (joinRequests.docs.isNotEmpty) await jrBatch.commit();
 
       final teamsRef = _firestore
-          .collection('clubs')
+          .collection(FirebaseCollections.clubs)
           .doc(clubId)
-          .collection('teams');
+          .collection(FirebaseCollections.teams);
       final teamsSnap = await teamsRef.get();
       final tBatch = _firestore.batch();
       for (final d in teamsSnap.docs) {
@@ -1012,9 +1013,9 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
       if (teamsSnap.docs.isNotEmpty) await tBatch.commit();
 
       final eventsRef = _firestore
-          .collection('clubs')
+          .collection(FirebaseCollections.clubs)
           .doc(clubId)
-          .collection('events');
+          .collection(FirebaseCollections.events);
       final eventsSnap = await eventsRef.get();
       final eBatch = _firestore.batch();
       for (final d in eventsSnap.docs) {
@@ -1023,9 +1024,9 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
       if (eventsSnap.docs.isNotEmpty) await eBatch.commit();
 
       final annRef = _firestore
-          .collection('clubs')
+          .collection(FirebaseCollections.clubs)
           .doc(clubId)
-          .collection('announcements');
+          .collection(FirebaseCollections.announcements);
       final annSnap = await annRef.get();
       final aBatch = _firestore.batch();
       for (final d in annSnap.docs) {
@@ -1033,7 +1034,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
       }
       if (annSnap.docs.isNotEmpty) await aBatch.commit();
 
-      await _firestore.collection('clubs').doc(clubId).delete();
+      await _firestore.collection(FirebaseCollections.clubs).doc(clubId).delete();
 
       try {
         final storageRef = FirebaseStorage.instance
@@ -1100,7 +1101,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
     final userId = _auth.currentUser?.uid;
     if (userId == null) return;
 
-    final usersSnap = await _firestore.collection('users').get();
+    final usersSnap = await _firestore.collection(FirebaseCollections.users).get();
     final allDocs = usersSnap.docs;
     final inClub = filterUsersByClub(allDocs, clubId);
     final candidates = <DocumentSnapshot<Map<String, dynamic>>>[];
@@ -1232,7 +1233,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
     );
 
     try {
-      final clubRef = _firestore.collection('clubs').doc(clubId);
+      final clubRef = _firestore.collection(FirebaseCollections.clubs).doc(clubId);
       final clubSnap = await clubRef.get();
       final clubData = clubSnap.data();
       if (clubData == null) throw Exception("Club introuvable");
@@ -1245,7 +1246,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
 
       await clubRef.update({'adminId': newOwnerId, 'admins': admins});
 
-      final newOwnerRef = _firestore.collection('users').doc(newOwnerId);
+      final newOwnerRef = _firestore.collection(FirebaseCollections.users).doc(newOwnerId);
       final newOwnerSnap = await newOwnerRef.get();
       final newOwnerData = newOwnerSnap.data() ?? {};
       final roles = Map<String, dynamic>.from(
@@ -1258,7 +1259,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
       roles['admin'] = adminList;
       await newOwnerRef.set({'roles': roles}, SetOptions(merge: true));
 
-      final currentUserRef = _firestore.collection('users').doc(userId);
+      final currentUserRef = _firestore.collection(FirebaseCollections.users).doc(userId);
       final currentSnap = await currentUserRef.get();
       final currentData = currentSnap.data() ?? {};
       final updatedRoles = _buildRolesAfterRemoveClub(
@@ -1278,7 +1279,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
         if (other != null) {
           updates['clubId'] = other.clubId;
           final clubDoc = await _firestore
-              .collection('clubs')
+              .collection(FirebaseCollections.clubs)
               .doc(other.clubId)
               .get();
           final name = clubDoc.data()?['name'] as String?;
@@ -1341,7 +1342,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
 
     try {
       final joinReq = await _firestore
-          .collection('join_requests')
+          .collection(FirebaseCollections.joinRequests)
           .where('userId', isEqualTo: uid)
           .get();
       final jrBatch = _firestore.batch();
@@ -1352,12 +1353,12 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
     } catch (_) {}
 
     try {
-      final clubsSnap = await _firestore.collection('clubs').get();
+      final clubsSnap = await _firestore.collection(FirebaseCollections.clubs).get();
       for (final clubDoc in clubsSnap.docs) {
         final teamsSnap = await _firestore
-            .collection('clubs')
+            .collection(FirebaseCollections.clubs)
             .doc(clubDoc.id)
-            .collection('teams')
+            .collection(FirebaseCollections.teams)
             .get();
         for (final teamDoc in teamsSnap.docs) {
           final d = teamDoc.data();
@@ -1380,7 +1381,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
     } catch (_) {}
 
     try {
-      await _firestore.collection('users').doc(uid).delete();
+      await _firestore.collection(FirebaseCollections.users).doc(uid).delete();
     } catch (_) {}
 
     try {
@@ -1444,7 +1445,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
       await storageRef.putFile(File(file.path));
       final url = await storageRef.getDownloadURL();
 
-      await FirebaseFirestore.instance.collection('clubs').doc(clubId).set({
+      await FirebaseFirestore.instance.collection(FirebaseCollections.clubs).doc(clubId).set({
         'logoUrl': url,
       }, SetOptions(merge: true));
 
@@ -1607,9 +1608,9 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
       // Vérifier combien d'événements sont après la nouvelle date
       try {
         final eventsQuery = await _firestore
-            .collection('clubs')
+            .collection(FirebaseCollections.clubs)
             .doc(clubId)
-            .collection('events')
+            .collection(FirebaseCollections.events)
             .where('date', isGreaterThan: Timestamp.fromDate(newDate))
             .get();
 
@@ -1677,7 +1678,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
         }
 
         // Sauvegarder la nouvelle date de fin de saison
-        await _firestore.collection('clubs').doc(clubId).set({
+        await _firestore.collection(FirebaseCollections.clubs).doc(clubId).set({
           'seasonEndDate': Timestamp.fromDate(newDate),
         }, SetOptions(merge: true));
 
@@ -1794,7 +1795,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
       final ref = FirebaseStorage.instance.ref().child('avatars/$uid.jpg');
       await ref.putFile(file);
       final url = await ref.getDownloadURL();
-      await _firestore.collection('users').doc(uid).set({
+      await _firestore.collection(FirebaseCollections.users).doc(uid).set({
         'avatarUrl': url,
       }, SetOptions(merge: true));
     } catch (e) {
@@ -1851,7 +1852,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
               final last = lastController.text.trim();
               setState(() => _isSaving = true);
               try {
-                await _firestore.collection('users').doc(user.uid).set({
+                await _firestore.collection(FirebaseCollections.users).doc(user.uid).set({
                   'firstName': first,
                   'lastName': last,
                 }, SetOptions(merge: true));
@@ -1904,7 +1905,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
               try {
                 // verifyBeforeUpdateEmail envoie un email de validation puis change l'email
                 await user.verifyBeforeUpdateEmail(newEmail);
-                await _firestore.collection('users').doc(user.uid).set({
+                await _firestore.collection(FirebaseCollections.users).doc(user.uid).set({
                   'email': newEmail,
                 }, SetOptions(merge: true));
                 if (mounted) Navigator.pop(context);
@@ -1964,7 +1965,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
               final newPhone = controller.text.trim();
               setState(() => _isSaving = true);
               try {
-                await _firestore.collection('users').doc(user.uid).set({
+                await _firestore.collection(FirebaseCollections.users).doc(user.uid).set({
                   'phone': newPhone,
                 }, SetOptions(merge: true));
                 if (mounted) Navigator.pop(context);
@@ -2257,7 +2258,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
 
       try {
         final clubDoc = await FirebaseFirestore.instance
-            .collection('clubs')
+            .collection(FirebaseCollections.clubs)
             .doc(clubId)
             .get();
         final clubData = clubDoc.data();
@@ -2281,15 +2282,15 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
     try {
       final db = FirebaseFirestore.instance;
       final playerTeams = await db
-          .collection('clubs')
+          .collection(FirebaseCollections.clubs)
           .doc(clubId)
-          .collection('teams')
+          .collection(FirebaseCollections.teams)
           .where('playerIds', arrayContains: userId)
           .get();
       final coachTeams = await db
-          .collection('clubs')
+          .collection(FirebaseCollections.clubs)
           .doc(clubId)
-          .collection('teams')
+          .collection(FirebaseCollections.teams)
           .where('coachIds', arrayContains: userId)
           .get();
 
@@ -2336,7 +2337,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
                   _formatRoleNameForInfo(role),
                   style: const TextStyle(fontSize: 11),
                 ),
-                backgroundColor: _getRoleColorForInfo(role).withOpacity(0.1),
+                backgroundColor: _getRoleColorForInfo(role).withValues(alpha: 0.1),
                 labelStyle: TextStyle(
                   color: _getRoleColorForInfo(role),
                   fontWeight: FontWeight.bold,
@@ -2475,7 +2476,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
     for (final id in clubIds) {
       try {
         final doc = await FirebaseFirestore.instance
-            .collection('clubs')
+            .collection(FirebaseCollections.clubs)
             .doc(id)
             .get();
         final url = doc.data()?['logoUrl'] as String?;

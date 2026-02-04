@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../constants/firebase_collections.dart';
 import '../../theme/viro_theme.dart';
 import '../../widget/viro_loader.dart';
 import '../../utils/firebase_helpers.dart';
@@ -21,7 +22,7 @@ class ProfilDisplayPage extends StatelessWidget {
     }
 
     final currentUserDoc = await FirebaseFirestore.instance
-        .collection('users')
+        .collection(FirebaseCollections.users)
         .doc(currentUid)
         .get();
     final currentUserData = currentUserDoc.data();
@@ -46,7 +47,7 @@ class ProfilDisplayPage extends StatelessWidget {
     if (viewerClubIds.isEmpty) return {'hasAccess': false, 'role': finalRole};
 
     final viewedUserDoc = await FirebaseFirestore.instance
-        .collection('users')
+        .collection(FirebaseCollections.users)
         .doc(userId)
         .get();
     final viewedData = viewedUserDoc.data();
@@ -111,7 +112,7 @@ class ProfilDisplayPage extends StatelessWidget {
 
     // Récupérer les données de l'utilisateur actuel
     final currentUserDoc = await FirebaseFirestore.instance
-        .collection('users')
+        .collection(FirebaseCollections.users)
         .doc(currentUid)
         .get();
     final currentUserData = currentUserDoc.data();
@@ -156,9 +157,9 @@ class ProfilDisplayPage extends StatelessWidget {
       try {
         // Récupérer toutes les équipes où le coach est dans coachIds
         final teamsSnapshot = await FirebaseFirestore.instance
-            .collection('clubs')
+            .collection(FirebaseCollections.clubs)
             .doc(clubId)
-            .collection('teams')
+            .collection(FirebaseCollections.teams)
             .where('coachIds', arrayContains: currentUid)
             .get();
 
@@ -229,7 +230,7 @@ class ProfilDisplayPage extends StatelessWidget {
               try {
                 // Récupérer les données actuelles de l'utilisateur
                 final userDoc = await FirebaseFirestore.instance
-                    .collection('users')
+                    .collection(FirebaseCollections.users)
                     .doc(userId)
                     .get();
                 final userData = userDoc.data() ?? {};
@@ -261,7 +262,7 @@ class ProfilDisplayPage extends StatelessWidget {
                 updatedRoles['player'] = {...playerData, 'clubs': clubs};
 
                 await FirebaseFirestore.instance
-                    .collection('users')
+                    .collection(FirebaseCollections.users)
                     .doc(userId)
                     .update({'roles': updatedRoles});
 
@@ -296,7 +297,7 @@ class ProfilDisplayPage extends StatelessWidget {
       ),
       body: StreamBuilder<DocumentSnapshot>(
         stream: FirebaseFirestore.instance
-            .collection('users')
+            .collection(FirebaseCollections.users)
             .doc(userId)
             .snapshots(),
         builder: (context, snapshot) {
@@ -337,7 +338,7 @@ class ProfilDisplayPage extends StatelessWidget {
                                   CircleAvatar(
                                     radius: 60,
                                     backgroundColor: ViroColors.primary
-                                        .withOpacity(0.1),
+                                        .withValues(alpha: 0.1),
                                     backgroundImage:
                                         (data['avatarUrl'] != null &&
                                             (data['avatarUrl'] as String)
@@ -628,7 +629,7 @@ class ProfilDisplayPage extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: clubColor.withOpacity(0.3), width: 2),
+        border: Border.all(color: clubColor.withValues(alpha: 0.3), width: 2),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -640,7 +641,7 @@ class ProfilDisplayPage extends StatelessWidget {
               children: [
                 CircleAvatar(
                   radius: 20,
-                  backgroundColor: clubColor.withOpacity(0.1),
+                  backgroundColor: clubColor.withValues(alpha: 0.1),
                   backgroundImage: clubLogo.isNotEmpty
                       ? CachedNetworkImageProvider(clubLogo)
                       : null,
@@ -671,10 +672,10 @@ class ProfilDisplayPage extends StatelessWidget {
                               vertical: 2,
                             ),
                             decoration: BoxDecoration(
-                              color: _getRoleColor(role).withOpacity(0.1),
+                              color: _getRoleColor(role).withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
-                                color: _getRoleColor(role).withOpacity(0.3),
+                                color: _getRoleColor(role).withValues(alpha: 0.3),
                                 width: 1,
                               ),
                             ),
@@ -810,7 +811,7 @@ class ProfilDisplayPage extends StatelessWidget {
                                   vertical: 4,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: clubColor.withOpacity(0.1),
+                                  color: clubColor.withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: Text(
@@ -930,7 +931,7 @@ class ProfilDisplayPage extends StatelessWidget {
 
       try {
         final clubDoc = await FirebaseFirestore.instance
-            .collection('clubs')
+            .collection(FirebaseCollections.clubs)
             .doc(clubId)
             .get();
         final clubData = clubDoc.data();
@@ -1058,7 +1059,7 @@ Future<List<String>> _fetchClubLogos(Map<String, dynamic> data) async {
   for (final id in clubIds) {
     try {
       final doc = await FirebaseFirestore.instance
-          .collection('clubs')
+          .collection(FirebaseCollections.clubs)
           .doc(id)
           .get();
       final url = doc.data()?['logoUrl'] as String?;
@@ -1073,15 +1074,15 @@ Future<List<String>> _fetchClubLogos(Map<String, dynamic> data) async {
 Future<List<String>> _fetchTeams(String clubId, String uid) async {
   final db = FirebaseFirestore.instance;
   final playerTeams = await db
-      .collection('clubs')
+      .collection(FirebaseCollections.clubs)
       .doc(clubId)
-      .collection('teams')
+      .collection(FirebaseCollections.teams)
       .where('playerIds', arrayContains: uid)
       .get();
   final coachTeams = await db
-      .collection('clubs')
+      .collection(FirebaseCollections.clubs)
       .doc(clubId)
-      .collection('teams')
+      .collection(FirebaseCollections.teams)
       .where('coachIds', arrayContains: uid)
       .get();
 

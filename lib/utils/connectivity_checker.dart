@@ -6,10 +6,10 @@ class ConnectivityChecker {
   /// Vérifie si l'appareil a une connexion internet active
   static Future<bool> hasInternetConnection() async {
     try {
-      final connectivityResult = await Connectivity().checkConnectivity();
-      
-      // Si pas de connexion réseau du tout
-      if (connectivityResult == ConnectivityResult.none) {
+      final results = await Connectivity().checkConnectivity();
+      // Si pas de connexion réseau du tout (API renvoie List<ConnectivityResult>)
+      if (results.isEmpty ||
+          results.every((r) => r == ConnectivityResult.none)) {
         return false;
       }
       

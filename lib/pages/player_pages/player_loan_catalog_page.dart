@@ -75,7 +75,7 @@ class _PlayerLoanCatalogPageState extends State<PlayerLoanCatalogPage>
       );
       try {
         final snapshot = await FirebaseFirestore.instance
-            .collection('clubs')
+            .collection(FirebaseCollections.clubs)
             .where(FieldPath.documentId, whereIn: batch)
             .get();
         for (var doc in snapshot.docs) {
@@ -175,7 +175,7 @@ class _PlayerLoanCatalogPageState extends State<PlayerLoanCatalogPage>
   Widget build(BuildContext context) {
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
       stream: FirebaseFirestore.instance
-          .collection('users')
+          .collection(FirebaseCollections.users)
           .doc(_currentUserId)
           .snapshots(),
       builder: (context, userSnap) {
@@ -238,7 +238,7 @@ class _PlayerLoanCatalogPageState extends State<PlayerLoanCatalogPage>
               ),
             ],
           ),
-          bottomNavigationBar: PlayerBottomNav(
+          bottomNavigationBar: playerBottomNav(
             context,
             currentIndex: 3,
             clubId: selectedClubId,
@@ -444,7 +444,7 @@ class _LoanRecapCard extends StatelessWidget {
 
     return Card(
       margin: EdgeInsets.zero,
-      color: ViroColors.primary.withOpacity(0.08),
+      color: ViroColors.primary.withValues(alpha: 0.08),
       child: Padding(
         padding: const EdgeInsets.all(14),
         child: Column(
@@ -513,7 +513,7 @@ class _LoanRecapCard extends StatelessWidget {
                           _getPaymentMethodLabel(method.toString()),
                           style: const TextStyle(fontSize: 11),
                         ),
-                        backgroundColor: ViroColors.primary.withOpacity(0.15),
+                        backgroundColor: ViroColors.primary.withValues(alpha: 0.15),
                         padding: const EdgeInsets.symmetric(
                           horizontal: 8,
                           vertical: 4,
@@ -741,9 +741,7 @@ class _EquipmentCard extends StatelessWidget {
                                 "Indisponible",
                                 style: TextStyle(fontSize: 12),
                               ),
-                              backgroundColor: ViroColors.error.withOpacity(
-                                0.15,
-                              ),
+                              backgroundColor: ViroColors.error.withValues(alpha: 0.15),
                             )
                           else
                             Chip(
@@ -751,9 +749,7 @@ class _EquipmentCard extends StatelessWidget {
                                 "$maxQuantity disponible(s)",
                                 style: const TextStyle(fontSize: 12),
                               ),
-                              backgroundColor: ViroColors.success.withOpacity(
-                                0.15,
-                              ),
+                              backgroundColor: ViroColors.success.withValues(alpha: 0.15),
                             ),
                         ],
                       ),
@@ -830,7 +826,7 @@ class _EquipmentCard extends StatelessWidget {
                             _getPaymentMethodLabel(method.toString()),
                             style: const TextStyle(fontSize: 11),
                           ),
-                          backgroundColor: ViroColors.primary.withOpacity(0.1),
+                          backgroundColor: ViroColors.primary.withValues(alpha: 0.1),
                           padding: const EdgeInsets.symmetric(horizontal: 8),
                         );
                       }),
@@ -1368,7 +1364,7 @@ class _RequestLoanDialogState extends State<_RequestLoanDialog> {
 
     try {
       final userDoc = await FirebaseFirestore.instance
-          .collection('users')
+          .collection(FirebaseCollections.users)
           .doc(widget.currentUserId)
           .get();
       final userData = userDoc.data() ?? {};
@@ -1553,6 +1549,7 @@ class _RequestLoanDialogState extends State<_RequestLoanDialog> {
 
         if (_calendarMode == 'pickup') {
           final isAvailable = await _isPickupDateAvailable(selectedDay);
+          if (!context.mounted) return;
           if (isAvailable) {
             setState(() {
               _selectedPickupDate = selectedDay;
@@ -1572,6 +1569,7 @@ class _RequestLoanDialogState extends State<_RequestLoanDialog> {
           }
         } else {
           final isAvailable = await _isReturnDateAvailable(selectedDay);
+          if (!context.mounted) return;
           if (isAvailable) {
             setState(() {
               _selectedReturnDate = selectedDay;
@@ -2396,7 +2394,7 @@ class _MyLoansSection extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
-                  color: iconColor.withOpacity(0.2),
+                  color: iconColor.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
@@ -2616,7 +2614,7 @@ class _ActiveLoanCard extends StatelessWidget {
                   horizontal: 12,
                 ),
                 decoration: BoxDecoration(
-                  color: ViroColors.warning.withOpacity(0.15),
+                  color: ViroColors.warning.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Row(
@@ -2637,7 +2635,7 @@ class _ActiveLoanCard extends StatelessWidget {
                   horizontal: 12,
                 ),
                 decoration: BoxDecoration(
-                  color: Colors.grey.withOpacity(0.1),
+                  color: Colors.grey.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
@@ -2768,7 +2766,7 @@ Future<void> _showLoanCancellationRequestDialog(
       return;
     }
     final userDoc = await FirebaseFirestore.instance
-        .collection('users')
+        .collection(FirebaseCollections.users)
         .doc(currentUserId)
         .get();
     final userData = userDoc.data() ?? {};
@@ -3243,8 +3241,8 @@ class _ChangeRequestHistoryCard extends StatelessWidget {
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
                   color: status == 'accepted'
-                      ? ViroColors.success.withOpacity(0.1)
-                      : ViroColors.error.withOpacity(0.1),
+                      ? ViroColors.success.withValues(alpha: 0.1)
+                      : ViroColors.error.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Column(
@@ -3452,8 +3450,8 @@ class _RequestHistoryCard extends StatelessWidget {
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
                   color: status == 'accepted'
-                      ? ViroColors.success.withOpacity(0.1)
-                      : ViroColors.error.withOpacity(0.1),
+                      ? ViroColors.success.withValues(alpha: 0.1)
+                      : ViroColors.error.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Column(

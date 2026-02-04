@@ -84,9 +84,9 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
               ),
               StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                 stream: FirebaseFirestore.instance
-                    .collection('clubs')
+                    .collection(FirebaseCollections.clubs)
                     .doc(widget.clubId)
-                    .collection('teams')
+                    .collection(FirebaseCollections.teams)
                     .snapshots(),
                 builder: (context, snapshot) {
                   final categories = <String>{};
@@ -191,7 +191,7 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
                   // Récupérer tous les utilisateurs et filtrer côté client
                   // car la nouvelle structure utilise roles/activeContext
                   stream: FirebaseFirestore.instance
-                      .collection('users')
+                      .collection(FirebaseCollections.users)
                       .snapshots(),
                   builder: (context, snapshot) {
                     if (snapshot.hasError) {

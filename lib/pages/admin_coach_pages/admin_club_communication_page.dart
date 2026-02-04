@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:viro_team/constants/firebase_collections.dart';
 import 'package:intl/intl.dart';
 import '../../theme/viro_theme.dart';
 import '../../utils/firebase_helpers.dart';
@@ -50,7 +51,7 @@ class _AdminClubCommunicationPageState
       String? senderLastName;
       if (_currentUserId.isNotEmpty) {
         final userSnap = await FirebaseFirestore.instance
-            .collection('users')
+            .collection(FirebaseCollections.users)
             .doc(_currentUserId)
             .get();
         final data = userSnap.data();
@@ -67,9 +68,9 @@ class _AdminClubCommunicationPageState
           : _selectedIds;
 
       await FirebaseFirestore.instance
-          .collection('clubs')
+          .collection(FirebaseCollections.clubs)
           .doc(widget.clubId)
-          .collection('announcements')
+          .collection(FirebaseCollections.announcements)
           .add({
             'senderId': _currentUserId.isNotEmpty ? _currentUserId : 'admin',
             'senderFirstName': senderFirstName,
@@ -203,9 +204,9 @@ class _AdminClubCommunicationPageState
     int durationDays,
   ) async {
     await FirebaseFirestore.instance
-        .collection('clubs')
+        .collection(FirebaseCollections.clubs)
         .doc(widget.clubId)
-        .collection('announcements')
+        .collection(FirebaseCollections.announcements)
         .doc(docId)
         .update({'message': message, 'durationDays': durationDays});
   }
@@ -245,9 +246,9 @@ class _AdminClubCommunicationPageState
 
   Future<void> _deleteAnnouncement(String docId) async {
     await FirebaseFirestore.instance
-        .collection('clubs')
+        .collection(FirebaseCollections.clubs)
         .doc(widget.clubId)
-        .collection('announcements')
+        .collection(FirebaseCollections.announcements)
         .doc(docId)
         .delete();
   }
@@ -267,7 +268,7 @@ class _AdminClubCommunicationPageState
               ? const Center(child: ViroLoader())
               : StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
                   stream: FirebaseFirestore.instance
-                      .collection('users')
+                      .collection(FirebaseCollections.users)
                       .doc(_currentUserId)
                       .snapshots(),
                   builder: (context, userSnap) {
@@ -440,9 +441,9 @@ class _AdminClubCommunicationPageState
     final now = DateTime.now();
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
-          .collection('clubs')
+          .collection(FirebaseCollections.clubs)
           .doc(widget.clubId)
-          .collection('announcements')
+          .collection(FirebaseCollections.announcements)
           .orderBy('createdAt', descending: true)
           .limit(50)
           .snapshots(),
@@ -492,7 +493,7 @@ class _AdminClubCommunicationPageState
                   border: Border.all(color: ViroColors.borderColor),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.04),
+                      color: Colors.black.withValues(alpha: 0.04),
                       blurRadius: 6,
                       offset: const Offset(0, 2),
                     ),
@@ -661,9 +662,9 @@ class _AdminClubCommunicationPageState
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
         decoration: BoxDecoration(
-          color: ViroColors.primary.withOpacity(0.08),
+          color: ViroColors.primary.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: ViroColors.primary.withOpacity(0.2)),
+          border: Border.all(color: ViroColors.primary.withValues(alpha: 0.2)),
         ),
         child: Row(
           children: [
@@ -686,9 +687,9 @@ class _AdminClubCommunicationPageState
     if (_selectedTargetType == 'Équipes') {
       return StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
-            .collection('clubs')
+            .collection(FirebaseCollections.clubs)
             .doc(widget.clubId)
-            .collection('teams')
+            .collection(FirebaseCollections.teams)
             .snapshots(),
         builder: (context, snapshot) {
           if (!snapshot.hasData) return const LinearProgressIndicator();
@@ -707,7 +708,7 @@ class _AdminClubCommunicationPageState
                       ? _selectedIds.add(doc.id)
                       : _selectedIds.remove(doc.id),
                 ),
-                selectedColor: ViroColors.primary.withOpacity(0.2),
+                selectedColor: ViroColors.primary.withValues(alpha: 0.2),
               );
             }).toList(),
           );
@@ -718,9 +719,9 @@ class _AdminClubCommunicationPageState
     if (_selectedTargetType == 'Catégories') {
       return StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
-            .collection('clubs')
+            .collection(FirebaseCollections.clubs)
             .doc(widget.clubId)
-            .collection('teams')
+            .collection(FirebaseCollections.teams)
             .snapshots(),
         builder: (context, snapshot) {
           if (!snapshot.hasData) return const LinearProgressIndicator();
@@ -747,7 +748,7 @@ class _AdminClubCommunicationPageState
                 onSelected: (val) => setState(
                   () => val ? _selectedIds.add(cat) : _selectedIds.remove(cat),
                 ),
-                selectedColor: ViroColors.primary.withOpacity(0.2),
+                selectedColor: ViroColors.primary.withValues(alpha: 0.2),
               );
             }).toList(),
           );
@@ -757,7 +758,7 @@ class _AdminClubCommunicationPageState
 
     // Joueurs
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance.collection('users').snapshots(),
+      stream: FirebaseFirestore.instance.collection(FirebaseCollections.users).snapshots(),
       builder: (context, snapshot) {
         if (!snapshot.hasData) return const LinearProgressIndicator();
         final allDocs = snapshot.data!.docs
@@ -828,7 +829,7 @@ class _AdminClubCommunicationPageState
                           ? _selectedIds.add(u['id'] as String)
                           : _selectedIds.remove(u['id'] as String),
                     ),
-                    selectedColor: ViroColors.primary.withOpacity(0.2),
+                    selectedColor: ViroColors.primary.withValues(alpha: 0.2),
                   );
                 }).toList(),
               ),
@@ -859,7 +860,7 @@ class _AdminClubCommunicationPageState
                           ? _selectedIds.add(u['id'] as String)
                           : _selectedIds.remove(u['id'] as String),
                     ),
-                    selectedColor: ViroColors.primary.withOpacity(0.2),
+                    selectedColor: ViroColors.primary.withValues(alpha: 0.2),
                   );
                 }).toList(),
               ),

@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:ui';
 
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
@@ -9,6 +8,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:provider/provider.dart';
 import 'package:viro_team/pages/onboarding_page.dart';
 import 'firebase_options.dart';
 import 'pages/admin_coach_pages/admin_club_communication_page.dart';
@@ -26,7 +26,6 @@ import 'services/user_session.dart';
 import 'theme/viro_theme.dart';
 import 'utils/app_logger.dart';
 import 'utils/connectivity_checker.dart';
-import 'utils/firebase_error_handler.dart';
 import 'widget/fatal_error_app.dart';
 import 'widget/viro_loader.dart';
 
@@ -76,8 +75,13 @@ void main() {
         // 5. Initialiser FCM (notifications push)
         unawaited(NotificationService.instance.init());
 
-        // 6. Lancer l'application principale
-        runApp(const MyApp());
+        // 6. Lancer l'application principale (Provider au-dessus pour que toutes les routes aient accès à UserSession)
+        runApp(
+          ChangeNotifierProvider<UserSession>(
+            create: (_) => UserSession(),
+            child: const MyApp(),
+          ),
+        );
       } catch (error, stackTrace) {
         // En cas d'erreur lors de l'initialisation (ex: Firebase échoue)
         // Essayer d'enregistrer dans Crashlytics si disponible
@@ -121,7 +125,6 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   String? _currentUserId;
-  final UserSession _session = UserSession();
   bool _hasInternet = true;
   final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
 
@@ -283,127 +286,116 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         GlobalCupertinoLocalizations.delegate,
       ],
       home: SplashPage(
-        child: StreamBuilder<User?>(
-          stream: FirebaseAuth.instance.authStateChanges(),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Scaffold(body: Center(child: ViroLoader(size: 50)));
-            }
-            if (snapshot.hasData) {
-              final user = snapshot.data!;
-
-              // Démarrer l'écoute uniquement si l'utilisateur a changé
-              // Évite les appels répétés lors des reconstructions
-              if (_currentUserId != user.uid) {
-                _currentUserId = user.uid;
-                // Utiliser un microtask pour éviter d'appeler startListening pendant le build
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  _session.startListening(user.uid);
-                  NotificationService.instance.updateTokenForUser(user.uid);
-                  NotificationService.instance
-                      .handlePendingNotificationIfNeeded();
-                });
-              }
-
-              return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-                stream: FirebaseFirestore.instance
-                    .collection('users')
-                    .doc(user.uid)
-                    .snapshots(),
-                builder: (context, userSnapshot) {
-                  if (userSnapshot.connectionState == ConnectionState.waiting) {
-                    return const Scaffold(
-                      body: Center(child: ViroLoader(size: 50)),
-                    );
-                  }
-                  if (userSnapshot.hasError) {
-                    return Scaffold(
-                      body: FirebaseErrorHandler.buildErrorWidget(
-                        context,
-                        userSnapshot.error,
-                      ),
-                    );
-                  }
-
-                  final data = userSnapshot.data?.data();
-                  final docExists = userSnapshot.data?.exists ?? false;
-
-                  if (!docExists || data == null) {
-                    // Document n'existe pas dans la base de données : déconnecter et rediriger vers l'authentification
-                    // Cela permet à l'utilisateur de créer un compte
-                    Future.microtask(() async {
-                      try {
-                        await FirebaseAuth.instance.signOut();
-                      } catch (e) {
-                        // Ignorer les erreurs de déconnexion
-                      }
-                    });
-                    // Afficher AuthPage pendant la déconnexion
-                    // Le StreamBuilder se reconstruira automatiquement une fois déconnecté
-                    return const AuthPage();
-                  }
-
-                  // Parse activeContext
-                  final activeContext =
-                      data['activeContext'] as Map<String, dynamic>?;
-                  final activeRole = activeContext?['role'] as String?;
-                  final activeClubId = activeContext?['clubId'] as String?;
-
-                  // Parse roles pour vérifier s'il y a des profils
-                  final roles = data['roles'] as Map<String, dynamic>? ?? {};
-                  final hasPlayer = roles['player'] != null;
-                  final hasCoach =
-                      (roles['coach'] as List?)?.isNotEmpty ?? false;
-                  final hasAdmin =
-                      (roles['admin'] as List?)?.isNotEmpty ?? false;
-                  final hasAnyRole = hasPlayer || hasCoach || hasAdmin;
-
-                  // Vérifier les demandes en attente
-                  final hasPending = data['hasPendingRequest'] == true;
-
-                  // 1. Pas de profil du tout
-                  if (!hasAnyRole && activeContext == null) {
-                    return const OnboardingPage();
-                  }
-
-                  // 2. Contexte actif : garder la home du rôle actif (coach, admin, joueur)
-                  // Priorité au contexte actif pour que le back depuis AddProfilePage
-                  // renvoie bien à la home (ex: coach reste sur AdminHomePage même avec une demande joueur en attente)
-                  if (activeContext != null &&
-                      activeRole != null &&
-                      activeClubId != null) {
-                    if (activeRole == 'admin' ||
-                        activeRole == 'coach' ||
-                        activeRole == 'admin_fondateur') {
-                      return const AdminHomePage();
-                    } else if (activeRole == 'player') {
-                      return const PlayerHomePage();
-                    }
-                  }
-
-                  // 3. Demande en attente (sans contexte actif déjà choisi)
-                  if (hasPending) {
-                    return const PlayerHomePage(); // PlayerPendingPage sera affichée dans PlayerHomePage
-                  }
-
-                  // 4. Profils existants mais pas de contexte actif (cas rare)
-                  // Forcer la sélection du premier profil disponible ou rediriger vers onboarding
-                  return const OnboardingPage();
-                },
-              );
-            }
-            // Réinitialiser le userId lors de la déconnexion
-            if (_currentUserId != null) {
-              _currentUserId = null;
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                _session.stopListening();
-                NotificationService.instance.updateTokenForUser(null);
-              });
-            }
-            return const AuthPage(); // Sinon on affiche l'écran d'auth
+        child: _AuthGate(
+          currentUserId: _currentUserId,
+          onUserIdChanged: (uid) {
+            if (mounted) setState(() => _currentUserId = uid);
+          },
+          onSessionStarted: (uid) {
+            NotificationService.instance.updateTokenForUser(uid);
+            NotificationService.instance.handlePendingNotificationIfNeeded();
+          },
+          onSessionStopped: () {
+            NotificationService.instance.updateTokenForUser(null);
           },
         ),
       ),
+    );
+  }
+}
+
+/// Encapsule la logique d'auth et de routage : une seule écoute Firestore via [UserSession].
+class _AuthGate extends StatefulWidget {
+  const _AuthGate({
+    required this.currentUserId,
+    required this.onUserIdChanged,
+    required this.onSessionStarted,
+    required this.onSessionStopped,
+  });
+
+  final String? currentUserId;
+  final void Function(String?) onUserIdChanged;
+  final void Function(String uid) onSessionStarted;
+  final void Function() onSessionStopped;
+
+  @override
+  State<_AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends State<_AuthGate> {
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<User?>(
+      stream: FirebaseAuth.instance.authStateChanges(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            body: Center(child: ViroLoader(size: 50)),
+          );
+        }
+        if (!snapshot.hasData) {
+          if (widget.currentUserId != null) {
+            widget.onUserIdChanged(null);
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              context.read<UserSession>().stopListening();
+              widget.onSessionStopped();
+            });
+          }
+          return const AuthPage();
+        }
+
+        final user = snapshot.data!;
+        if (user.uid != widget.currentUserId) {
+          widget.onUserIdChanged(user.uid);
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            context.read<UserSession>().startListening(user.uid);
+            widget.onSessionStarted(user.uid);
+          });
+        }
+
+        return Consumer<UserSession>(
+          builder: (context, session, _) {
+            if (session.isLoading && session.currentUser == null) {
+              return const Scaffold(
+                body: Center(child: ViroLoader(size: 50)),
+              );
+            }
+            final currentUser = session.currentUser;
+            if (currentUser == null) {
+              Future.microtask(() async {
+                try {
+                  await FirebaseAuth.instance.signOut();
+                } catch (_) {}
+              });
+              return const AuthPage();
+            }
+
+            final activeContext = currentUser.activeContext;
+            final activeRole = activeContext?.role;
+            final activeClubId = activeContext?.clubId;
+
+            if (!currentUser.hasAnyRole && activeContext == null) {
+              return const OnboardingPage();
+            }
+            if (activeContext != null &&
+                activeRole != null &&
+                activeClubId != null) {
+              if (activeRole == 'admin' ||
+                  activeRole == 'coach' ||
+                  activeRole == 'admin_fondateur') {
+                return const AdminHomePage();
+              }
+              if (activeRole == 'player') {
+                return const PlayerHomePage();
+              }
+            }
+            if (currentUser.hasPendingRequest) {
+              return const PlayerHomePage();
+            }
+            return const OnboardingPage();
+          },
+        );
+      },
     );
   }
 }

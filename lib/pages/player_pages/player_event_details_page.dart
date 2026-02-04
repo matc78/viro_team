@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:viro_team/constants/firebase_collections.dart';
+import 'package:viro_team/services/event_service.dart';
 import 'package:intl/intl.dart';
 import '../../theme/viro_theme.dart';
 import '../../utils/app_logger.dart';
@@ -18,26 +20,24 @@ class PlayerEventDetailsPage extends StatelessWidget {
     required this.eventId,
   });
 
+  static final EventService _eventService = EventService();
+
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<DocumentSnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('clubs')
-          .doc(clubId)
-          .collection('events')
-          .doc(eventId)
-          .snapshots(),
+    return StreamBuilder<DocumentSnapshot?>(
+      stream: _eventService.watchEvent(clubId, eventId),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(body: Center(child: ViroLoader(size: 60)));
         }
-        if (!snapshot.hasData || !snapshot.data!.exists) {
+        final doc = snapshot.data;
+        if (doc == null || !doc.exists) {
           return const Scaffold(
             body: Center(child: Text("Évènement introuvable")),
           );
         }
 
-        final event = snapshot.data!.data() as Map<String, dynamic>;
+        final event = doc.data() as Map<String, dynamic>;
         final String type = event['type'] ?? "Évènement";
         final String team = event['teamName'] ?? "Équipe";
         final String location = event['location'] ?? "Non défini";
@@ -209,9 +209,9 @@ class PlayerEventDetailsPage extends StatelessWidget {
 
     try {
       await FirebaseFirestore.instance
-          .collection('clubs')
+          .collection(FirebaseCollections.clubs)
           .doc(clubId)
-          .collection('events')
+          .collection(FirebaseCollections.events)
           .doc(eventId)
           .update({'attendance.$uid': newStatus});
       AppLogger.instance.info('Mise à jour de présence', {
@@ -260,9 +260,9 @@ class PlayerEventDetailsPage extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
+          color: color.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withOpacity(0.3)),
+          border: Border.all(color: color.withValues(alpha: 0.3)),
         ),
         child: Column(
           children: [
@@ -430,10 +430,10 @@ class PlayerEventDetailsPage extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: statusColor.withOpacity(0.1),
+                color: statusColor.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(20),
                 border: isCurrentUser
-                    ? Border.all(color: statusColor.withOpacity(0.5))
+                    ? Border.all(color: statusColor.withValues(alpha: 0.5))
                     : null,
               ),
               child: Text(

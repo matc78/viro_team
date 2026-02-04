@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../../constants/firebase_collections.dart';
 import '../../theme/viro_theme.dart';
 import '../../utils/app_logger.dart';
 import '../../utils/firebase_helpers.dart';
@@ -97,7 +98,7 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
       }
       // Récupération du nom du club
       final clubSnap = await FirebaseFirestore.instance
-          .collection('clubs')
+          .collection(FirebaseCollections.clubs)
           .doc(widget.clubId)
           .get();
       final clubName = clubSnap.data()?['name'] as String? ?? "";
@@ -108,9 +109,9 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
           : null;
       if (_selectedType == 'Entraînement' || _selectedType == 'Match') {
         final snap = await FirebaseFirestore.instance
-            .collection('clubs')
+            .collection(FirebaseCollections.clubs)
             .doc(widget.clubId)
-            .collection('teams')
+            .collection(FirebaseCollections.teams)
             .where('name', isEqualTo: _selectedTeamName)
             .limit(1)
             .get();
@@ -144,15 +145,16 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
         }
       }
 
+      if (!context.mounted) return;
       // 3. Boucle de création (gestion récurrence)
       for (int i = 0; i < iterations; i++) {
         DateTime eventDate = _date.add(Duration(days: i * 7));
         String dateId = DateFormat('yyyyMMdd').format(eventDate);
 
         DocumentReference ref = FirebaseFirestore.instance
-            .collection('clubs')
+            .collection(FirebaseCollections.clubs)
             .doc(widget.clubId)
-            .collection('events')
+            .collection(FirebaseCollections.events)
             .doc();
 
         final startStr = _allDay ? null : _startTime.format(context);
@@ -200,6 +202,7 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
       }
 
       await batch.commit();
+      if (!context.mounted) return;
       AppLogger.instance.info(
         iterations > 1 ? 'Événements récurrents créés' : 'Événement créé',
         {
@@ -211,7 +214,7 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
           'creatorId': FirebaseAuth.instance.currentUser?.uid,
         },
       );
-      if (mounted) Navigator.pop(context);
+      if (context.mounted) Navigator.pop(context);
     } catch (e) {
       AppLogger.instance.error(
         'Erreur lors de la création d\'événement',
@@ -235,9 +238,9 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
     required bool isMatch,
   }) async {
     final clubsRef = FirebaseFirestore.instance
-        .collection('clubs')
+        .collection(FirebaseCollections.clubs)
         .doc(widget.clubId)
-        .collection('teams');
+        .collection(FirebaseCollections.teams);
     final Set<String> ids = {};
 
     if (isTraining || isMatch) {
@@ -283,9 +286,9 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
     if (_selectedTeamName == null) return const SizedBox();
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
       stream: FirebaseFirestore.instance
-          .collection('clubs')
+          .collection(FirebaseCollections.clubs)
           .doc(widget.clubId)
-          .collection('teams')
+          .collection(FirebaseCollections.teams)
           .where('name', isEqualTo: _selectedTeamName)
           .limit(1)
           .snapshots(),
@@ -500,7 +503,7 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
 
   Future<void> _loadClubSport() async {
     final doc = await FirebaseFirestore.instance
-        .collection('clubs')
+        .collection(FirebaseCollections.clubs)
         .doc(widget.clubId)
         .get();
     if (!mounted) return;
@@ -591,9 +594,9 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
 
                   StreamBuilder<QuerySnapshot>(
                     stream: FirebaseFirestore.instance
-                        .collection('clubs')
+                        .collection(FirebaseCollections.clubs)
                         .doc(widget.clubId)
-                        .collection('teams')
+                        .collection(FirebaseCollections.teams)
                         .snapshots(),
                     builder: (context, snap) {
                       if (!snap.hasData) return const SizedBox();
@@ -790,10 +793,10 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
                           child: Container(
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: ViroColors.primary.withOpacity(0.1),
+                              color: ViroColors.primary.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
-                                color: ViroColors.primary.withOpacity(0.3),
+                                color: ViroColors.primary.withValues(alpha: 0.3),
                               ),
                             ),
                             child: Row(

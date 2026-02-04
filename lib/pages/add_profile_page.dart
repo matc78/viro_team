@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:viro_team/constants/firebase_collections.dart';
 import '../theme/viro_theme.dart';
 import '../widget/viro_loader.dart';
 import '../widget/club_search_widget.dart';
@@ -50,7 +51,7 @@ class _AddProfilePageState extends State<AddProfilePage> {
 
     try {
       final userDoc = await FirebaseFirestore.instance
-          .collection('users')
+          .collection(FirebaseCollections.users)
           .doc(_uid)
           .get();
       final userData = userDoc.data() ?? {};
@@ -139,7 +140,7 @@ class _AddProfilePageState extends State<AddProfilePage> {
       }
 
       // Marquer la demande en attente
-      await FirebaseFirestore.instance.collection('users').doc(_uid).set({
+      await FirebaseFirestore.instance.collection(FirebaseCollections.users).doc(_uid).set({
         'hasPendingRequest': true,
       }, SetOptions(merge: true));
 
@@ -253,7 +254,7 @@ class _AddProfilePageState extends State<AddProfilePage> {
       appBar: AppBar(title: const Text("Ajouter un profil"), elevation: 0),
       body: StreamBuilder<DocumentSnapshot>(
         stream: FirebaseFirestore.instance
-            .collection('users')
+            .collection(FirebaseCollections.users)
             .doc(_uid)
             .snapshots(),
         builder: (context, userSnapshot) {
@@ -346,7 +347,7 @@ class _AddProfilePageState extends State<AddProfilePage> {
       decoration: BoxDecoration(
         color: Colors.grey[50],
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: ViroColors.primary.withOpacity(0.3)),
+        border: Border.all(color: ViroColors.primary.withValues(alpha: 0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -457,7 +458,7 @@ class _AddProfilePageState extends State<AddProfilePage> {
         margin: const EdgeInsets.only(bottom: 12),
         decoration: BoxDecoration(
           color: isSelected
-              ? ViroColors.primary.withOpacity(0.05)
+              ? ViroColors.primary.withValues(alpha: 0.05)
               : Colors.white,
           borderRadius: BorderRadius.circular(15),
           border: Border.all(

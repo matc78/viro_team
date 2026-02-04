@@ -1,6 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:viro_team/constants/firebase_collections.dart';
 import '../services/user_session.dart';
 import '../theme/viro_theme.dart';
 import '../pages/player_pages/player_home_page.dart';
@@ -50,7 +51,7 @@ class _ProfileSwitcherDialogState extends State<ProfileSwitcherDialog> {
 
       try {
         final snapshot = await FirebaseFirestore.instance
-            .collection('clubs')
+            .collection(FirebaseCollections.clubs)
             .where(FieldPath.documentId, whereIn: batch)
             .get();
 
@@ -395,7 +396,7 @@ class _ProfileSwitcherDialogState extends State<ProfileSwitcherDialog> {
                   return Card(
                     margin: const EdgeInsets.only(bottom: 8),
                     color: isCurrent
-                        ? ViroColors.primary.withOpacity(0.1)
+                        ? ViroColors.primary.withValues(alpha: 0.1)
                         : Colors.white,
                     child: ListTile(
                       leading: _buildProfileLeading(

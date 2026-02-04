@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:viro_team/constants/firebase_collections.dart';
 import '../../theme/viro_theme.dart';
 import '../../utils/app_logger.dart';
 import '../../utils/firebase_helpers.dart';
@@ -38,7 +39,7 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (ctx) => StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: FirebaseFirestore.instance.collection('users').snapshots(),
+        stream: FirebaseFirestore.instance.collection(FirebaseCollections.users).snapshots(),
         builder: (context, snapshot) {
           if (!snapshot.hasData) {
             return const Center(child: ViroLoader(size: 40));
@@ -156,7 +157,7 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
                               ]),
                             };
                             await FirebaseFirestore.instance
-                                .collection('users')
+                                .collection(FirebaseCollections.users)
                                 .doc(userId)
                                 .set(userUpdate, SetOptions(merge: true));
                           }
@@ -233,7 +234,7 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
 
         return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
           stream: FirebaseFirestore.instance
-              .collection('users')
+              .collection(FirebaseCollections.users)
               .doc(currentUserId)
               .snapshots(),
           builder: (context, userSnap) {
@@ -296,7 +297,7 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
               if (_isProcessing)
                 Positioned.fill(
                   child: Container(
-                    color: Colors.black.withOpacity(0.1),
+                    color: Colors.black.withValues(alpha: 0.1),
                     child: const Center(
                       child: CircularProgressIndicator(
                         color: ViroColors.primary,
@@ -393,7 +394,7 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                        color: ViroColors.borderColor.withOpacity(0.5),
+                        color: ViroColors.borderColor.withValues(alpha: 0.5),
                       ),
                     ),
                     child: ListTile(
@@ -445,7 +446,7 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
                                         ]),
                                   };
                                   await FirebaseFirestore.instance
-                                      .collection('users')
+                                      .collection(FirebaseCollections.users)
                                       .doc(userId)
                                       .set(userUpdate, SetOptions(merge: true));
                                 }
@@ -515,9 +516,9 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
   }) async {
     if (teamName.isEmpty) return;
     final eventsRef = FirebaseFirestore.instance
-        .collection('clubs')
+        .collection(FirebaseCollections.clubs)
         .doc(widget.clubId)
-        .collection('events');
+        .collection(FirebaseCollections.events);
 
     final List<QuerySnapshot> snaps = await Future.wait([
       eventsRef.where('teamName', isEqualTo: teamName).get(),

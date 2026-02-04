@@ -2,6 +2,8 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:viro_team/constants/firebase_collections.dart';
+import 'package:viro_team/services/team_service.dart';
 import '../../theme/viro_theme.dart';
 import '../../utils/app_logger.dart';
 import '../../utils/firebase_error_handler.dart';
@@ -19,6 +21,7 @@ class AdminTeamsPage extends StatefulWidget {
 
 class _AdminTeamsPageState extends State<AdminTeamsPage> {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
+  final TeamService _teamService = TeamService();
   String? _clubSport;
   String? _clubLogoUrl;
   String? _deletingTeamId;
@@ -31,7 +34,7 @@ class _AdminTeamsPageState extends State<AdminTeamsPage> {
   }
 
   Future<void> _loadClubInfo() async {
-    final doc = await _db.collection('clubs').doc(widget.clubId).get();
+    final doc = await _db.collection(FirebaseCollections.clubs).doc(widget.clubId).get();
     final data = doc.data();
     if (data == null) return;
     setState(() {
@@ -91,17 +94,17 @@ class _AdminTeamsPageState extends State<AdminTeamsPage> {
             onPressed: () async {
               if (nameController.text.isNotEmpty) {
                 try {
-                  final teamRef = await _db
-                      .collection('clubs')
-                      .doc(widget.clubId)
-                      .collection('teams')
-                      .add({
-                        'name': nameController.text.trim(),
-                        'category': category,
-                        'playerIds': [],
-                        'coachIds': [],
-                        'createdAt': FieldValue.serverTimestamp(),
-                      });
+                  final teamRef = await _teamService.addTeam(
+                    widget.clubId,
+                    {
+                      'name': nameController.text.trim(),
+                      'category': category,
+                      'playerIds': [],
+                      'coachIds': [],
+                      'createdAt': FieldValue.serverTimestamp(),
+                    },
+                  );
+                  if (teamRef == null) throw Exception('Création échouée');
                   AppLogger.instance.info(
                     'Équipe créée',
                     {
@@ -134,7 +137,7 @@ class _AdminTeamsPageState extends State<AdminTeamsPage> {
   Future<List<String>> _fetchCoachNames(List<String> coachIds) async {
     if (coachIds.isEmpty) return [];
     final snap = await _db
-        .collection('users')
+        .collection(FirebaseCollections.users)
         .where(FieldPath.documentId, whereIn: coachIds)
         .get();
     return snap.docs.map((doc) {
@@ -271,7 +274,7 @@ class _AdminTeamsPageState extends State<AdminTeamsPage> {
       );
     }
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance.collection('users').doc(userId).snapshots(),
+      stream: FirebaseFirestore.instance.collection(FirebaseCollections.users).doc(userId).snapshots(),
       builder: (context, userSnap) {
         final userData = userSnap.data?.data();
         final rolesInClub = getAllUserRolesInClub(userData ?? {}, widget.clubId);
@@ -317,12 +320,8 @@ class _AdminTeamsPageState extends State<AdminTeamsPage> {
                 ),
               ),
             ),
-            StreamBuilder<QuerySnapshot>(
-              stream: _db
-                  .collection('clubs')
-                  .doc(widget.clubId)
-                  .collection('teams')
-                  .snapshots(),
+            StreamBuilder<List<DocumentSnapshot>>(
+              stream: _teamService.watchTeamsByClub(widget.clubId),
               builder: (context, snapshot) {
                 if (snapshot.hasError) {
                   return Center(
@@ -336,7 +335,7 @@ class _AdminTeamsPageState extends State<AdminTeamsPage> {
                   return const Center(child: ViroLoader(size: 50));
                 }
 
-                final teams = snapshot.data!.docs;
+                final teams = snapshot.data!;
 
                 if (teams.isEmpty) {
                   return Center(
@@ -388,7 +387,7 @@ class _AdminTeamsPageState extends State<AdminTeamsPage> {
                           vertical: 8,
                         ),
                         leading: CircleAvatar(
-                          backgroundColor: ViroColors.primary.withOpacity(0.1),
+                          backgroundColor: ViroColors.primary.withValues(alpha: 0.1),
                           backgroundImage:
                               (_clubLogoUrl != null && _clubLogoUrl!.isNotEmpty)
                               ? CachedNetworkImageProvider(_clubLogoUrl!)
@@ -470,7 +469,7 @@ class _AdminTeamsPageState extends State<AdminTeamsPage> {
             if (_deletingTeamId != null)
               Positioned.fill(
                 child: Container(
-                  color: Colors.black.withOpacity(0.05),
+                  color: Colors.black.withValues(alpha: 0.05),
                   child: const Center(
                     child: CircularProgressIndicator(color: ViroColors.primary),
                   ),
@@ -534,7 +533,7 @@ class _AdminTeamsPageState extends State<AdminTeamsPage> {
       for (final uid in memberIds) {
         final isCoach = coachIds.contains(uid);
         if (isCoach) {
-          await _db.collection('users').doc(uid).set({
+          await _db.collection(FirebaseCollections.users).doc(uid).set({
             'coachedTeams': FieldValue.arrayRemove([
               {'teamId': teamDoc.id, 'teamName': teamName},
             ]),
@@ -595,9 +594,9 @@ class _AdminTeamsPageState extends State<AdminTeamsPage> {
   Future<void> _cleanupEvents(String teamName, List<String> memberIds) async {
     if (teamName.isEmpty) return;
     final eventsRef = _db
-        .collection('clubs')
+        .collection(FirebaseCollections.clubs)
         .doc(widget.clubId)
-        .collection('events');
+        .collection(FirebaseCollections.events);
     final snaps = await Future.wait([
       eventsRef.where('teamName', isEqualTo: teamName).get(),
       eventsRef.where('teamNames', arrayContains: teamName).get(),

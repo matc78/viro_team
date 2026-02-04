@@ -5,6 +5,22 @@ import '../constants/firebase_collections.dart';
 class TeamService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
+  /// Crée une nouvelle équipe dans un club
+  Future<DocumentReference?> addTeam(
+    String clubId,
+    Map<String, dynamic> data,
+  ) async {
+    try {
+      return await _db
+          .collection(FirebaseCollections.clubs)
+          .doc(clubId)
+          .collection(FirebaseCollections.teams)
+          .add(data);
+    } catch (e) {
+      return null;
+    }
+  }
+
   /// Récupère toutes les équipes d'un club
   Future<List<DocumentSnapshot>> getTeamsByClub(String clubId) async {
     try {

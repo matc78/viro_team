@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:viro_team/constants/firebase_collections.dart';
 import '../../theme/viro_theme.dart';
 import '../../utils/firebase_error_handler.dart';
 import '../../utils/firebase_helpers.dart';
@@ -62,25 +63,15 @@ class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
 
   // Générer une couleur unique par clubId
   Color _getClubColor(String clubId) {
-    final colors = [
-      Colors.blue,
-      Colors.green,
-      Colors.orange,
-      Colors.purple,
-      Colors.teal,
-      Colors.indigo,
-      Colors.pink,
-      Colors.amber,
-    ];
-    final index = clubId.hashCode % colors.length;
-    return colors[index.abs()];
+    final index = clubId.hashCode % ViroColors.clubPalette.length;
+    return ViroColors.clubPalette[index.abs()];
   }
 
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
       stream: FirebaseFirestore.instance
-          .collection('users')
+          .collection(FirebaseCollections.users)
           .doc(_currentUserId)
           .snapshots(),
       builder: (context, snapshot) {
@@ -102,7 +93,7 @@ class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
               Expanded(child: _buildEventList()),
             ],
           ),
-          bottomNavigationBar: PlayerBottomNav(
+          bottomNavigationBar: playerBottomNav(
             context,
             currentIndex: 1,
             clubId: widget.clubId,
@@ -194,9 +185,9 @@ class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
     // Créer les streams pour chaque club
     final streams = clubIds.map((clubId) {
       return FirebaseFirestore.instance
-          .collection('clubs')
+          .collection(FirebaseCollections.clubs)
           .doc(clubId)
-          .collection('events')
+          .collection(FirebaseCollections.events)
           .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
           .where('date', isLessThan: Timestamp.fromDate(endOfDay))
           .orderBy('date')
@@ -372,7 +363,7 @@ class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
     for (final clubId in clubIds) {
       try {
         final doc = await FirebaseFirestore.instance
-            .collection('clubs')
+            .collection(FirebaseCollections.clubs)
             .doc(clubId)
             .get();
         final data = doc.data();
@@ -431,9 +422,9 @@ class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
   ) async {
     try {
       await FirebaseFirestore.instance
-          .collection('clubs')
+          .collection(FirebaseCollections.clubs)
           .doc(clubId)
-          .collection('events')
+          .collection(FirebaseCollections.events)
           .doc(eventId)
           .update({'attendance.$_currentUserId': status});
     } catch (e) {
@@ -471,7 +462,7 @@ class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
 
     // Récupérer le nom du club
     return FutureBuilder<DocumentSnapshot>(
-      future: FirebaseFirestore.instance.collection('clubs').doc(clubId).get(),
+      future: FirebaseFirestore.instance.collection(FirebaseCollections.clubs).doc(clubId).get(),
       builder: (context, clubSnap) {
         final clubData = clubSnap.data?.data() as Map<String, dynamic>?;
         final clubName = clubData?['name'] as String? ?? "Club";
@@ -488,12 +479,12 @@ class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
                   ? Colors.grey
                   : (isSeasonCompleted
                         ? Colors.grey.shade400
-                        : clubColor.withOpacity(0.5)),
+                        : clubColor.withValues(alpha: 0.5)),
               width: 2,
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.03),
+                color: Colors.black.withValues(alpha: 0.03),
                 blurRadius: 10,
                 offset: const Offset(0, 4),
               ),
@@ -523,7 +514,7 @@ class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
                         Container(
                           width: 50,
                           decoration: BoxDecoration(
-                            color: clubColor.withOpacity(0.1),
+                            color: clubColor.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Column(
@@ -716,7 +707,7 @@ class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.15),
+        color: color.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
@@ -748,7 +739,7 @@ class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Icon(icon, size: 16, color: color),

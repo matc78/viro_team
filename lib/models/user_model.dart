@@ -30,6 +30,9 @@ class UserModel {
   /// Tous les rôles de l'utilisateur
   final UserRoles roles;
 
+  /// Indique si l'utilisateur a une demande (rejoindre un club, etc.) en attente
+  final bool hasPendingRequest;
+
   UserModel({
     required this.uid,
     this.email,
@@ -39,6 +42,7 @@ class UserModel {
     this.avatarUrl,
     this.activeContext,
     required this.roles,
+    this.hasPendingRequest = false,
   });
 
   /// Parse depuis un document Firestore
@@ -130,6 +134,8 @@ class UserModel {
       );
     }
 
+    final hasPending = data['hasPendingRequest'] == true;
+
     return UserModel(
       uid: doc.id,
       email: data['email'] as String?,
@@ -144,6 +150,7 @@ class UserModel {
         admin: adminClubIds,
         adminFondateur: adminFondateurClubIds,
       ),
+      hasPendingRequest: hasPending,
     );
   }
 
@@ -208,7 +215,14 @@ class UserModel {
   }
 
   bool get hasPlayerProfile => roles.player != null;
-  
+
+  /// True si l'utilisateur a au moins un rôle (player, coach ou admin)
+  bool get hasAnyRole =>
+      roles.player != null ||
+      roles.coach.isNotEmpty ||
+      roles.admin.isNotEmpty ||
+      roles.adminFondateur.isNotEmpty;
+
   List<String> get coachClubIds => roles.coach.map((c) => c.clubId ?? '').where((id) => id.isNotEmpty).toList();
   
   List<String> get allClubIds {

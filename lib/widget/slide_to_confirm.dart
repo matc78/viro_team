@@ -44,10 +44,10 @@ class _SlideToConfirmState extends State<SlideToConfirm>
             width: width,
             height: widget.height,
             decoration: BoxDecoration(
-              color: widget.color.withOpacity(0.1),
+              color: widget.color.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(widget.height / 2),
               border: Border.all(
-                color: widget.color.withOpacity(0.2),
+                color: widget.color.withValues(alpha: 0.2),
                 width: 1.5,
               ),
             ),
@@ -76,8 +76,8 @@ class _SlideToConfirmState extends State<SlideToConfirm>
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       colors: [
-                        widget.color.withOpacity(0.1),
-                        widget.color.withOpacity(0.3),
+                        widget.color.withValues(alpha: 0.1),
+                        widget.color.withValues(alpha: 0.3),
                       ],
                     ),
                     borderRadius: BorderRadius.circular(widget.height / 2),
@@ -116,7 +116,7 @@ class _SlideToConfirmState extends State<SlideToConfirm>
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
-                            color: widget.color.withOpacity(0.4),
+                            color: widget.color.withValues(alpha: 0.4),
                             blurRadius: 12,
                             offset: const Offset(0, 4),
                           ),
@@ -127,7 +127,7 @@ class _SlideToConfirmState extends State<SlideToConfirm>
                               padding: const EdgeInsets.all(8.0),
                               child: CircularProgressIndicator(
                                 strokeWidth: 2,
-                                color: Colors.white.withOpacity(0.8),
+                                color: Colors.white.withValues(alpha: 0.8),
                               ),
                             )
                           : Icon(widget.icon, color: Colors.white, size: 24),

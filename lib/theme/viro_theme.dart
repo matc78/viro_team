@@ -13,6 +13,18 @@ class ViroColors {
   static const Color success = Color(0xFF2ECC71);
   static const Color warning = Color(0xFFF1C40F); // Jaune pour "En attente"
   static const Color error = Color(0xFFE74C3C);   // Rouge pour "Erreur"
+
+  /// Palette de couleurs pour différencier les clubs (calendrier, cartes, etc.)
+  static const List<Color> clubPalette = [
+    Colors.blue,
+    Colors.green,
+    Colors.orange,
+    Colors.purple,
+    Colors.teal,
+    Colors.indigo,
+    Colors.pink,
+    Colors.amber,
+  ];
 }
 
 class ViroTheme {

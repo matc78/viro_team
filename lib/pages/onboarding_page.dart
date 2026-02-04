@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:viro_team/constants/firebase_collections.dart';
 import '../theme/viro_theme.dart';
 import '../widget/viro_loader.dart';
 import '../widget/club_search_widget.dart';
@@ -45,7 +46,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
       return;
     }
     final doc = await FirebaseFirestore.instance
-        .collection('users')
+        .collection(FirebaseCollections.users)
         .doc(user.uid)
         .get();
     final data = doc.data();
@@ -112,7 +113,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
         'clubId': firstClubId,
       };
 
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+      await FirebaseFirestore.instance.collection(FirebaseCollections.users).doc(user.uid).set({
         'activeContext': newActiveContext,
         'clubId': firstClubId,
       }, SetOptions(merge: true));
@@ -139,7 +140,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
     final doc = await FirebaseFirestore.instance
-        .collection('users')
+        .collection(FirebaseCollections.users)
         .doc(user.uid)
         .get();
     final raw = doc.data()?['phone'];
@@ -182,7 +183,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
 
       // Récupérer les infos utilisateur
       final userDoc = await FirebaseFirestore.instance
-          .collection('users')
+          .collection(FirebaseCollections.users)
           .doc(user.uid)
           .get();
       final userData = userDoc.data() ?? {};
@@ -238,7 +239,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
         'phone': _phoneController.text.trim(),
       };
       await FirebaseFirestore.instance
-          .collection('users')
+          .collection(FirebaseCollections.users)
           .doc(user.uid)
           .set(userUpdateData, SetOptions(merge: true));
 
@@ -325,7 +326,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
       decoration: BoxDecoration(
         color: Colors.grey[50],
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: ViroColors.primary.withOpacity(0.3)),
+        border: Border.all(color: ViroColors.primary.withValues(alpha: 0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -456,7 +457,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
         margin: const EdgeInsets.only(bottom: 12),
         decoration: BoxDecoration(
           color: isSelected
-              ? ViroColors.primary.withOpacity(0.05)
+              ? ViroColors.primary.withValues(alpha: 0.05)
               : Colors.white,
           borderRadius: BorderRadius.circular(15),
           border: Border.all(

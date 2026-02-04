@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
+import 'package:viro_team/constants/firebase_collections.dart';
 import '../models/user_model.dart';
 import '../utils/app_logger.dart';
 
@@ -33,7 +34,7 @@ class UserSession extends ChangeNotifier {
 
     try {
       final doc = await FirebaseFirestore.instance
-          .collection('users')
+          .collection(FirebaseCollections.users)
           .doc(uid)
           .get();
 
@@ -65,7 +66,7 @@ class UserSession extends ChangeNotifier {
     notifyListeners();
 
     _subscription = FirebaseFirestore.instance
-        .collection('users')
+        .collection(FirebaseCollections.users)
         .doc(uid)
         .snapshots()
         .listen(
@@ -105,7 +106,7 @@ class UserSession extends ChangeNotifier {
 
     try {
       await FirebaseFirestore.instance
-          .collection('users')
+          .collection(FirebaseCollections.users)
           .doc(_currentUser!.uid)
           .update({
             'activeContext': {'role': role, 'clubId': clubId},

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:viro_team/constants/firebase_collections.dart';
@@ -6,6 +8,7 @@ import 'package:viro_team/utils/app_logger.dart';
 
 /// Gère FCM : permissions, token, sauvegarde dans users/{uid}, dispatch du tap sur notif.
 /// Chaque type de notif est défini dans [lib/notifications/] (un fichier par notif).
+/// Les listeners FCM sont actifs pour toute la durée de l'app ; [dispose] les annule (utile en tests).
 final class NotificationService {
   NotificationService._();
 
@@ -17,6 +20,10 @@ final class NotificationService {
   RemoteMessage? _pendingInitialMessage;
   bool _initialized = false;
 
+  StreamSubscription<RemoteMessage>? _onMessageOpenedAppSubscription;
+  StreamSubscription<RemoteMessage>? _onMessageSubscription;
+  StreamSubscription<String?>? _onTokenRefreshSubscription;
+
   /// À appeler une fois au démarrage (après Firebase.initializeApp).
   /// Ne demande pas les permissions ici : utiliser [requestPermissionIfNeeded] depuis une home page.
   Future<void> init() async {
@@ -24,10 +31,11 @@ final class NotificationService {
     _initialized = true;
 
     // Message ouvert depuis une notif (app en arrière-plan)
-    FirebaseMessaging.onMessageOpenedApp.listen(_handleMessage);
+    _onMessageOpenedAppSubscription =
+        FirebaseMessaging.onMessageOpenedApp.listen(_handleMessage);
 
     // Notif reçue au premier plan (optionnel : afficher in-app)
-    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+    _onMessageSubscription = FirebaseMessaging.onMessage.listen((RemoteMessage message) {
       AppLogger.instance.info(
         'FCM: message reçu au premier plan',
         message.data,
@@ -41,10 +49,23 @@ final class NotificationService {
     }
 
     // Rafraîchissement du token
-    FirebaseMessaging.instance.onTokenRefresh.listen((_) {
+    _onTokenRefreshSubscription =
+        FirebaseMessaging.instance.onTokenRefresh.listen((_) {
       AppLogger.instance.info('FCM: token rafraîchi');
       onTokenRefreshed?.call();
     });
+  }
+
+  /// Annule les abonnements FCM. Utile en tests ou si le service a un cycle de vie explicite.
+  void dispose() {
+    _onMessageOpenedAppSubscription?.cancel();
+    _onMessageOpenedAppSubscription = null;
+    _onMessageSubscription?.cancel();
+    _onMessageSubscription = null;
+    _onTokenRefreshSubscription?.cancel();
+    _onTokenRefreshSubscription = null;
+    _pendingInitialMessage = null;
+    _initialized = false;
   }
 
   /// À appeler lorsque l'utilisateur arrive sur une home page (après choix onboarding).
