@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -26,15 +27,69 @@ class AdminEquipmentPage extends StatefulWidget {
 class _AdminEquipmentPageState extends State<AdminEquipmentPage> {
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: ViroColors.background,
-      appBar: AppBar(title: const Text("Équipement"), centerTitle: true),
-      body: _InventoryTab(clubId: widget.clubId, sport: widget.sport),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _showAddEquipmentDialog(context),
-        backgroundColor: ViroColors.primary,
-        child: const Icon(Icons.add, color: Colors.white),
-      ),
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId == null) {
+      return Scaffold(
+        backgroundColor: ViroColors.background,
+        appBar: AppBar(title: const Text("Équipement"), centerTitle: true),
+        body: const Center(child: Text("Non connecté")),
+      );
+    }
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .snapshots(),
+      builder: (context, userSnap) {
+        final userData = userSnap.data?.data();
+        final rolesInClub =
+            getAllUserRolesInClub(userData ?? {}, widget.clubId);
+        final canManageEquipment = rolesInClub.contains('admin') ||
+            rolesInClub.contains('admin_fondateur');
+        if (userSnap.hasData && userData != null && !canManageEquipment) {
+          return Scaffold(
+            backgroundColor: ViroColors.background,
+            appBar: AppBar(title: const Text("Équipement"), centerTitle: true),
+            body: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24.0),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.lock_outline,
+                      size: 64,
+                      color: Colors.grey[400],
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      "Accès réservé aux administrateurs",
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      "La gestion des équipements n'est pas disponible pour les coaches.",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.grey[600]),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }
+        return Scaffold(
+          backgroundColor: ViroColors.background,
+          appBar: AppBar(title: const Text("Équipement"), centerTitle: true),
+          body: _InventoryTab(clubId: widget.clubId, sport: widget.sport),
+          floatingActionButton: FloatingActionButton(
+            onPressed: () => _showAddEquipmentDialog(context),
+            backgroundColor: ViroColors.primary,
+            child: const Icon(Icons.add, color: Colors.white),
+          ),
+        );
+      },
     );
   }
 

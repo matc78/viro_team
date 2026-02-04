@@ -73,6 +73,8 @@ class UserModel {
             clubs.add(PlayerClubInfo(
               clubId: clubItem['clubId'] as String?,
               teamIds: (clubItem['teamIds'] as List?)?.whereType<String>().toList() ?? [],
+              teamNames: (clubItem['teamNames'] as List?)?.whereType<String>().toList() ?? [],
+              categories: (clubItem['categories'] as List?)?.whereType<String>().toList() ?? [],
               license: clubItem['license'] as String?,
             ));
           }
@@ -83,6 +85,10 @@ class UserModel {
         clubs.add(PlayerClubInfo(
           clubId: playerData['clubId'] as String?,
           teamIds: (playerData['teamIds'] as List?)?.whereType<String>().toList() ?? [],
+          teamNames: (playerData['teamNames'] as List?)?.whereType<String>().toList() ??
+              (data['teamNames'] as List?)?.whereType<String>().toList() ?? [],
+          categories: (playerData['categories'] as List?)?.whereType<String>().toList() ??
+              (data['categories'] as List?)?.whereType<String>().toList() ?? [],
           license: playerData['license'] as String?, // Migration depuis l'ancienne structure
         ));
       }
@@ -151,6 +157,8 @@ class UserModel {
         'clubs': roles.player!.clubs.map((club) => {
           'clubId': club.clubId,
           'teamIds': club.teamIds,
+          if (club.teamNames.isNotEmpty) 'teamNames': club.teamNames,
+          if (club.categories.isNotEmpty) 'categories': club.categories,
           if (club.license != null) 'license': club.license,
         }).toList(),
       };
@@ -273,14 +281,19 @@ class PlayerProfile {
 }
 
 /// Information sur un club dans lequel le player joue
+/// teamIds, teamNames et categories sont synchronisés (même longueur logique par équipe)
 class PlayerClubInfo {
   final String? clubId;
   final List<String> teamIds;
+  final List<String> teamNames; // Noms des équipes (dénormalisés pour affichage)
+  final List<String> categories; // Catégories des équipes
   final String? license; // Numéro de licence spécifique à ce club
 
   PlayerClubInfo({
     this.clubId,
     this.teamIds = const [],
+    this.teamNames = const [],
+    this.categories = const [],
     this.license,
   });
 }

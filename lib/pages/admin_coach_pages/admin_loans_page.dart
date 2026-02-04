@@ -32,6 +32,11 @@ class AdminLoansPage extends StatefulWidget {
 bool _isAdminForClub(Map<String, dynamic>? userData, String clubId) {
   if (userData == null) return false;
   final roles = userData['roles'] as Map<String, dynamic>? ?? {};
+  if (roles['admin_fondateur'] is List) {
+    final fondateurIds =
+        (roles['admin_fondateur'] as List).whereType<String>();
+    if (fondateurIds.contains(clubId)) return true;
+  }
   if (roles['admin'] is List) {
     final adminClubIds = (roles['admin'] as List).whereType<String>();
     if (adminClubIds.contains(clubId)) return true;
@@ -89,6 +94,43 @@ class _AdminLoansPageState extends State<AdminLoansPage>
         final userData = userSnap.data?.data();
         final isAdmin = _isAdminForClub(userData, widget.clubId);
         final showCancelButtons = _editMode && isAdmin;
+        // Un coach ne peut pas gérer le catalogue et les prêts
+        if (userSnap.hasData && userData != null && !isAdmin) {
+          return Scaffold(
+            backgroundColor: ViroColors.background,
+            appBar: AppBar(
+              title: const Text("Prêts"),
+              centerTitle: true,
+            ),
+            body: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24.0),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.lock_outline,
+                      size: 64,
+                      color: Colors.grey[400],
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      "Accès réservé aux administrateurs",
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      "La gestion du catalogue et des prêts n'est pas disponible pour les coaches.",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.grey[600]),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }
         return Scaffold(
           backgroundColor: ViroColors.background,
           appBar: AppBar(

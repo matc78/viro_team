@@ -1,9 +1,11 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../../theme/viro_theme.dart';
 import '../../utils/app_logger.dart';
 import '../../utils/firebase_error_handler.dart';
+import '../../utils/firebase_helpers.dart';
 import '../../widget/viro_loader.dart';
 import 'admin_teams_detail_page.dart';
 
@@ -261,20 +263,36 @@ class _AdminTeamsPageState extends State<AdminTeamsPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text("Gestion des Équipes"),
-        centerTitle: true,
-        actions: [
-          IconButton(
-            icon: Icon(_isEditing ? Icons.close : Icons.edit),
-            onPressed: () => setState(() {
-              _isEditing = !_isEditing;
-            }),
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId == null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text("Gestion des Équipes"), centerTitle: true),
+        body: const Center(child: Text("Non connecté")),
+      );
+    }
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance.collection('users').doc(userId).snapshots(),
+      builder: (context, userSnap) {
+        final userData = userSnap.data?.data();
+        final rolesInClub = getAllUserRolesInClub(userData ?? {}, widget.clubId);
+        final canCreateOrDelete =
+            rolesInClub.contains('admin') || rolesInClub.contains('admin_fondateur');
+
+        return Scaffold(
+          appBar: AppBar(
+            title: const Text("Gestion des Équipes"),
+            centerTitle: true,
+            actions: [
+              if (canCreateOrDelete)
+                IconButton(
+                  icon: Icon(_isEditing ? Icons.close : Icons.edit),
+                  onPressed: () => setState(() {
+                    _isEditing = !_isEditing;
+                  }),
+                ),
+            ],
           ),
-        ],
-      ),
-      body: AbsorbPointer(
+          body: AbsorbPointer(
         absorbing: _deletingTeamId != null,
         child: Stack(
           children: [
@@ -461,13 +479,15 @@ class _AdminTeamsPageState extends State<AdminTeamsPage> {
           ],
         ),
       ),
-      floatingActionButton: _isEditing
-          ? null
-          : FloatingActionButton(
-              onPressed: _showCreateTeamDialog,
-              backgroundColor: ViroColors.primary,
-              child: const Icon(Icons.add, color: Colors.white),
-            ),
+          floatingActionButton: canCreateOrDelete && !_isEditing
+              ? FloatingActionButton(
+                  onPressed: _showCreateTeamDialog,
+                  backgroundColor: ViroColors.primary,
+                  child: const Icon(Icons.add, color: Colors.white),
+                )
+              : null,
+        );
+      },
     );
   }
 
@@ -510,27 +530,26 @@ class _AdminTeamsPageState extends State<AdminTeamsPage> {
     try {
       await _cleanupEvents(teamName, memberIds);
 
-      // Mise à jour des profils membres
+      // Mise à jour des profils membres (source unifiée : roles.player.clubs)
       for (final uid in memberIds) {
         final isCoach = coachIds.contains(uid);
-        final update = <String, dynamic>{
-          'teamIds': FieldValue.arrayRemove([teamDoc.id]),
-        };
-        if (teamName.isNotEmpty) {
-          update['teamNames'] = FieldValue.arrayRemove([teamName]);
-        }
-        if (teamCategory.isNotEmpty) {
-          update['categories'] = FieldValue.arrayRemove([teamCategory]);
-        }
         if (isCoach) {
-          update['coachedTeams'] = FieldValue.arrayRemove([
-            {'teamId': teamDoc.id, 'teamName': teamName},
-          ]);
+          await _db.collection('users').doc(uid).set({
+            'coachedTeams': FieldValue.arrayRemove([
+              {'teamId': teamDoc.id, 'teamName': teamName},
+            ]),
+          }, SetOptions(merge: true));
+        } else {
+          await updatePlayerClubsForTeam(
+            _db,
+            uid,
+            widget.clubId,
+            add: false,
+            teamId: teamDoc.id,
+            teamName: teamName,
+            teamCategory: teamCategory,
+          );
         }
-        await _db
-            .collection('users')
-            .doc(uid)
-            .set(update, SetOptions(merge: true));
       }
 
       await teamDoc.reference.delete();

@@ -241,18 +241,9 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
                               .toLowerCase();
                           final email = (data['email'] as String? ?? "")
                               .toLowerCase();
-                          final userCat = data['category'] as String? ?? "";
-                          final userCats =
-                              (data['categories'] as List?)
-                                  ?.whereType<String>()
-                                  .toList() ??
-                              [];
-                          final userTeams =
-                              (data['teamNames'] as List?)
-                                  ?.whereType<String>()
-                                  .toList() ??
-                              [];
-                          final userTeam = data['teamName'] as String?;
+                          // Source unifiée : roles.player.clubs
+                          final userCats = getUserCategories(data);
+                          final userTeams = getUserTeamNames(data);
 
                           // Pour les filtres de catégorie et équipe, on ne filtre que les joueurs
                           // Les admins/coachs ne sont pas filtrés par catégorie/équipe
@@ -260,8 +251,6 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
                           final catOk =
                               !isPlayer ||
                               _selectedCategory == null ||
-                              _normalize(userCat) ==
-                                  _normalize(_selectedCategory!) ||
                               userCats.any(
                                 (c) =>
                                     _normalize(c) ==
@@ -270,8 +259,6 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
                           final teamOk =
                               !isPlayer ||
                               _selectedTeam == null ||
-                              _normalize(userTeam ?? "") ==
-                                  _normalize(_selectedTeam!) ||
                               userTeams.any(
                                 (t) =>
                                     _normalize(t) == _normalize(_selectedTeam!),

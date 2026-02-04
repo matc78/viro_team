@@ -118,7 +118,9 @@ class _OnboardingPageState extends State<OnboardingPage> {
       }, SetOptions(merge: true));
 
       if (!mounted) return;
-      if (firstRole == 'admin' || firstRole == 'coach' || firstRole == 'admin_fondateur') {
+      if (firstRole == 'admin' ||
+          firstRole == 'coach' ||
+          firstRole == 'admin_fondateur') {
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (_) => const AdminHomePage()),
         );

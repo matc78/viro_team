@@ -637,15 +637,17 @@ class _ClubAnnouncementsList extends StatelessWidget {
             final teamIds =
                 (club['teamIds'] as List?)?.whereType<String>().toList() ?? [];
 
-            // Récupérer les catégories depuis les équipes
-            List<String> categories = [];
-            if (teamIds.isNotEmpty) {
+            // Catégories : source unifiée roles.player.clubs, sinon fetch depuis équipes
+            List<String> categories = (club['categories'] as List?)
+                    ?.whereType<String>()
+                    .toList() ??
+                [];
+            if (categories.isEmpty && teamIds.isNotEmpty) {
               final teamsSnapshot = await FirebaseFirestore.instance
                   .collection('clubs')
                   .doc(clubIdFromClub)
                   .collection('teams')
                   .get();
-
               for (var teamDoc in teamsSnapshot.docs) {
                 if (teamIds.contains(teamDoc.id)) {
                   final category = teamDoc.data()['category'] as String?;
@@ -655,8 +657,6 @@ class _ClubAnnouncementsList extends StatelessWidget {
                 }
               }
             }
-
-            // Fallback : récupérer la catégorie directement de l'utilisateur
             if (categories.isEmpty) {
               final userCategory = userData['category'] as String?;
               if (userCategory != null && userCategory.isNotEmpty) {

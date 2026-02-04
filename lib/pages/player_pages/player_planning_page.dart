@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../theme/viro_theme.dart';
 import '../../utils/firebase_error_handler.dart';
+import '../../utils/firebase_helpers.dart';
 import '../../widget/player_bottom_nav.dart';
 import '../../widget/viro_loader.dart';
 import 'player_event_details_page.dart'; // Importation de ta page de détails player
@@ -410,17 +411,9 @@ class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
       return memberIds.contains(_currentUserId);
     }
 
-    // Sinon, vérifier par équipe ou catégorie
-    final userTeams =
-        (_userData?['teamNames'] as List?)?.whereType<String>().toList() ?? [];
-    if (userTeams.isEmpty && _userData?['teamName'] is String) {
-      userTeams.add(_userData?['teamName'] as String);
-    }
-    final userCategories =
-        (_userData?['categories'] as List?)?.whereType<String>().toList() ?? [];
-    if (userCategories.isEmpty && _userData?['category'] is String) {
-      userCategories.add(_userData?['category'] as String);
-    }
+    // Sinon, vérifier par équipe ou catégorie (source unifiée : roles.player.clubs)
+    final userTeams = getUserTeamNames(_userData ?? {});
+    final userCategories = getUserCategories(_userData ?? {});
 
     final bool matchTeam =
         teamNames.any(userTeams.contains) ||

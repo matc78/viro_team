@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:viro_team/pages/player_pages/player_teams_page.dart';
 import '../../constants/firebase_collections.dart';
 import '../../utils/firebase_error_handler.dart';
+import '../../utils/firebase_helpers.dart';
 
 // Import de tes nouvelles pages
 import 'player_pending_page.dart';
@@ -947,28 +948,9 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
             (data['teamNames'] as List?)?.whereType<String>().toList() ?? [];
         final teamName = data['teamName'] as String?;
         final eventCategory = data['category'] as String?;
-        final userTeams =
-            (_manualUserData?['teamNames'] as List?)
-                ?.whereType<String>()
-                .toList() ??
-            (userData?['teamNames'] as List?)?.whereType<String>().toList() ??
-            [];
-        if (userTeams.isEmpty && _manualUserData?['teamName'] is String) {
-          userTeams.add(_manualUserData?['teamName'] as String);
-        } else if (userTeams.isEmpty && userData?['teamName'] is String) {
-          userTeams.add(userData?['teamName'] as String);
-        }
-        final userCategories =
-            (_manualUserData?['categories'] as List?)
-                ?.whereType<String>()
-                .toList() ??
-            (userData?['categories'] as List?)?.whereType<String>().toList() ??
-            [];
-        if (userCategories.isEmpty && _manualUserData?['category'] is String) {
-          userCategories.add(_manualUserData?['category'] as String);
-        } else if (userCategories.isEmpty && userData?['category'] is String) {
-          userCategories.add(userData?['category'] as String);
-        }
+        final effectiveUserData = _manualUserData ?? userData ?? {};
+        final userTeams = getUserTeamNames(effectiveUserData);
+        final userCategories = getUserCategories(effectiveUserData);
         final bool inMemberIds =
             memberIds.isNotEmpty && memberIds.contains(_currentUserId);
         final bool matchTeam =

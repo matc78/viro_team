@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../../theme/viro_theme.dart';
 import '../../utils/app_logger.dart';
@@ -22,7 +23,6 @@ class TeamDetailsPage extends StatefulWidget {
 }
 
 class _TeamDetailsPageState extends State<TeamDetailsPage> {
-  bool _isEditing = false;
   bool _isProcessing = false;
   // Ouvre une liste de membres du club pour les ajouter à l'équipe
   void _showAddMemberSheet(
@@ -46,14 +46,25 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
           final existingIds = role == 'coach' ? coachIds : playerIds;
 
           // Filtrer les utilisateurs du club avec le bon rôle
-          final allDocs = snapshot.data!.docs;
-          final clubMembers = filterUsersByClub(
-            allDocs
-                .map((doc) => doc as DocumentSnapshot<Map<String, dynamic>>)
-                .toList(),
-            widget.clubId,
-            role: role == 'coach' ? 'coach' : 'player',
-          );
+          // Pour la section Coachs : coach, admin et admin_fondateur peuvent être assignés à une équipe
+          final allDocs = snapshot.data!.docs
+              .map((doc) => doc as DocumentSnapshot<Map<String, dynamic>>)
+              .toList();
+          final List<DocumentSnapshot<Map<String, dynamic>>> clubMembers;
+          if (role == 'coach') {
+            final coaches =
+                filterUsersByClub(allDocs, widget.clubId, role: 'coach');
+            final admins =
+                filterUsersByClub(allDocs, widget.clubId, role: 'admin');
+            final seenIds = coaches.map((d) => d.id).toSet();
+            clubMembers = [
+              ...coaches,
+              ...admins.where((doc) => seenIds.add(doc.id)),
+            ];
+          } else {
+            clubMembers =
+                filterUsersByClub(allDocs, widget.clubId, role: 'player');
+          }
 
           final users = clubMembers
               .where((doc) => !existingIds.contains(doc.id))
@@ -125,33 +136,30 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
                           await widget.teamDoc.reference.update({
                             field: FieldValue.arrayUnion([userId]),
                           });
-                          final Map<String, dynamic> userUpdate = {
-                            'teamIds': FieldValue.arrayUnion([
-                              widget.teamDoc.id,
-                            ]),
-                          };
-                          if (role == 'coach') {
-                            userUpdate['coachedTeams'] = FieldValue.arrayUnion([
-                              {
-                                'teamId': widget.teamDoc.id,
-                                'teamName': teamName,
-                              },
-                            ]);
+                          if (role == 'player') {
+                            await updatePlayerClubsForTeam(
+                              FirebaseFirestore.instance,
+                              userId,
+                              widget.clubId,
+                              add: true,
+                              teamId: widget.teamDoc.id,
+                              teamName: teamName,
+                              teamCategory: teamCategory,
+                            );
+                          } else {
+                            final userUpdate = <String, dynamic>{
+                              'coachedTeams': FieldValue.arrayUnion([
+                                {
+                                  'teamId': widget.teamDoc.id,
+                                  'teamName': teamName,
+                                },
+                              ]),
+                            };
+                            await FirebaseFirestore.instance
+                                .collection('users')
+                                .doc(userId)
+                                .set(userUpdate, SetOptions(merge: true));
                           }
-                          if (teamName.isNotEmpty) {
-                            userUpdate['teamNames'] = FieldValue.arrayUnion([
-                              teamName,
-                            ]);
-                          }
-                          if (teamCategory.isNotEmpty) {
-                            userUpdate['categories'] = FieldValue.arrayUnion([
-                              teamCategory,
-                            ]);
-                          }
-                          await FirebaseFirestore.instance
-                              .collection('users')
-                              .doc(userId)
-                              .set(userUpdate, SetOptions(merge: true));
                           if (role == 'player') {
                             await _updateEventsAttendanceForPlayer(
                               userId,
@@ -202,6 +210,7 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final currentUserId = FirebaseAuth.instance.currentUser?.uid;
     return StreamBuilder<DocumentSnapshot>(
       stream: widget.teamDoc.reference.snapshots(),
       builder: (context, snapshot) {
@@ -210,57 +219,80 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
         }
 
         final teamData = snapshot.data!.data() as Map<String, dynamic>;
-        final List coachIds = teamData['coachIds'] ?? [];
+        final List coachIds = List<String>.from(teamData['coachIds'] ?? []);
         final List playerIds = teamData['playerIds'] ?? [];
         final String teamName = teamData['name'] ?? "";
         final String teamCategory = teamData['category'] ?? "";
 
-        return Scaffold(
-          appBar: AppBar(
-            title: Column(
-              children: [
-                Text(teamData['name'] ?? "Détails"),
-                Text(
-                  teamData['category'] ?? "",
-                  style: const TextStyle(fontSize: 12, color: Colors.grey),
-                ),
-              ],
-            ),
-            actions: [
-              IconButton(
-                icon: Icon(_isEditing ? Icons.check : Icons.edit),
-                onPressed: () => setState(() => _isEditing = !_isEditing),
-              ),
-            ],
-          ),
-          body: Stack(
-            children: [
-              AbsorbPointer(
-                absorbing: _isProcessing,
-                child: Column(
+        if (currentUserId == null) {
+          return Scaffold(
+            appBar: AppBar(title: Text(teamData['name'] ?? "Détails")),
+            body: const Center(child: Text("Non connecté")),
+          );
+        }
+
+        return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+          stream: FirebaseFirestore.instance
+              .collection('users')
+              .doc(currentUserId)
+              .snapshots(),
+          builder: (context, userSnap) {
+            final userData = userSnap.data?.data();
+            final rolesInClub =
+                getAllUserRolesInClub(userData ?? {}, widget.clubId);
+            final isAdmin = rolesInClub.contains('admin') ||
+                rolesInClub.contains('admin_fondateur');
+            final isCoachOfThisTeam = coachIds.contains(currentUserId);
+            final canEdit = isAdmin || isCoachOfThisTeam;
+
+            return Scaffold(
+              appBar: AppBar(
+                title: Column(
                   children: [
-                    _buildMemberSection(
-                      "Coachs",
-                      coachIds,
-                      'coach',
-                      teamName,
-                      teamCategory,
-                      coachIds,
-                      playerIds,
-                    ),
-                    const Divider(height: 1, color: ViroColors.borderColor),
-                    _buildMemberSection(
-                      "Effectif (Membres)",
-                      playerIds,
-                      'player',
-                      teamName,
-                      teamCategory,
-                      coachIds,
-                      playerIds,
+                    Text(teamData['name'] ?? "Détails"),
+                    Text(
+                      teamData['category'] ?? "",
+                      style: const TextStyle(fontSize: 12, color: Colors.grey),
                     ),
                   ],
                 ),
+                // Pas d'icône d'édition : admin et coach ajoutent/retirent via les boutons + et - directement
+                actions: [],
               ),
+              body: Stack(
+                children: [
+                  AbsorbPointer(
+                    absorbing: _isProcessing,
+                    child: Column(
+                      children: [
+                        _buildMemberSection(
+                          "Coachs",
+                          coachIds,
+                          'coach',
+                          teamName,
+                          teamCategory,
+                          coachIds,
+                          playerIds,
+                          canEdit: canEdit,
+                          showAddWithoutEditMode: isAdmin || isCoachOfThisTeam,
+                          canRemoveInSection: isAdmin,
+                        ),
+                        const Divider(height: 1, color: ViroColors.borderColor),
+                        _buildMemberSection(
+                          "Effectif (Membres)",
+                          playerIds,
+                          'player',
+                          teamName,
+                          teamCategory,
+                          coachIds,
+                          playerIds,
+                          canEdit: canEdit,
+                          showAddWithoutEditMode: isAdmin || isCoachOfThisTeam,
+                          canRemoveInSection: isAdmin || isCoachOfThisTeam,
+                        ),
+                      ],
+                    ),
+                  ),
               if (_isProcessing)
                 Positioned.fill(
                   child: Container(
@@ -274,6 +306,8 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
                 ),
             ],
           ),
+            );
+          },
         );
       },
     );
@@ -286,9 +320,14 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
     String teamName,
     String teamCategory,
     List coachIds,
-    List playerIds,
-  ) {
+    List playerIds, {
+    bool canEdit = true,
+    bool showAddWithoutEditMode = false,
+    bool canRemoveInSection = true,
+  }) {
     final isCoach = role == 'coach';
+    final showAdd = canEdit &&
+        (role != 'coach' || showAddWithoutEditMode);
     final header = Padding(
       padding: const EdgeInsets.fromLTRB(20, 16, 10, 8),
       child: Row(
@@ -303,7 +342,7 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
               letterSpacing: 1.2,
             ),
           ),
-          if (role != 'coach' || _isEditing)
+          if (showAdd)
             IconButton(
               icon: const Icon(
                 Icons.add_circle_rounded,
@@ -371,7 +410,7 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
                           fontWeight: FontWeight.w600,
                         ),
                       ),
-                      trailing: _isEditing
+                      trailing: canEdit && canRemoveInSection
                           ? IconButton(
                               icon: const Icon(
                                 Icons.remove_circle_outline,
@@ -385,32 +424,31 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
                                 await widget.teamDoc.reference.update({
                                   field: FieldValue.arrayRemove([userId]),
                                 });
-                                final Map<String, dynamic> userUpdate = {
-                                  'teamIds': FieldValue.arrayRemove([
-                                    widget.teamDoc.id,
-                                  ]),
-                                };
-                                if (role == 'coach') {
-                                  userUpdate['coachedTeams'] =
-                                      FieldValue.arrayRemove([
-                                        {
-                                          'teamId': widget.teamDoc.id,
-                                          'teamName': teamName,
-                                        },
-                                      ]);
+                                if (role == 'player') {
+                                  await updatePlayerClubsForTeam(
+                                    FirebaseFirestore.instance,
+                                    userId,
+                                    widget.clubId,
+                                    add: false,
+                                    teamId: widget.teamDoc.id,
+                                    teamName: teamName,
+                                    teamCategory: teamCategory,
+                                  );
+                                } else {
+                                  final userUpdate = <String, dynamic>{
+                                    'coachedTeams':
+                                        FieldValue.arrayRemove([
+                                          {
+                                            'teamId': widget.teamDoc.id,
+                                            'teamName': teamName,
+                                          },
+                                        ]),
+                                  };
+                                  await FirebaseFirestore.instance
+                                      .collection('users')
+                                      .doc(userId)
+                                      .set(userUpdate, SetOptions(merge: true));
                                 }
-                                if (teamName.isNotEmpty) {
-                                  userUpdate['teamNames'] =
-                                      FieldValue.arrayRemove([teamName]);
-                                }
-                                if (teamCategory.isNotEmpty) {
-                                  userUpdate['categories'] =
-                                      FieldValue.arrayRemove([teamCategory]);
-                                }
-                                await FirebaseFirestore.instance
-                                    .collection('users')
-                                    .doc(userId)
-                                    .set(userUpdate, SetOptions(merge: true));
                                 if (role == 'player') {
                                   await _updateEventsAttendanceForPlayer(
                                     userId,

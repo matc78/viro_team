@@ -178,6 +178,10 @@ class _AdminHomePageState extends State<AdminHomePage> {
               final clubData = clubSnapshot.data?.data() ?? {};
               final club = {...clubData, 'id': clubId};
               final clubName = club['name'] ?? "Mon Club";
+              final viewerRole =
+                  _viewerRoleInClub(userSnapshot.data?.data() ?? {}, clubId);
+              final canManageEquipmentAndLoans =
+                  viewerRole == 'admin' || viewerRole == 'admin_fondateur';
 
               return Stack(
                 children: [
@@ -271,12 +275,14 @@ class _AdminHomePageState extends State<AdminHomePage> {
                           const SizedBox(height: 12),
                           _buildMemberLeavesSection(clubId),
                           const SizedBox(height: 12),
-                          _buildLoanRequestsSection(clubId),
-                          _buildLoanChangeRequestsSection(clubId),
-                          _buildActiveLoans(clubId),
-                          _buildPickupToConfirmSection(clubId),
-                          _buildUpcomingLoans(clubId),
-                          const SizedBox(height: 12),
+                          if (canManageEquipmentAndLoans) ...[
+                            _buildLoanRequestsSection(clubId),
+                            _buildLoanChangeRequestsSection(clubId),
+                            _buildActiveLoans(clubId),
+                            _buildPickupToConfirmSection(clubId),
+                            _buildUpcomingLoans(clubId),
+                            const SizedBox(height: 12),
+                          ],
 
                           // Grille d'actions (cards en bas du body)
                           GridView.count(
@@ -325,38 +331,40 @@ class _AdminHomePageState extends State<AdminHomePage> {
                                   );
                                 },
                               ),
-                              _adminCard(
-                                title: "Équipement",
-                                count: "",
-                                icon: Icons.inventory_2,
-                                color: ViroColors.primary,
-                                onTap: () {
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (_) => AdminEquipmentPage(
-                                        clubId: clubId,
-                                        sport: club['sport'] as String?,
+                              if (canManageEquipmentAndLoans)
+                                _adminCard(
+                                  title: "Équipement",
+                                  count: "",
+                                  icon: Icons.inventory_2,
+                                  color: ViroColors.primary,
+                                  onTap: () {
+                                    Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (_) => AdminEquipmentPage(
+                                          clubId: clubId,
+                                          sport: club['sport'] as String?,
+                                        ),
                                       ),
-                                    ),
-                                  );
-                                },
-                              ),
-                              _adminCard(
-                                title: "Prêts",
-                                count: "",
-                                icon: Icons.handshake_outlined,
-                                color: ViroColors.accent,
-                                onTap: () {
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (_) => AdminLoansPage(
-                                        clubId: clubId,
-                                        initialTabIndex: 1,
+                                    );
+                                  },
+                                ),
+                              if (canManageEquipmentAndLoans)
+                                _adminCard(
+                                  title: "Prêts",
+                                  count: "",
+                                  icon: Icons.handshake_outlined,
+                                  color: ViroColors.accent,
+                                  onTap: () {
+                                    Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (_) => AdminLoansPage(
+                                          clubId: clubId,
+                                          initialTabIndex: 1,
+                                        ),
                                       ),
-                                    ),
-                                  );
-                                },
-                              ),
+                                    );
+                                  },
+                                ),
                             ],
                           ),
                           const SizedBox(height: 24),

@@ -225,6 +225,145 @@ List<String> getAllUserRolesInClub(Map<String, dynamic> userData, String clubId)
   return result;
 }
 
+/// Extrait les noms d'équipes de l'utilisateur depuis roles.player.clubs (source unifiée).
+/// Fallback sur les champs racine teamNames/teamName pour les anciennes données.
+List<String> getUserTeamNames(Map<String, dynamic> userData) {
+  final roles = userData['roles'] as Map<String, dynamic>? ?? {};
+  if (roles['player'] is Map) {
+    final playerData = roles['player'] as Map;
+    if (playerData['clubs'] is List) {
+      final clubs = (playerData['clubs'] as List).whereType<Map>();
+      final names = <String>{};
+      for (var club in clubs) {
+        final list = (club['teamNames'] as List?)?.whereType<String>().toList() ?? [];
+        names.addAll(list);
+      }
+      if (names.isNotEmpty) return names.toList();
+    }
+    // Migration : ancienne structure clubId direct
+    if (playerData['clubId'] != null) {
+      final list = (playerData['teamNames'] as List?)?.whereType<String>().toList() ?? [];
+      if (list.isNotEmpty) return list;
+    }
+  }
+  // Fallback champs racine (données legacy)
+  final rootList = (userData['teamNames'] as List?)?.whereType<String>().toList() ?? [];
+  if (rootList.isNotEmpty) return rootList;
+  final single = userData['teamName'] as String?;
+  if (single != null && single.isNotEmpty) return [single];
+  return [];
+}
+
+/// Extrait les catégories d'équipes de l'utilisateur depuis roles.player.clubs (source unifiée).
+/// Fallback sur les champs racine categories/category pour les anciennes données.
+List<String> getUserCategories(Map<String, dynamic> userData) {
+  final roles = userData['roles'] as Map<String, dynamic>? ?? {};
+  if (roles['player'] is Map) {
+    final playerData = roles['player'] as Map;
+    if (playerData['clubs'] is List) {
+      final clubs = (playerData['clubs'] as List).whereType<Map>();
+      final cats = <String>{};
+      for (var club in clubs) {
+        final list = (club['categories'] as List?)?.whereType<String>().toList() ?? [];
+        cats.addAll(list);
+      }
+      if (cats.isNotEmpty) return cats.toList();
+    }
+    if (playerData['clubId'] != null) {
+      final list = (playerData['categories'] as List?)?.whereType<String>().toList() ?? [];
+      if (list.isNotEmpty) return list;
+    }
+  }
+  final rootList = (userData['categories'] as List?)?.whereType<String>().toList() ?? [];
+  if (rootList.isNotEmpty) return rootList;
+  final single = userData['category'] as String?;
+  if (single != null && single.isNotEmpty) return [single];
+  return [];
+}
+
+/// Met à jour roles.player.clubs pour un joueur (ajout ou retrait d'équipe).
+/// Source unifiée : teamIds, teamNames, categories stockés par club.
+Future<void> updatePlayerClubsForTeam(
+  FirebaseFirestore firestore,
+  String userId,
+  String clubId, {
+  required bool add,
+  required String teamId,
+  required String teamName,
+  required String teamCategory,
+}) async {
+  final userRef = firestore.collection('users').doc(userId);
+  final userSnap = await userRef.get();
+  final userData = userSnap.data() ?? {};
+  final roles = userData['roles'] as Map<String, dynamic>? ?? {};
+  final playerData = roles['player'] as Map<String, dynamic>? ?? {};
+
+  List<Map<String, dynamic>> clubsList;
+  if (playerData['clubs'] is List) {
+    clubsList = (playerData['clubs'] as List)
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+  } else if (playerData['clubId'] != null) {
+    clubsList = [
+      {
+        'clubId': playerData['clubId'],
+        'teamIds': (playerData['teamIds'] as List?)?.toList() ?? [],
+        'teamNames': (playerData['teamNames'] as List?)?.toList() ?? [],
+        'categories': (playerData['categories'] as List?)?.toList() ?? [],
+        if (playerData['license'] != null) 'license': playerData['license'],
+      },
+    ];
+  } else {
+    clubsList = [];
+  }
+
+  bool found = false;
+  for (var club in clubsList) {
+    if (club['clubId'] == clubId) {
+      found = true;
+      final teamIds =
+          List<String>.from((club['teamIds'] as List?)?.whereType<String>() ?? []);
+      final teamNames =
+          List<String>.from((club['teamNames'] as List?)?.whereType<String>() ?? []);
+      final categories =
+          List<String>.from((club['categories'] as List?)?.whereType<String>() ?? []);
+
+      if (add) {
+        if (!teamIds.contains(teamId)) teamIds.add(teamId);
+        if (teamName.isNotEmpty && !teamNames.contains(teamName)) {
+          teamNames.add(teamName);
+        }
+        if (teamCategory.isNotEmpty && !categories.contains(teamCategory)) {
+          categories.add(teamCategory);
+        }
+      } else {
+        teamIds.remove(teamId);
+        teamNames.remove(teamName);
+        categories.remove(teamCategory);
+      }
+
+      club['teamIds'] = teamIds;
+      club['teamNames'] = teamNames;
+      club['categories'] = categories;
+      break;
+    }
+  }
+
+  if (!found && add) {
+    clubsList.add({
+      'clubId': clubId,
+      'teamIds': [teamId],
+      'teamNames': teamName.isNotEmpty ? [teamName] : [],
+      'categories': teamCategory.isNotEmpty ? [teamCategory] : [],
+    });
+  }
+
+  final updatedRoles = Map<String, dynamic>.from(roles);
+  updatedRoles['player'] = {...playerData, 'clubs': clubsList};
+
+  await userRef.set({'roles': updatedRoles}, SetOptions(merge: true));
+}
+
 /// Vérifie si un joueur a un numéro de licence dans un club donné
 /// Retourne true si la licence existe et n'est pas vide, false sinon
 bool playerHasLicense(Map<String, dynamic> userData, String clubId) {
