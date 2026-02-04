@@ -69,6 +69,13 @@ bool userBelongsToClub(Map<String, dynamic> userData, String clubId, {String? ro
       }
     }
     
+    // Vérifier admin_fondateur (roles.admin_fondateur = liste d'ids de clubs fondés)
+    if (roles['admin_fondateur'] is List) {
+      final fondateurClubIds = (roles['admin_fondateur'] as List).whereType<String>();
+      if (fondateurClubIds.contains(clubId)) {
+        if (role == null || role == 'admin' || role == 'admin_fondateur') return true;
+      }
+    }
     // Vérifier admin
     if (roles['admin'] is List) {
       final adminClubIds = (roles['admin'] as List).whereType<String>();
@@ -190,17 +197,18 @@ List<String> getAllUserRolesInClub(Map<String, dynamic> userData, String clubId)
       }
     }
     
-    // Vérifier admin
+    // Vérifier admin_fondateur (priorité : fondateur du club)
+    if (roles['admin_fondateur'] is List) {
+      final fondateurClubIds = (roles['admin_fondateur'] as List).whereType<String>();
+      if (fondateurClubIds.contains(clubId)) {
+        result.add('admin_fondateur');
+      }
+    }
+    // Vérifier admin (si pas déjà fondateur)
     if (roles['admin'] is List) {
       final adminClubIds = (roles['admin'] as List).whereType<String>();
-      if (adminClubIds.contains(clubId)) {
-        // Vérifier si c'est un admin fondateur
-        final adminFondateur = userData['role'] as String?;
-        if (adminFondateur == 'admin_fondateur') {
-          result.add('admin_fondateur');
-        } else {
-          result.add('admin');
-        }
+      if (adminClubIds.contains(clubId) && !result.contains('admin_fondateur')) {
+        result.add('admin');
       }
     }
   } else {

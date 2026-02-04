@@ -966,6 +966,28 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
         await firestore.collection(FirebaseCollections.clubs).doc(clubId).update({
           'members': FieldValue.arrayRemove([uid]),
         });
+        // Enregistrer le départ pour la tuile "À ne pas manquer" et la notif aux admins/coachs
+        try {
+          final firstName = (data['firstName'] as String?)?.trim() ?? '';
+          final lastName = (data['lastName'] as String?)?.trim() ?? '';
+          await firestore
+              .collection(FirebaseCollections.clubs)
+              .doc(clubId)
+              .collection(FirebaseCollections.memberLeaves)
+              .add({
+            'userId': uid,
+            'firstName': firstName,
+            'lastName': lastName,
+            'role': 'player',
+            'leftAt': FieldValue.serverTimestamp(),
+          });
+        } catch (e) {
+          AppLogger.instance.error(
+            'Erreur enregistrement départ club (tuile/notif)',
+            error: e,
+            context: {'clubId': clubId, 'userId': uid},
+          );
+        }
       }
 
       // 4. User : retirer le club de roles.player.clubs et mettre à jour activeContext

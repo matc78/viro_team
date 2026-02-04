@@ -118,6 +118,13 @@ final class NotificationService {
           );
         }
         break;
+      case MemberLeaveNotification.type:
+        if (MemberLeaveNotification.onOpen != null) {
+          MemberLeaveNotification.onOpen!(
+            MemberLeaveNotification.payloadFromData(data),
+          );
+        }
+        break;
       default:
         if (type != null && type.isNotEmpty) {
           AppLogger.instance.info('FCM: type de notif inconnu', {'type': type});

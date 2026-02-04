@@ -99,13 +99,23 @@ class _CreateClubPageState extends State<CreateClubPage> {
         existingAdmins.add(clubRef.id);
       }
 
-      // Construire la nouvelle structure roles
-      final updatedRoles = {...existingRoles, 'admin': existingAdmins};
+      // Créateur du club = admin_fondateur : ajouter l'id du club dans roles.admin_fondateur
+      final existingAdminFondateur =
+          (existingRoles['admin_fondateur'] as List?)?.whereType<String>().toList() ?? [];
+      if (!existingAdminFondateur.contains(clubRef.id)) {
+        existingAdminFondateur.add(clubRef.id);
+      }
 
-      // Toujours basculer vers le club venant d'être créé pour afficher
-      // sa page coach (évite d'afficher un autre club par erreur)
+      // Construire la nouvelle structure roles (admin + admin_fondateur)
+      final updatedRoles = {
+        ...existingRoles,
+        'admin': existingAdmins,
+        'admin_fondateur': existingAdminFondateur,
+      };
+
+      // Toujours basculer vers le club venant d'être créé (rôle fondateur)
       final Map<String, dynamic> newActiveContext = {
-        'role': 'admin',
+        'role': 'admin_fondateur',
         'clubId': clubRef.id,
       };
 

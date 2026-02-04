@@ -452,3 +452,123 @@ exports.onLoanRequestUpdated = functions.firestore
       throw err;
     }
   });
+
+/**
+ * Envoie une notification FCM aux admins/coachs du club lorsqu'un membre,
+ * coach ou admin quitte le club (création dans member_leaves).
+ */
+exports.onMemberLeaveCreated = functions.firestore
+  .document("clubs/{clubId}/member_leaves/{leaveId}")
+  .onCreate(async (snap, context) => {
+    const { clubId, leaveId } = context.params;
+    const data = snap.data();
+
+    console.log(
+      "onMemberLeaveCreated: déclenché, clubId=",
+      clubId,
+      "leaveId=",
+      leaveId,
+    );
+
+    const userId = String(data.userId || "");
+    const firstName = String(data.firstName || "").trim();
+    const lastName = String(data.lastName || "").trim();
+    const role = String(data.role || "player");
+    const leftAt = data.leftAt;
+
+    const roleLabels = {
+      player: "Membre",
+      coach: "Coach",
+      admin: "Admin",
+    };
+    const roleLabel = roleLabels[role] || role;
+    const displayName =
+      firstName || lastName ? `${firstName} ${lastName}`.trim() : "Un utilisateur";
+
+    const clubDoc = await db.collection("clubs").doc(clubId).get();
+    if (!clubDoc.exists) {
+      console.warn("onMemberLeaveCreated: club introuvable, clubId=", clubId);
+      return null;
+    }
+
+    const clubData = clubDoc.data();
+    const admins = Array.isArray(clubData?.admins) ? clubData.admins : [];
+    const coaches = Array.isArray(clubData?.coaches) ? clubData.coaches : [];
+    const adminId = clubData?.adminId;
+    const recipientIdsSet = new Set([...admins, ...coaches]);
+    if (adminId) recipientIdsSet.add(adminId);
+    // Exclure la personne qui part
+    if (userId) recipientIdsSet.delete(userId);
+    const recipientIds = [...recipientIdsSet];
+
+    if (recipientIds.length === 0) {
+      console.log(
+        "onMemberLeaveCreated: aucun admin/coach à notifier pour clubId=",
+        clubId,
+      );
+      return null;
+    }
+
+    const tokens = [];
+    for (const uid of recipientIds) {
+      const userDoc = await db.collection("users").doc(uid).get();
+      const token = userDoc.exists && userDoc.data()?.fcmToken;
+      if (token) {
+        tokens.push(token);
+      }
+    }
+
+    if (tokens.length === 0) {
+      console.warn(
+        "onMemberLeaveCreated: aucun token FCM. recipientIds=",
+        recipientIds,
+      );
+      return null;
+    }
+
+    const notifTitle = "Départ du club";
+    const notifBody = `${displayName} (${roleLabel}) a quitté le club.`;
+
+    const payload = {
+      notification: { title: notifTitle, body: notifBody },
+      data: {
+        type: "member_leave",
+        clubId: String(clubId),
+        leaveId: String(leaveId),
+        userId,
+        firstName,
+        lastName,
+        role,
+        leftAt: leftAt ? String(leftAt.toMillis?.() ?? leftAt) : "",
+      },
+      android: { priority: "high" },
+      apns: {
+        payload: {
+          aps: { sound: "default", badge: 1 },
+        },
+      },
+    };
+
+    const messaging = admin.messaging();
+    try {
+      const result = await messaging.sendEachForMulticast({
+        tokens,
+        notification: payload.notification,
+        data: payload.data,
+        android: payload.android,
+        apns: payload.apns,
+      });
+      console.log(
+        "onMemberLeaveCreated: notif envoyée à",
+        result.successCount,
+        "/",
+        tokens.length,
+        "destinataire(s), leaveId=",
+        leaveId,
+      );
+      return result;
+    } catch (err) {
+      console.error("onMemberLeaveCreated: erreur FCM", err);
+      throw err;
+    }
+  });

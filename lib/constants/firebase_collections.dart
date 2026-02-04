@@ -20,4 +20,7 @@ class FirebaseCollections {
   static const String equipmentLoanRequests = 'equipment_loan_requests';
   static const String equipmentLoanChangeRequests =
       'equipment_loan_change_requests';
+  static const String memberLeaves = 'member_leaves';
+  /// Sous-collection des retraits par un admin (quota 1 coach/player par jour)
+  static const String memberRemovals = 'member_removals';
 }

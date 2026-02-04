@@ -13,7 +13,6 @@ import 'package:viro_team/pages/onboarding_page.dart';
 import 'firebase_options.dart';
 import 'pages/admin_coach_pages/admin_home_page.dart';
 import 'pages/admin_coach_pages/admin_loans_page.dart';
-import 'pages/admin_coach_pages/profil_request_page.dart';
 import 'pages/auth_page.dart';
 import 'pages/no_internet_page.dart';
 import 'pages/player_pages/player_home_page.dart';
@@ -133,18 +132,11 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   }
 
   void _setupNotificationHandlers() {
-    JoinRequestNotification.onOpen = (payload) {
+    // Atterrir sur la home admin : un autre admin a pu déjà accepter/refuser la demande
+    JoinRequestNotification.onOpen = (_) {
       _navigatorKey.currentState?.push(
         MaterialPageRoute<void>(
-          builder: (_) => ProfilRequestPage(
-            requestId: payload['requestId'] ?? '',
-            userId: payload['userId'],
-            clubId: payload['clubId'],
-            clubName: payload['clubName'],
-            roleRequested: payload['roleRequested'],
-            firstName: payload['firstName'],
-            lastName: payload['lastName'],
-          ),
+          builder: (_) => const AdminHomePage(),
         ),
       );
     };

@@ -45,9 +45,32 @@ FirebaseFirestore.instance
     .snapshots();
 ```
 
+## Index pour les départs du club (member_leaves)
+
+### 3. Filtrage par date (24h) et tri par leftAt
+
+**Collection:** `clubs/{clubId}/member_leaves`
+**Champs indexés:**
+
+- `leftAt` (Descending)
+
+**Usage:** Requête dans la section « À ne pas manquer » du tableau de bord admin : afficher les départs des 24 dernières heures, triés du plus récent au plus ancien.
+
+**Requête exemple:**
+
+```dart
+FirebaseFirestore.instance
+    .collection('clubs')
+    .doc(clubId)
+    .collection('member_leaves')
+    .where('leftAt', isGreaterThanOrEqualTo: cutoff24h)
+    .orderBy('leftAt', descending: true)
+    .snapshots();
+```
+
 ## Index pour les demandes de prêt (joueur)
 
-### 3. Filtrage par joueur et tri par date
+### 4. Filtrage par joueur et tri par date (equipment_loan_requests)
 
 **Collection:** `clubs/{clubId}/equipment_loan_requests`
 **Champs indexés:**
@@ -66,6 +89,31 @@ FirebaseFirestore.instance
     .collection('equipment_loan_requests')
     .where('playerId', isEqualTo: currentUserId)
     .snapshots();
+```
+
+## Index pour les retraits par un admin (quota 1/jour)
+
+### 5. Quota retrait membre/coach par admin et par jour
+
+**Collection:** `clubs/{clubId}/member_removals`
+**Champs indexés:**
+
+- `adminId` (Ascending)
+- `removedAt` (Ascending)
+
+**Usage:** Vérifier si l’admin a déjà retiré un membre ou un coach aujourd’hui (quota 1 par jour).
+
+**Requête exemple:**
+
+```dart
+FirebaseFirestore.instance
+    .collection('clubs')
+    .doc(clubId)
+    .collection('member_removals')
+    .where('adminId', isEqualTo: adminId)
+    .where('removedAt', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
+    .limit(1)
+    .get();
 ```
 
 ## Comment créer les index

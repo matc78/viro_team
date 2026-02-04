@@ -265,6 +265,8 @@ class _AdminHomePageState extends State<AdminHomePage> {
                           const SizedBox(height: 10),
                           _buildJoinRequestsSection(clubId, clubName),
                           const SizedBox(height: 12),
+                          _buildMemberLeavesSection(clubId),
+                          const SizedBox(height: 12),
                           _buildLoanRequestsSection(clubId),
                           _buildLoanChangeRequestsSection(clubId),
                           _buildActiveLoans(clubId),
@@ -283,6 +285,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
                               _MembersCountCard(
                                 clubId: clubId,
                                 clubName: clubName,
+                                userId: user?.uid,
                               ),
                               _TeamsCountCard(clubId: clubId),
                               _adminCard(
@@ -588,6 +591,127 @@ class _AdminHomePageState extends State<AdminHomePage> {
                     ),
                   ),
                 ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildMemberLeavesSection(String clubId) {
+    final cutoff24h = Timestamp.fromDate(
+      DateTime.now().subtract(const Duration(hours: 24)),
+    );
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection(FirebaseCollections.clubs)
+          .doc(clubId)
+          .collection(FirebaseCollections.memberLeaves)
+          .where('leftAt', isGreaterThanOrEqualTo: cutoff24h)
+          .orderBy('leftAt', descending: true)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const SizedBox.shrink();
+        }
+        if (snapshot.hasError || !snapshot.hasData) {
+          return const SizedBox.shrink();
+        }
+        final docs = snapshot.data!.docs;
+        if (docs.isEmpty) {
+          return const SizedBox.shrink();
+        }
+        final roleLabels = <String, String>{
+          'player': 'Membre',
+          'coach': 'Coach',
+          'admin': 'Admin',
+        };
+        return _infoCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.person_off_rounded, color: ViroColors.error),
+                  const SizedBox(width: 8),
+                  const Text(
+                    "Départs du club",
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Chip(
+                    label: Text(
+                      "${docs.length}",
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Colors.white,
+                      ),
+                    ),
+                    backgroundColor: ViroColors.error,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              ...docs.map((doc) {
+                final data = doc.data();
+                final firstName =
+                    (data['firstName'] as String?)?.trim() ?? '';
+                final lastName = (data['lastName'] as String?)?.trim() ?? '';
+                final role = data['role'] as String? ?? 'player';
+                final leftAt = data['leftAt'] as Timestamp?;
+                final roleLabel = roleLabels[role] ?? role;
+                final displayName = firstName.isNotEmpty || lastName.isNotEmpty
+                    ? '$firstName $lastName'.trim()
+                    : 'Un utilisateur';
+                String timeAgo = '';
+                if (leftAt != null) {
+                  final diff = DateTime.now().difference(leftAt.toDate());
+                  if (diff.inMinutes < 60) {
+                    timeAgo = 'Il y a ${diff.inMinutes} min';
+                  } else if (diff.inHours < 24) {
+                    timeAgo = 'Il y a ${diff.inHours} h';
+                  } else {
+                    timeAgo = DateFormat('dd/MM HH:mm', 'fr_FR')
+                        .format(leftAt.toDate());
+                  }
+                }
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: ViroColors.error.withOpacity(0.06),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: ViroColors.error.withOpacity(0.25),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "$displayName ($roleLabel) a quitté le club.",
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                        ),
+                      ),
+                      if (timeAgo.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          timeAgo,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                );
+              }),
             ],
           ),
         );
@@ -2181,29 +2305,79 @@ class _infoCard extends StatelessWidget {
 class _MembersCountCard extends StatelessWidget {
   final String clubId;
   final String clubName;
+  final String? userId;
 
-  const _MembersCountCard({required this.clubId, required this.clubName});
+  const _MembersCountCard({
+    required this.clubId,
+    required this.clubName,
+    this.userId,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance.collection('users').snapshots(),
-      builder: (context, snap) {
-        // Filtrer les membres du club côté client
-        final allDocs = snap.data?.docs ?? [];
-        final clubMembers = filterUsersByClub(allDocs, clubId);
-        final count = clubMembers.length;
-        return _AdminCard(
-          title: "Membres",
-          count: count == 0 ? "" : "$count",
-          icon: Icons.group_outlined,
-          color: ViroColors.accent,
-          onTap: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) =>
-                    AdminMembersPage(clubId: clubId, clubName: clubName),
-              ),
+    if (userId == null) {
+      return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+        stream: FirebaseFirestore.instance.collection('users').snapshots(),
+        builder: (context, snap) {
+          final allDocs = snap.data?.docs ?? [];
+          final clubMembers = filterUsersByClub(allDocs, clubId);
+          final count = clubMembers.length;
+          return _AdminCard(
+            title: "Membres",
+            count: count == 0 ? "" : "$count",
+            icon: Icons.group_outlined,
+            color: ViroColors.accent,
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => AdminMembersPage(
+                    clubId: clubId,
+                    clubName: clubName,
+                    currentViewerRole: null,
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      );
+    }
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .snapshots(),
+      builder: (context, userSnap) {
+        final userData = userSnap.data?.data();
+        final rolesInClub =
+            userData != null ? getAllUserRolesInClub(userData, clubId) : <String>[];
+        final currentViewerRole = rolesInClub.contains('admin_fondateur')
+            ? 'admin_fondateur'
+            : (rolesInClub.contains('admin')
+                ? 'admin'
+                : (rolesInClub.contains('coach') ? 'coach' : null));
+        return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+          stream: FirebaseFirestore.instance.collection('users').snapshots(),
+          builder: (context, snap) {
+            final allDocs = snap.data?.docs ?? [];
+            final clubMembers = filterUsersByClub(allDocs, clubId);
+            final count = clubMembers.length;
+            return _AdminCard(
+              title: "Membres",
+              count: count == 0 ? "" : "$count",
+              icon: Icons.group_outlined,
+              color: ViroColors.accent,
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => AdminMembersPage(
+                      clubId: clubId,
+                      clubName: clubName,
+                      currentViewerRole: currentViewerRole,
+                    ),
+                  ),
+                );
+              },
             );
           },
         );
