@@ -1,61 +1,136 @@
 rules_version = '2';
 
-// Règles Firestore pour ViroTeam
-// À adapter selon les rôles (admin/coach/player) et la structure members.
-// Voir FIRESTORE_RULES.md pour la documentation.
+// =============================================================================
+// Règles Firestore ViroTeam – Production
+// =============================================================================
+// Principes : authentification obligatoire, accès par rôle (admin/coach/player),
+// propriété des ressources (club, join_request). Les rôles sont dans users/{uid}
+// (roles.player, roles.coach, roles.admin, roles.admin_fondateur).
+// Document club : adminId, admins[], coaches[] (maintenu par l’app). Voir FIRESTORE_RULES.md.
+// =============================================================================
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Utilisateurs : lecture/écriture uniquement sur son propre document
-    match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+    // -------------------------------------------------------------------------
+    // Fonctions helper (évitent la duplication)
+    // -------------------------------------------------------------------------
+
+    // True si l’utilisateur connecté est admin du club (adminId ou dans admins)
+    function isClubAdmin(clubId) {
+      let club = get(/databases/$(database)/documents/clubs/$(clubId)).data;
+      return request.auth != null
+        && (request.auth.uid == club.get('adminId', '')
+             || request.auth.uid in club.get('admins', []));
     }
 
-    // Clubs : lecture pour les utilisateurs connectés (affiner selon rôle/members si besoin)
+    // True si l’utilisateur connecté peut écrire dans le club (admin ou coach ; coaches[] maintenu par l’app)
+    function canWriteClub(clubId) {
+      let club = get(/databases/$(database)/documents/clubs/$(clubId)).data;
+      return request.auth != null
+        && (request.auth.uid == club.get('adminId', '')
+             || request.auth.uid in club.get('admins', [])
+             || request.auth.uid in club.get('coaches', []));
+    }
+
+    // -------------------------------------------------------------------------
+    // users/{userId}
+    // Lecture : utilisateur connecté (nécessaire pour liste membres / join_requests).
+    // Écriture : uniquement sur son propre document.
+    // Note : pour renforcer la confidentialité, restreindre la lecture à son
+    // propre document et déléguer la liste des membres à une Cloud Function.
+    // -------------------------------------------------------------------------
+    match /users/{userId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && request.auth.uid == userId;
+      allow update, delete: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // -------------------------------------------------------------------------
+    // clubs/{clubId}
+    // Lecture : tout utilisateur connecté (recherche de club, accès au club actif).
+    // Création : tout utilisateur connecté (création de club).
+    // Mise à jour / suppression : uniquement les admins du club.
+    // -------------------------------------------------------------------------
     match /clubs/{clubId} {
       allow read: if request.auth != null;
       allow create: if request.auth != null;
-      allow update, delete: if request.auth != null;
+      allow update, delete: if isClubAdmin(clubId);
 
+      // Membres du club : lecture par tout connecté (liste membres), écriture par admin/coach
       match /members/{memberId} {
-        allow read, write: if request.auth != null;
+        allow read: if request.auth != null;
+        allow write: if canWriteClub(clubId);
       }
+
+      // Équipes : lecture par tout connecté, écriture par admin/coach
       match /teams/{teamId} {
-        allow read, write: if request.auth != null;
+        allow read: if request.auth != null;
+        allow write: if canWriteClub(clubId);
       }
+
+      // Événements
       match /events/{eventId} {
-        allow read, write: if request.auth != null;
+        allow read: if request.auth != null;
+        allow write: if canWriteClub(clubId);
       }
+
+      // Équipement et catalogue
       match /equipment/{docId} {
-        allow read, write: if request.auth != null;
+        allow read: if request.auth != null;
+        allow write: if canWriteClub(clubId);
       }
       match /equipmentCatalog/{docId} {
-        allow read, write: if request.auth != null;
+        allow read: if request.auth != null;
+        allow write: if canWriteClub(clubId);
       }
+
+      // Prêts et demandes de prêt
       match /equipment_loans/{docId} {
-        allow read, write: if request.auth != null;
+        allow read: if request.auth != null;
+        allow write: if canWriteClub(clubId);
       }
       match /equipment_loan_requests/{docId} {
-        allow read, write: if request.auth != null;
+        allow read: if request.auth != null;
+        allow write: if canWriteClub(clubId);
       }
       match /equipment_loan_change_requests/{docId} {
-        allow read, write: if request.auth != null;
+        allow read: if request.auth != null;
+        allow write: if canWriteClub(clubId);
       }
+
+      // Départs et retraits de membres
       match /member_leaves/{docId} {
-        allow read, write: if request.auth != null;
+        allow read: if request.auth != null;
+        allow write: if canWriteClub(clubId);
       }
       match /member_removals/{docId} {
-        allow read, write: if request.auth != null;
+        allow read: if request.auth != null;
+        allow write: if canWriteClub(clubId);
       }
+
+      // Annonces
       match /announcements/{docId} {
-        allow read, write: if request.auth != null;
+        allow read: if request.auth != null;
+        allow write: if canWriteClub(clubId);
       }
     }
 
-    // Demandes d'adhésion (collection racine)
+    // -------------------------------------------------------------------------
+    // join_requests/{requestId} (collection racine)
+    // Création : tout utilisateur connecté (déposer une demande).
+    // Lecture : le demandeur (userId) ou un admin du club (clubId).
+    // Mise à jour / suppression : le demandeur (annuler) ou un admin du club (accepter/refuser).
+    // -------------------------------------------------------------------------
     match /join_requests/{requestId} {
-      allow read, write: if request.auth != null;
+      allow create: if request.auth != null
+        && request.resource.data.userId == request.auth.uid;
+      allow read: if request.auth != null
+        && (resource.data.userId == request.auth.uid
+             || isClubAdmin(resource.data.clubId));
+      allow update, delete: if request.auth != null
+        && (resource.data.userId == request.auth.uid
+             || isClubAdmin(resource.data.clubId));
     }
   }
 }

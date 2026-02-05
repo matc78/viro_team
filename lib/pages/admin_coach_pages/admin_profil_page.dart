@@ -9,6 +9,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:viro_team/constants/firebase_collections.dart';
 import 'package:viro_team/pages/add_profile_page.dart';
+import 'package:viro_team/pages/notification_settings_page.dart';
+import 'package:viro_team/services/notification_preferences_service.dart';
 import '../../theme/viro_theme.dart';
 import '../../widget/viro_loader.dart';
 import '../../utils/app_logger.dart';
@@ -251,8 +253,17 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
                 _buildMenuCard(
                   icon: Icons.notifications_active_outlined,
                   title: "Notifications",
-                  subtitle: "Alertes nouvelles demandes",
-                  onTap: () {},
+                  subtitle: "Activer ou désactiver certaines notifications",
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute<void>(
+                        builder: (_) => NotificationSettingsPage(
+                          types: kNotificationTypesAdmin,
+                        ),
+                      ),
+                    );
+                  },
                 ),
 
                 const SizedBox(height: 40),

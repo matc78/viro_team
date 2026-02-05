@@ -13,6 +13,8 @@ import '../../widget/viro_loader.dart';
 import '../../utils/app_logger.dart';
 import '../auth_page.dart';
 import '../add_profile_page.dart';
+import '../notification_settings_page.dart';
+import '../../services/notification_preferences_service.dart';
 import '../onboarding_page.dart';
 import 'player_home_page.dart';
 
@@ -50,8 +52,6 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
         final rawLast = data?['lastName'] as String? ?? "";
         final displayFirst = _formatFirst(rawFirst);
         final displayLast = _formatLast(rawLast);
-
-        final String? clubName = data?['clubName'] as String?;
 
         // Construire la liste de tous les clubIds depuis roles
         final roles = data?['roles'] as Map<String, dynamic>? ?? {};
@@ -100,6 +100,7 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
         final email = data?['email'] as String? ?? user.email ?? "";
 
         return Scaffold(
+          backgroundColor: const Color(0xFFF8F9FA),
           appBar: AppBar(
             title: const Text("Mon Profil"),
             centerTitle: false,
@@ -114,15 +115,19 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
             padding: const EdgeInsets.all(20.0),
             child: Column(
               children: [
-                FutureBuilder<List<String>>(
+                FutureBuilder<({List<String> logos, List<String> names})>(
                   future: clubIds.isNotEmpty
-                      ? _fetchClubLogos(clubIds)
-                      : Future.value([]),
+                      ? _fetchClubInfos(clubIds)
+                      : Future.value((logos: <String>[], names: <String>[])),
                   builder: (context, snap) {
-                    final logos = snap.data ?? [];
+                    final logos = snap.data?.logos ?? [];
+                    final names = snap.data?.names ?? [];
+                    final clubNamesText = names.isNotEmpty
+                        ? names.join(', ')
+                        : null;
                     return _buildHeader(
                       "$displayFirst $displayLast",
-                      clubName,
+                      clubNamesText,
                       logos,
                       avatarUrl,
                     );
@@ -130,63 +135,84 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
                 ),
                 const SizedBox(height: 30),
                 _buildSectionHeader("MES INFORMATIONS"),
-                _buildActionTile(
-                  Icons.badge_outlined,
-                  "Modifier mon nom & prénom",
-                  () => _editName(rawFirst, rawLast),
+                _buildMenuCard(
+                  icon: Icons.badge_outlined,
+                  title: "Modifier mon nom & prénom",
+                  subtitle: "$displayFirst $displayLast",
+                  onTap: () => _editName(rawFirst, rawLast),
                 ),
-                _buildActionTile(
-                  Icons.alternate_email,
-                  "Changer d'adresse email",
-                  () => _changeEmail(email),
+                _buildMenuCard(
+                  icon: Icons.alternate_email,
+                  title: "Changer d'adresse email",
+                  subtitle: email,
+                  onTap: () => _changeEmail(email),
                 ),
-                _buildActionTile(
-                  Icons.phone_outlined,
-                  "Changer mon téléphone",
-                  () => _changePhone(data?['phone'] as String? ?? ""),
+                _buildMenuCard(
+                  icon: Icons.phone_outlined,
+                  title: "Changer mon téléphone",
+                  subtitle: (data?['phone'] as String?)?.trim().isNotEmpty == true
+                      ? (data?['phone'] as String?)
+                      : "Non renseigné",
+                  onTap: () => _changePhone(data?['phone'] as String? ?? ""),
                 ),
-                _buildActionTile(
-                  Icons.lock_open_outlined,
-                  "Changer mon mot de passe",
-                  _changePassword,
+                _buildMenuCard(
+                  icon: Icons.lock_open_outlined,
+                  title: "Changer mon mot de passe",
+                  subtitle: "Modifier le mot de passe",
+                  onTap: _changePassword,
                 ),
-                _buildActionTile(
-                  Icons.info_outline,
-                  "Afficher mes infos",
-                  () => _showInfoDialog(data ?? {}, user),
+                _buildMenuCard(
+                  icon: Icons.info_outline,
+                  title: "Afficher mes infos",
+                  subtitle: "Voir toutes mes informations",
+                  onTap: () => _showInfoDialog(data ?? {}, user),
                 ),
                 const SizedBox(height: 30),
 
                 _buildSectionHeader("PROFILS & CLUBS"),
-                _buildActionTile(
-                  Icons.add_circle_outline,
-                  "Ajouter un profil",
-                  () => Navigator.push(
+                _buildMenuCard(
+                  icon: Icons.add_circle_outline,
+                  title: "Ajouter un profil",
+                  subtitle: "Création d'un compte joueur/coach ou d'un nouveau club",
+                  onTap: () => Navigator.push(
                     context,
                     MaterialPageRoute(builder: (_) => const AddProfilePage()),
                   ),
                 ),
-                _buildActionTile(
-                  Icons.exit_to_app,
-                  "Quitter un club",
-                  () => _showLeaveClubDialog(context, data ?? {}, user.uid),
+                _buildMenuCard(
+                  icon: Icons.exit_to_app,
+                  title: "Quitter un club",
+                  subtitle: "Choisir un club à quitter",
+                  onTap: () => _showLeaveClubDialog(context, data ?? {}, user.uid),
                 ),
                 const SizedBox(height: 30),
 
-                _buildSectionHeader("COMPTE & SÉCURITÉ"),
-                _buildActionTile(
-                  Icons.logout_rounded,
-                  "Se déconnecter",
-                  () => _showLogoutDialog(context),
-                  isDestructive: true,
+                _buildSectionHeader("PARAMÈTRES DU COMPTE"),
+                _buildMenuCard(
+                  icon: Icons.notifications_active_outlined,
+                  title: "Notifications",
+                  subtitle: "Activer ou désactiver certaines notifications",
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute<void>(
+                        builder: (_) => NotificationSettingsPage(
+                          types: kNotificationTypesPlayer,
+                        ),
+                      ),
+                    );
+                  },
                 ),
-                _buildActionTile(
-                  Icons.delete_forever_outlined,
-                  "Supprimer mon compte",
-                  () => _showDeleteDialog(context),
-                  isDestructive: true,
+                const SizedBox(height: 24),
+
+                _buildSectionHeader("PARAMÈTRES AVANCÉS"),
+                _buildMenuCard(
+                  icon: Icons.settings_applications_outlined,
+                  title: "Paramètres avancés",
+                  subtitle: "Déconnexion et suppression du compte",
+                  onTap: () => _showAdvancedSettings(context),
                 ),
-                const SizedBox(height: 40),
+                const SizedBox(height: 20),
               ],
             ),
           ),
@@ -327,11 +353,11 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
     return Align(
       alignment: Alignment.centerLeft,
       child: Padding(
-        padding: const EdgeInsets.only(bottom: 10, left: 5),
+        padding: const EdgeInsets.only(left: 4, bottom: 12),
         child: Text(
           title,
           style: const TextStyle(
-            fontSize: 11,
+            fontSize: 12,
             fontWeight: FontWeight.w900,
             color: Colors.grey,
             letterSpacing: 1.2,
@@ -341,32 +367,42 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
     );
   }
 
-  Widget _buildActionTile(
-    IconData icon,
-    String title,
-    VoidCallback onTap, {
-    bool isDestructive = false,
+  Widget _buildMenuCard({
+    required IconData icon,
+    required String title,
+    String? subtitle,
+    required VoidCallback onTap,
   }) {
-    Color color = isDestructive ? Colors.redAccent : ViroColors.primary;
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: ViroColors.borderColor, width: 1.5),
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: ViroColors.borderColor),
       ),
       child: ListTile(
-        leading: Icon(icon, color: color),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+        leading: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: ViroColors.background,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, color: ViroColors.primary, size: 22),
+        ),
         title: Text(
           title,
-          style: TextStyle(
-            fontWeight: FontWeight.w600,
-            fontSize: 14,
-            color: isDestructive ? Colors.redAccent : Colors.black87,
-          ),
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
         ),
+        subtitle: subtitle != null
+            ? Text(
+                subtitle,
+                style: const TextStyle(fontSize: 12, color: Colors.grey),
+              )
+            : null,
         trailing: const Icon(
-          Icons.chevron_right,
+          Icons.arrow_forward_ios_rounded,
+          size: 14,
           color: ViroColors.borderColor,
         ),
         onTap: _isSaving ? null : onTap,
@@ -619,6 +655,50 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
             child: const Text("Enregistrer"),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showAdvancedSettings(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                "Paramètres avancés",
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 12),
+              ListTile(
+                leading: const Icon(Icons.logout, color: Colors.redAccent),
+                title: const Text("Se déconnecter"),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _showLogoutDialog(context);
+                },
+              ),
+              ListTile(
+                leading: const Icon(
+                  Icons.delete_forever_outlined,
+                  color: Colors.red,
+                ),
+                title: const Text("Supprimer mon compte"),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _showDeleteDialog(context);
+                },
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -1397,17 +1477,24 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
 
   String _formatLast(String value) => value.toUpperCase();
 
-  Future<List<String>> _fetchClubLogos(List<String> clubIds) async {
+  /// Récupère les logos et noms des clubs (une seule lecture Firestore par club).
+  Future<({List<String> logos, List<String> names})> _fetchClubInfos(
+    List<String> clubIds,
+  ) async {
     final logos = <String>[];
+    final names = <String>[];
     for (final id in clubIds) {
       final doc = await FirebaseFirestore.instance
           .collection(FirebaseCollections.clubs)
           .doc(id)
           .get();
-      final url = doc.data()?['logoUrl'] as String?;
+      final data = doc.data();
+      final url = data?['logoUrl'] as String?;
+      final name = (data?['name'] as String?)?.trim();
       if (url != null && url.isNotEmpty) logos.add(url);
+      names.add(name != null && name.isNotEmpty ? name : 'Club inconnu');
     }
-    return logos;
+    return (logos: logos, names: names);
   }
 
   Future<void> _pickAvatar() async {
