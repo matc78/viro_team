@@ -2295,50 +2295,56 @@ class _MyLoansTab extends StatelessWidget {
                 ),
               );
             }
-            return ListView(
+            return SingleChildScrollView(
               padding: const EdgeInsets.all(16),
-              children: [
-                _MyLoansSection(
-                  title: "Prêt en retard",
-                  icon: Icons.warning_amber_rounded,
-                  iconColor: ViroColors.error,
-                  loans: overdue,
-                  clubId: clubId,
-                  currentUserId: currentUserId,
-                  pendingLoanIds: pendingLoanIds,
-                  isActiveCard: true,
-                ),
-                _MyLoansSection(
-                  title: "Prêt en cours",
-                  icon: Icons.inventory_2_rounded,
-                  iconColor: ViroColors.primary,
-                  loans: current,
-                  clubId: clubId,
-                  currentUserId: currentUserId,
-                  pendingLoanIds: pendingLoanIds,
-                  isActiveCard: true,
-                ),
-                _MyLoansSection(
-                  title: "Prochain prêt",
-                  icon: Icons.schedule,
-                  iconColor: Colors.orange,
-                  loans: upcoming,
-                  clubId: clubId,
-                  currentUserId: currentUserId,
-                  pendingLoanIds: pendingLoanIds,
-                  isActiveCard: true,
-                ),
-                _MyLoansSection(
-                  title: "Prêt fini",
-                  icon: Icons.check_circle_outline,
-                  iconColor: Colors.grey,
-                  loans: finished,
-                  clubId: clubId,
-                  currentUserId: currentUserId,
-                  pendingLoanIds: pendingLoanIds,
-                  isActiveCard: false,
-                ),
-              ],
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _MyLoansSection(
+                    title: "Prêt en retard",
+                    icon: Icons.warning_amber_rounded,
+                    iconColor: ViroColors.error,
+                    loans: overdue,
+                    clubId: clubId,
+                    currentUserId: currentUserId,
+                    pendingLoanIds: pendingLoanIds,
+                    isActiveCard: true,
+                  ),
+                  const SizedBox(height: 8),
+                  _MyLoansSection(
+                    title: "Prêt en cours",
+                    icon: Icons.inventory_2_rounded,
+                    iconColor: ViroColors.primary,
+                    loans: current,
+                    clubId: clubId,
+                    currentUserId: currentUserId,
+                    pendingLoanIds: pendingLoanIds,
+                    isActiveCard: true,
+                  ),
+                  const SizedBox(height: 8),
+                  _MyLoansSection(
+                    title: "Prochain prêt",
+                    icon: Icons.schedule,
+                    iconColor: Colors.orange,
+                    loans: upcoming,
+                    clubId: clubId,
+                    currentUserId: currentUserId,
+                    pendingLoanIds: pendingLoanIds,
+                    isActiveCard: true,
+                  ),
+                  const SizedBox(height: 8),
+                  _MyLoansSection(
+                    title: "Prêt fini",
+                    icon: Icons.check_circle_outline,
+                    iconColor: Colors.grey,
+                    loans: finished,
+                    clubId: clubId,
+                    currentUserId: currentUserId,
+                    pendingLoanIds: pendingLoanIds,
+                    isActiveCard: false,
+                  ),
+                ],
+              ),
             );
           },
         );
@@ -2372,44 +2378,40 @@ class _MyLoansSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (loans.isEmpty) return const SizedBox.shrink();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SizedBox(height: 8),
-        Padding(
-          padding: const EdgeInsets.only(left: 4, bottom: 8),
-          child: Row(
-            children: [
-              Icon(icon, size: 20, color: iconColor),
-              const SizedBox(width: 8),
-              Text(
-                title,
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: iconColor,
-                ),
-              ),
-              const SizedBox(width: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: iconColor.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  "${loans.length}",
+    return Card(
+      color: iconColor.withValues(alpha: 0.1),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(icon, size: 20, color: iconColor),
+                const SizedBox(width: 8),
+                Text(
+                  title,
                   style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
                     color: iconColor,
                   ),
                 ),
-              ),
-            ],
-          ),
-        ),
-        ...loans.map((doc) {
+                const SizedBox(width: 8),
+                Chip(
+                  label: Text(
+                    "${loans.length}",
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Colors.white,
+                    ),
+                  ),
+                  backgroundColor: iconColor,
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            ...loans.map((doc) {
           final data = doc.data();
           final loanId = doc.id;
           final loanData = <String, dynamic>{'id': loanId, ...data};
@@ -2436,7 +2438,9 @@ class _MyLoansSection extends StatelessWidget {
           }
           return _ReturnedLoanCard(clubId: clubId, loanData: loanData);
         }),
-      ],
+          ],
+        ),
+      ),
     );
   }
 }
@@ -3047,50 +3051,141 @@ class _MyRequestsTab extends StatelessWidget {
                 ),
               );
             }
-            return ListView(
+            return SingleChildScrollView(
               padding: const EdgeInsets.all(16),
-              children: [
-                const Text(
-                  "Demandes de prêt",
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                ),
-                const SizedBox(height: 8),
-                if (sortedLoanRequests.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 24),
-                    child: Text(
-                      "Aucune demande de prêt.",
-                      style: TextStyle(color: Colors.grey[600], fontSize: 14),
-                    ),
-                  )
-                else
-                  ...sortedLoanRequests.map(
-                    (doc) => _RequestHistoryCard(
-                      requestId: doc.id,
-                      requestData: doc.data(),
-                      clubId: clubId,
-                      onRefaireDemande: onRefaireDemande,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Card(
+                    color: ViroColors.primary.withValues(alpha: 0.08),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.send_outlined,
+                                color: ViroColors.primary,
+                              ),
+                              const SizedBox(width: 8),
+                              const Expanded(
+                                child: Text(
+                                  "Demandes de prêt",
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 1,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Chip(
+                                label: Text(
+                                  "${sortedLoanRequests.length}",
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                                backgroundColor: ViroColors.primary,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          if (sortedLoanRequests.isEmpty)
+                            Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Center(
+                                child: Text(
+                                  "Aucune demande de prêt.",
+                                  style: TextStyle(
+                                    color: Colors.grey[600],
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ),
+                            )
+                          else
+                            ...sortedLoanRequests.map(
+                              (doc) => _RequestHistoryCard(
+                                requestId: doc.id,
+                                requestData: doc.data(),
+                                clubId: clubId,
+                                onRefaireDemande: onRefaireDemande,
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
                   ),
-                const SizedBox(height: 24),
-                const Text(
-                  "Demandes de modification/annulation",
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                ),
-                const SizedBox(height: 8),
-                if (sortedChangeRequests.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 24),
-                    child: Text(
-                      "Aucune demande de modification ou d'annulation.",
-                      style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                  const SizedBox(height: 24),
+                  Card(
+                    color: ViroColors.warning.withValues(alpha: 0.1),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.pending_actions,
+                                color: ViroColors.warning,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  "Demandes de modification/annulation",
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 1,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Chip(
+                                label: Text(
+                                  "${sortedChangeRequests.length}",
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                                backgroundColor: ViroColors.warning,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          if (sortedChangeRequests.isEmpty)
+                            Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Center(
+                                child: Text(
+                                  "Aucune demande de modification ou d'annulation.",
+                                  style: TextStyle(
+                                    color: Colors.grey[600],
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ),
+                            )
+                          else
+                            ...sortedChangeRequests.map(
+                              (doc) => _ChangeRequestHistoryCard(
+                                requestData: doc.data(),
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
-                  )
-                else
-                  ...sortedChangeRequests.map(
-                    (doc) => _ChangeRequestHistoryCard(requestData: doc.data()),
                   ),
-              ],
+                ],
+              ),
             );
           },
         );
