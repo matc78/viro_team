@@ -294,9 +294,11 @@ class _ProfilRequestPageState extends State<ProfilRequestPage> {
         }, SetOptions(merge: true));
 
         if (clubId != null) {
-          final field = (normalizedRole == 'admin' || normalizedRole == 'coach')
-              ? 'coaches'
-              : 'members';
+          final String field = normalizedRole == 'admin'
+              ? 'admins'
+              : normalizedRole == 'coach'
+                  ? 'coaches'
+                  : 'members';
           await FirebaseFirestore.instance
               .collection(FirebaseCollections.clubs)
               .doc(clubId)

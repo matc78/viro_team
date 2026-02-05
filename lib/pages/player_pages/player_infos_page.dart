@@ -164,6 +164,8 @@ class _PlayerInfosPageState extends State<PlayerInfosPage> {
                 child: _ClubAnnouncementsList(
                   clubIds: [selectedClubId],
                   userId: userId,
+                  hasMultipleClubs: allClubIds.length > 1,
+                  clubNames: _clubNamesCache,
                 ),
               ),
             ],
@@ -258,10 +260,17 @@ class _ClubDetailsPage extends StatelessWidget {
   Future<Map<String, dynamic>> _fetchClubStats() async {
     final db = FirebaseFirestore.instance;
 
-    // 1. Infos du club
+    // 1. Infos du club (source de vérité pour admins/coachs)
     final clubDoc = await db.collection(FirebaseCollections.clubs).doc(clubId).get();
+    final clubData = clubDoc.data();
 
-    // 2. Compteurs (C'est mieux d'avoir des compteurs stockés, mais voici la méthode brute pour l'instant)
+    // 2. Compteurs : admins et coachs depuis le document club (adminId, admins, coaches)
+    final adminId = clubData?['adminId'] as String?;
+    final adminsList = (clubData?['admins'] as List?)?.whereType<String>().toList() ?? [];
+    final coachesList = (clubData?['coaches'] as List?)?.whereType<String>().toList() ?? [];
+    final adminsCount = {...{if (adminId != null) adminId}, ...adminsList}.length;
+    final coachsCount = coachesList.length;
+
     final usersQuery = await db.collection(FirebaseCollections.users).get();
     final teamsQuery = await db
         .collection(FirebaseCollections.clubs)
@@ -271,10 +280,8 @@ class _ClubDetailsPage extends StatelessWidget {
         .get();
 
     final allUsers = usersQuery.docs;
-    // Filtrer les utilisateurs du club
     final users = filterUsersByClub(allUsers, clubId);
 
-    // Filtrage simple avec la nouvelle structure
     final playersCount = users
         .where(
           (u) =>
@@ -282,38 +289,56 @@ class _ClubDetailsPage extends StatelessWidget {
               'player',
         )
         .length;
-    final coachsCount = users
-        .where(
-          (u) =>
-              getUserRoleInClub(u.data() as Map<String, dynamic>, clubId) ==
-              'coach',
-        )
-        .length;
-    final adminsCount = users.where((u) {
-      final role = getUserRoleInClub(u.data() as Map<String, dynamic>, clubId);
-      return role == 'admin' || role == 'admin_fondateur';
-    }).length;
 
-    // Trouver le fondateur
+    // Fondateur : nom depuis adminId du club, sinon fallback sur les rôles utilisateur
     String founderName = "Non défini";
-    try {
-      final founder = users.firstWhere((u) {
-        final data = u.data();
-        if (data == null) return false;
-        final role = getUserRoleInClub(data, clubId);
-        return role == 'admin_fondateur' || role == 'admin';
-      });
-      final founderData = founder.data();
-      if (founderData != null) {
-        final firstName = founderData['firstName'] as String? ?? "";
-        final lastName = founderData['lastName'] as String? ?? "";
-        founderName = "$firstName $lastName".trim();
-        if (founderName.isEmpty) founderName = "Non défini";
+    if (adminId != null && adminId.isNotEmpty) {
+      DocumentSnapshot<Map<String, dynamic>>? founderDoc;
+      for (final d in allUsers) {
+        if (d.id == adminId) {
+          founderDoc = d as DocumentSnapshot<Map<String, dynamic>>;
+          break;
+        }
       }
-    } catch (_) {}
+      if (founderDoc != null) {
+        final founderData = founderDoc.data();
+        if (founderData != null) {
+          final firstName = founderData['firstName'] as String? ?? "";
+          final lastName = founderData['lastName'] as String? ?? "";
+          founderName = "$firstName $lastName".trim();
+          if (founderName.isEmpty) founderName = "Non défini";
+        }
+      }
+    }
+    if (founderName == "Non défini") {
+      try {
+        DocumentSnapshot<Map<String, dynamic>>? founderDoc;
+        for (final u in users) {
+          final data = u.data();
+          if (data == null) continue;
+          final role = getUserRoleInClub(data, clubId);
+          if (role == 'admin_fondateur') {
+            founderDoc = u;
+            break;
+          }
+          if (founderDoc == null && (role == 'admin' || role == 'admin_fondateur')) {
+            founderDoc = u;
+          }
+        }
+        if (founderDoc != null) {
+          final founderData = founderDoc.data();
+          if (founderData != null) {
+            final firstName = founderData['firstName'] as String? ?? "";
+            final lastName = founderData['lastName'] as String? ?? "";
+            founderName = "$firstName $lastName".trim();
+            if (founderName.isEmpty) founderName = "Non défini";
+          }
+        }
+      } catch (_) {}
+    }
 
     return {
-      'data': clubDoc.data(),
+      'data': clubData,
       'players': playersCount,
       'coachs': coachsCount,
       'admins': adminsCount,
@@ -542,7 +567,10 @@ class _StaffListPage extends StatelessWidget {
               // Définition de l'affichage du rôle
               String roleLabel = "Coach";
               Color roleColor = Colors.blue;
-              if (role == 'admin' || role == 'admin_fondateur') {
+              if (role == 'admin_fondateur') {
+                roleLabel = "Fondateur";
+                roleColor = Colors.orange;
+              } else if (role == 'admin') {
                 roleLabel = "Admin";
                 roleColor = Colors.orange;
               }
@@ -610,8 +638,15 @@ class _StaffListPage extends StatelessWidget {
 class _ClubAnnouncementsList extends StatelessWidget {
   final List<String> clubIds;
   final String userId;
+  final bool hasMultipleClubs;
+  final Map<String, String>? clubNames;
 
-  const _ClubAnnouncementsList({required this.clubIds, required this.userId});
+  const _ClubAnnouncementsList({
+    required this.clubIds,
+    required this.userId,
+    this.hasMultipleClubs = false,
+    this.clubNames,
+  });
 
   // Récupère les teamIds et catégories de l'utilisateur pour tous ses clubs
   Future<Map<String, Map<String, dynamic>>> _getUserClubsInfo() async {
@@ -740,6 +775,44 @@ class _ClubAnnouncementsList extends StatelessWidget {
   Color _getClubColor(String clubId) {
     final index = clubId.hashCode % ViroColors.clubPalette.length;
     return ViroColors.clubPalette[index.abs()];
+  }
+
+  /// Légende : point de couleur + nom du club (si plusieurs clubs et au moins 1 annonce)
+  Widget _buildLegend(List<String> clubIdsInAnnouncements) {
+    final distinctIds = clubIdsInAnnouncements.toSet().toList();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+      child: Wrap(
+        spacing: 16,
+        runSpacing: 8,
+        children: [
+          for (final cid in distinctIds)
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: _getClubColor(cid),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  clubNames?[cid] ?? cid,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[700],
+                    fontWeight: FontWeight.w500,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+        ],
+      ),
+    );
   }
 
   // Formate le nom de la cible pour l'affichage
@@ -971,6 +1044,17 @@ class _ClubAnnouncementsList extends StatelessWidget {
       return bCreated.compareTo(aCreated);
     });
 
+    if (hasMultipleClubs && validAnnouncements.isNotEmpty) {
+      final clubIdsInAnnouncements =
+          validAnnouncements.map((a) => a.clubId).toList();
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildLegend(clubIdsInAnnouncements),
+          Expanded(child: _buildAnnouncementsList(validAnnouncements)),
+        ],
+      );
+    }
     return _buildAnnouncementsList(validAnnouncements);
   }
 
@@ -1041,6 +1125,17 @@ class _ClubAnnouncementsList extends StatelessWidget {
       );
     }
 
+    if (hasMultipleClubs && validAnnouncements.isNotEmpty) {
+      final clubIdsInAnnouncements =
+          validAnnouncements.map((a) => a.clubId).toList();
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildLegend(clubIdsInAnnouncements),
+          Expanded(child: _buildAnnouncementsList(validAnnouncements)),
+        ],
+      );
+    }
     return _buildAnnouncementsList(validAnnouncements);
   }
 

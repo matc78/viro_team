@@ -991,7 +991,7 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
   ) async {
     final clubId = widget.clubId;
     await firestore.collection(FirebaseCollections.clubs).doc(clubId).update({
-      'coaches': FieldValue.arrayRemove([uid]),
+      'admins': FieldValue.arrayRemove([uid]),
     });
     final roles = Map<String, dynamic>.from(data['roles'] as Map? ?? {});
     final adminList =

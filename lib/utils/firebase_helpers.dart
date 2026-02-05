@@ -146,6 +146,11 @@ String? getUserRoleInClub(Map<String, dynamic> userData, String clubId) {
       }
     }
     
+    // Vérifier admin_fondateur (priorité sur admin)
+    if (roles['admin_fondateur'] is List) {
+      final fondateurClubIds = (roles['admin_fondateur'] as List).whereType<String>();
+      if (fondateurClubIds.contains(clubId)) return 'admin_fondateur';
+    }
     // Vérifier admin
     if (roles['admin'] is List) {
       final adminClubIds = (roles['admin'] as List).whereType<String>();

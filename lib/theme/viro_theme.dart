@@ -7,23 +7,23 @@ class ViroColors {
   static const Color primary = Color(0xFF2F27CE);
   static const Color secondary = Color(0xFFDEDCFF);
   static const Color accent = Color(0xFF433BFF);
-  
+
   // Couleurs techniques & délimitations
   static const Color borderColor = Color(0xFFD1D1D1);
   static const Color success = Color(0xFF2ECC71);
   static const Color warning = Color(0xFFF1C40F); // Jaune pour "En attente"
-  static const Color error = Color(0xFFE74C3C);   // Rouge pour "Erreur"
+  static const Color error = Color(0xFFE74C3C); // Rouge pour "Erreur"
 
   /// Palette de couleurs pour différencier les clubs (calendrier, cartes, etc.)
   static const List<Color> clubPalette = [
-    Colors.blue,
-    Colors.green,
-    Colors.orange,
-    Colors.purple,
-    Colors.teal,
-    Colors.indigo,
-    Colors.pink,
-    Colors.amber,
+    Color(0xFF2F27CE), // Bleu ViroTeam (Primary)
+    Color(0xFFE91E63), // Rose Électrique (Pink accent)
+    Color(0xFF00B8D4), // Cyan Profond (Plus lisible que le néon)
+    Color(0xFFFF6D00), // Orange Brûlé (Sportif et ultra lisible)
+    Color(0xFF6200EA), // Violet Impérial
+    Color(0xFF00C853), // Vert Jungle (Énergie terrain)
+    Color(0xFFD50000), // Rouge Racing
+    Color(0xFF0091EA), // Bleu Azur Sport
   ];
 }
 
@@ -38,11 +38,19 @@ class ViroTheme {
         surface: ViroColors.background,
         error: ViroColors.error,
       ),
-      
+
       // Configuration des Textes
       textTheme: const TextTheme(
-        headlineLarge: TextStyle(color: ViroColors.text, fontWeight: FontWeight.w900, fontSize: 32),
-        titleLarge: TextStyle(color: ViroColors.text, fontWeight: FontWeight.bold, fontSize: 20),
+        headlineLarge: TextStyle(
+          color: ViroColors.text,
+          fontWeight: FontWeight.w900,
+          fontSize: 32,
+        ),
+        titleLarge: TextStyle(
+          color: ViroColors.text,
+          fontWeight: FontWeight.bold,
+          fontSize: 20,
+        ),
         bodyMedium: TextStyle(color: ViroColors.text, fontSize: 14),
       ),
 
@@ -51,9 +59,15 @@ class ViroTheme {
         backgroundColor: ViroColors.background,
         elevation: 0,
         centerTitle: false,
-        titleTextStyle: TextStyle(color: ViroColors.text, fontWeight: FontWeight.bold, fontSize: 20),
+        titleTextStyle: TextStyle(
+          color: ViroColors.text,
+          fontWeight: FontWeight.bold,
+          fontSize: 20,
+        ),
         iconTheme: IconThemeData(color: ViroColors.primary),
-        shape: Border(bottom: BorderSide(color: ViroColors.borderColor, width: 1)),
+        shape: Border(
+          bottom: BorderSide(color: ViroColors.borderColor, width: 1),
+        ),
       ),
 
       // Style des Boutons Primaires (Pleins)
@@ -95,7 +109,10 @@ class ViroTheme {
         filled: true,
         fillColor: Colors.white,
         enabledBorder: OutlineInputBorder(
-          borderSide: const BorderSide(color: ViroColors.borderColor, width: 1.5),
+          borderSide: const BorderSide(
+            color: ViroColors.borderColor,
+            width: 1.5,
+          ),
           borderRadius: BorderRadius.circular(8),
         ),
         focusedBorder: OutlineInputBorder(
