@@ -7,6 +7,8 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../../constants/app_urls.dart';
 import '../../constants/firebase_collections.dart';
 import '../../theme/viro_theme.dart';
 import '../../widget/viro_loader.dart';
@@ -201,6 +203,34 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
                         ),
                       ),
                     );
+                  },
+                ),
+                _buildMenuCard(
+                  icon: Icons.privacy_tip_outlined,
+                  title: "Politique de confidentialité",
+                  subtitle:
+                      "Consulter la politique de confidentialité et les droits RGPD",
+                  onTap: () async {
+                    final uri = Uri.parse(AppUrls.politiqueConfidentialiteUrl);
+                    try {
+                      final launched = await launchUrl(
+                        uri,
+                        mode: LaunchMode.externalApplication,
+                      );
+                      if (!launched && context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                              content: Text("Impossible d'ouvrir le lien")),
+                        );
+                      }
+                    } catch (_) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                              content: Text("Impossible d'ouvrir le lien")),
+                        );
+                      }
+                    }
                   },
                 ),
                 const SizedBox(height: 24),

@@ -335,8 +335,8 @@ class _AuthGateState extends State<_AuthGate> {
         }
         if (!snapshot.hasData) {
           if (widget.currentUserId != null) {
-            widget.onUserIdChanged(null);
             WidgetsBinding.instance.addPostFrameCallback((_) {
+              widget.onUserIdChanged(null);
               context.read<UserSession>().stopListening();
               widget.onSessionStopped();
             });
@@ -346,8 +346,8 @@ class _AuthGateState extends State<_AuthGate> {
 
         final user = snapshot.data!;
         if (user.uid != widget.currentUserId) {
-          widget.onUserIdChanged(user.uid);
           WidgetsBinding.instance.addPostFrameCallback((_) {
+            widget.onUserIdChanged(user.uid);
             context.read<UserSession>().startListening(user.uid);
             widget.onSessionStarted(user.uid);
           });
