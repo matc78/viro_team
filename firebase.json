@@ -1,7 +1,14 @@
 {
-  "firestore": {
-    "rules": "firestore.rules"
-  },
+  "firestore": [
+    {
+      "database": "test",
+      "rules": "firestore.rules"
+    },
+    {
+      "database": "prod",
+      "rules": "firestore.rules"
+    }
+  ],
   "functions": {
     "source": "functions"
   },

@@ -1,6 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:viro_team/utils/firestore_instance.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../constants/firebase_collections.dart';
@@ -97,7 +98,7 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
         audienceMembers = List.from(_selectedPlayersMatch);
       }
       // Récupération du nom du club
-      final clubSnap = await FirebaseFirestore.instance
+      final clubSnap = await appFirestore
           .collection(FirebaseCollections.clubs)
           .doc(widget.clubId)
           .get();
@@ -108,7 +109,7 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
           ? _selectedCategoriesAudience.first
           : null;
       if (_selectedType == 'Entraînement' || _selectedType == 'Match') {
-        final snap = await FirebaseFirestore.instance
+        final snap = await appFirestore
             .collection(FirebaseCollections.clubs)
             .doc(widget.clubId)
             .collection(FirebaseCollections.teams)
@@ -125,7 +126,7 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
         for (var id in audienceMembers) id: 'none',
       };
 
-      final batch = FirebaseFirestore.instance.batch();
+      final batch = appFirestore.batch();
       int iterations = 1;
       if (_selectedType == 'Entraînement' && _isRecurring) {
         if (_recurrenceMode == 'season_end' && _seasonEndDate != null) {
@@ -151,7 +152,7 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
         DateTime eventDate = _date.add(Duration(days: i * 7));
         String dateId = DateFormat('yyyyMMdd').format(eventDate);
 
-        DocumentReference ref = FirebaseFirestore.instance
+        DocumentReference ref = appFirestore
             .collection(FirebaseCollections.clubs)
             .doc(widget.clubId)
             .collection(FirebaseCollections.events)
@@ -237,7 +238,7 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
     required bool isTraining,
     required bool isMatch,
   }) async {
-    final clubsRef = FirebaseFirestore.instance
+    final clubsRef = appFirestore
         .collection(FirebaseCollections.clubs)
         .doc(widget.clubId)
         .collection(FirebaseCollections.teams);
@@ -285,7 +286,7 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
   Widget _buildMatchPlayersSelector() {
     if (_selectedTeamName == null) return const SizedBox();
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance
+      stream: appFirestore
           .collection(FirebaseCollections.clubs)
           .doc(widget.clubId)
           .collection(FirebaseCollections.teams)
@@ -502,7 +503,7 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
   }
 
   Future<void> _loadClubSport() async {
-    final doc = await FirebaseFirestore.instance
+    final doc = await appFirestore
         .collection(FirebaseCollections.clubs)
         .doc(widget.clubId)
         .get();
@@ -593,7 +594,7 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
                   const SizedBox(height: 16),
 
                   StreamBuilder<QuerySnapshot>(
-                    stream: FirebaseFirestore.instance
+                    stream: appFirestore
                         .collection(FirebaseCollections.clubs)
                         .doc(widget.clubId)
                         .collection(FirebaseCollections.teams)

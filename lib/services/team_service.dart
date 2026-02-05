@@ -1,9 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../constants/firebase_collections.dart';
+import 'package:viro_team/utils/firestore_instance.dart';
 
 /// Service pour gérer les opérations liées aux équipes
 class TeamService {
-  final FirebaseFirestore _db = FirebaseFirestore.instance;
+  final FirebaseFirestore _db = appFirestore;
 
   /// Crée une nouvelle équipe dans un club
   Future<DocumentReference?> addTeam(

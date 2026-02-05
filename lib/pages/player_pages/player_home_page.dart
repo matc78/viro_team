@@ -1,6 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:viro_team/utils/firestore_instance.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:viro_team/pages/player_pages/player_teams_page.dart';
@@ -51,7 +52,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
   Future<void> _refreshUserStatus() async {
     setState(() => _isManualRefreshing = true);
     try {
-      final snap = await FirebaseFirestore.instance
+      final snap = await appFirestore
           .collection(FirebaseCollections.users)
           .doc(_currentUserId)
           .get(const GetOptions(source: Source.server));
@@ -108,7 +109,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<DocumentSnapshot>(
-      stream: FirebaseFirestore.instance
+      stream: appFirestore
           .collection(FirebaseCollections.users)
           .doc(_currentUserId)
           .snapshots(),
@@ -203,7 +204,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
             },
           ),
           StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-            stream: FirebaseFirestore.instance
+            stream: appFirestore
                 .collection(FirebaseCollections.users)
                 .doc(_currentUserId)
                 .snapshots(),
@@ -386,7 +387,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
     }
     final clubId = clubIds[currentIndex];
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
+      stream: appFirestore
           .collection(FirebaseCollections.clubs)
           .doc(clubId)
           .collection(FirebaseCollections.announcements)
@@ -562,7 +563,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
                                 )
                               : senderId != null
                               ? FutureBuilder<DocumentSnapshot>(
-                                  future: FirebaseFirestore.instance
+                                  future: appFirestore
                                       .collection(FirebaseCollections.users)
                                       .doc(senderId)
                                       .get(),
@@ -663,7 +664,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
     if (clubIds.isEmpty) return [];
     final snaps = await Future.wait(
       clubIds.map(
-        (id) => FirebaseFirestore.instance.collection(FirebaseCollections.clubs).doc(id).get(),
+        (id) => appFirestore.collection(FirebaseCollections.clubs).doc(id).get(),
       ),
     );
     return clubIds.asMap().entries.map((e) {
@@ -785,7 +786,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
     final startOfDay = DateTime(now.year, now.month, now.day);
     final nextSunday = startOfDay.add(Duration(days: 7 - now.weekday + 1));
     final streams = clubIds.map((clubId) {
-      return FirebaseFirestore.instance
+      return appFirestore
           .collection(FirebaseCollections.clubs)
           .doc(clubId)
           .collection(FirebaseCollections.events)
@@ -981,7 +982,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
 
     final eventStream = allClubIds.isEmpty
         ? null
-        : FirebaseFirestore.instance
+        : appFirestore
               .collection(FirebaseCollections.clubs)
               .doc(allClubIds.first)
               .collection(FirebaseCollections.events)
@@ -993,7 +994,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
               .orderBy('date')
               .snapshots();
 
-    final loanRequestStream = FirebaseFirestore.instance
+    final loanRequestStream = appFirestore
         .collection(FirebaseCollections.clubs)
         .doc(clubId)
         .collection(FirebaseCollections.equipmentLoanRequests)
@@ -1008,7 +1009,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
         .snapshots();
 
     // Requête sans plage sur lentAt/dueAt pour éviter les index composites
-    final preparationStream = FirebaseFirestore.instance
+    final preparationStream = appFirestore
         .collection(FirebaseCollections.clubs)
         .doc(clubId)
         .collection(FirebaseCollections.equipmentLoans)
@@ -1016,7 +1017,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
         .where('status', isEqualTo: 'active')
         .snapshots();
 
-    final returnStream = FirebaseFirestore.instance
+    final returnStream = appFirestore
         .collection(FirebaseCollections.clubs)
         .doc(clubId)
         .collection(FirebaseCollections.equipmentLoans)
@@ -1349,7 +1350,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
     final endOfDay = startOfDay.add(const Duration(days: 1));
     final primaryClubId = allClubIds.isNotEmpty ? allClubIds.first : clubId;
 
-    final activeLoansStream = FirebaseFirestore.instance
+    final activeLoansStream = appFirestore
         .collection(FirebaseCollections.clubs)
         .doc(clubId)
         .collection(FirebaseCollections.equipmentLoans)
@@ -1357,7 +1358,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
         .where('status', isEqualTo: 'active')
         .snapshots();
 
-    final todayEventsStream = FirebaseFirestore.instance
+    final todayEventsStream = appFirestore
         .collection(FirebaseCollections.clubs)
         .doc(primaryClubId)
         .collection(FirebaseCollections.events)
@@ -1454,7 +1455,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
 
   Widget _buildActiveLoansSectionSingleClub(String clubId) {
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance
+      stream: appFirestore
           .collection(FirebaseCollections.clubs)
           .doc(clubId)
           .collection(FirebaseCollections.equipmentLoans)
@@ -1525,7 +1526,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
     }
     final clubId = clubIds[index];
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance
+      stream: appFirestore
           .collection(FirebaseCollections.clubs)
           .doc(clubId)
           .collection(FirebaseCollections.equipmentLoans)
@@ -2013,7 +2014,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             FutureBuilder<DocumentSnapshot>(
-              future: FirebaseFirestore.instance
+              future: appFirestore
                   .collection(FirebaseCollections.clubs)
                   .doc(clubId)
                   .get(),

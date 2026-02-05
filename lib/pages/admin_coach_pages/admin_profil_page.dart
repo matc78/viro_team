@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:viro_team/utils/firestore_instance.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -32,7 +33,7 @@ class AdminProfilPage extends StatefulWidget {
 
 class _AdminProfilPageState extends State<AdminProfilPage> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseFirestore _firestore = appFirestore;
   bool _isUploadingAvatar = false;
   bool _isSaving = false;
 
@@ -1298,7 +1299,10 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
       );
       if (!adminList.contains(clubId)) adminList.add(clubId);
       roles['admin'] = adminList;
-      await newOwnerRef.set({'roles': roles}, SetOptions(merge: true));
+      await newOwnerRef.set({
+        'roles': roles,
+        '_adminClubId': clubId,
+      }, SetOptions(merge: true));
 
       final currentUserRef = _firestore.collection(FirebaseCollections.users).doc(userId);
       final currentSnap = await currentUserRef.get();
@@ -1486,7 +1490,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
       await storageRef.putFile(File(file.path));
       final url = await storageRef.getDownloadURL();
 
-      await FirebaseFirestore.instance.collection(FirebaseCollections.clubs).doc(clubId).set({
+      await appFirestore.collection(FirebaseCollections.clubs).doc(clubId).set({
         'logoUrl': url,
       }, SetOptions(merge: true));
 
@@ -2298,7 +2302,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
       final clubInfo = entry.value;
 
       try {
-        final clubDoc = await FirebaseFirestore.instance
+        final clubDoc = await appFirestore
             .collection(FirebaseCollections.clubs)
             .doc(clubId)
             .get();
@@ -2321,7 +2325,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
 
   Future<List<String>> _fetchTeamsForClub(String clubId, String userId) async {
     try {
-      final db = FirebaseFirestore.instance;
+      final db = appFirestore;
       final playerTeams = await db
           .collection(FirebaseCollections.clubs)
           .doc(clubId)
@@ -2516,7 +2520,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
     final logos = <String>[];
     for (final id in clubIds) {
       try {
-        final doc = await FirebaseFirestore.instance
+        final doc = await appFirestore
             .collection(FirebaseCollections.clubs)
             .doc(id)
             .get();

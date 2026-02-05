@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:viro_team/constants/firebase_collections.dart';
+import 'package:viro_team/utils/firestore_instance.dart';
 
 /// Récupère plusieurs documents utilisateur en batch pour éviter les N+1 queries.
 /// Firestore limite whereIn à 10 éléments, donc on fait plusieurs appels si nécessaire.
@@ -11,7 +12,7 @@ Future<List<DocumentSnapshot<Map<String, dynamic>>>> fetchUsersBatch(List<String
   for (var i = 0; i < userIds.length; i += 10) {
     final batch = userIds.sublist(i, math.min(i + 10, userIds.length));
     batches.add(
-      FirebaseFirestore.instance
+      appFirestore
           .collection(FirebaseCollections.users)
           .where(FieldPath.documentId, whereIn: batch)
           .get(),
@@ -367,7 +368,10 @@ Future<void> updatePlayerClubsForTeam(
   final updatedRoles = Map<String, dynamic>.from(roles);
   updatedRoles['player'] = {...playerData, 'clubs': clubsList};
 
-  await userRef.set({'roles': updatedRoles}, SetOptions(merge: true));
+  await userRef.set({
+    'roles': updatedRoles,
+    '_adminClubId': clubId,
+  }, SetOptions(merge: true));
 }
 
 /// Vérifie si un joueur a un numéro de licence dans un club donné

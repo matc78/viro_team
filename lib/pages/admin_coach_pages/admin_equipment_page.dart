@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:viro_team/utils/firestore_instance.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -36,7 +37,7 @@ class _AdminEquipmentPageState extends State<AdminEquipmentPage> {
       );
     }
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance
+      stream: appFirestore
           .collection(FirebaseCollections.users)
           .doc(userId)
           .snapshots(),
@@ -121,7 +122,7 @@ class _InventoryTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance
+      stream: appFirestore
           .collection(FirebaseCollections.clubs)
           .doc(clubId)
           .collection(FirebaseCollections.equipment)
@@ -684,7 +685,7 @@ class _AddEquipmentDialogState extends State<_AddEquipmentDialog> {
 
     setState(() => _saving = true);
     try {
-      final ref = await FirebaseFirestore.instance
+      final ref = await appFirestore
           .collection(FirebaseCollections.clubs)
           .doc(widget.clubId)
           .collection(FirebaseCollections.equipment)
@@ -1106,7 +1107,7 @@ class _AddEquipmentDialogState extends State<_AddEquipmentDialog> {
                   ),
                   const SizedBox(height: 8),
                   StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                    stream: FirebaseFirestore.instance
+                    stream: appFirestore
                         .collection(FirebaseCollections.users)
                         .snapshots(),
                     builder: (context, userSnap) {
@@ -1164,7 +1165,7 @@ class _AddEquipmentDialogState extends State<_AddEquipmentDialog> {
                   ),
                   const SizedBox(height: 12),
                   StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                    stream: FirebaseFirestore.instance
+                    stream: appFirestore
                         .collection(FirebaseCollections.clubs)
                         .doc(widget.clubId)
                         .collection(FirebaseCollections.teams)
@@ -1430,7 +1431,7 @@ class _EditEquipmentSheetState extends State<_EditEquipmentSheet> {
 
     setState(() => _saving = true);
     try {
-      await FirebaseFirestore.instance
+      await appFirestore
           .collection(FirebaseCollections.clubs)
           .doc(widget.clubId)
           .collection(FirebaseCollections.equipment)
@@ -1481,7 +1482,7 @@ class _EditEquipmentSheetState extends State<_EditEquipmentSheet> {
           });
       final equipmentId = widget.data['id'] as String;
       if (_removePhoto) {
-        await FirebaseFirestore.instance
+        await appFirestore
             .collection(FirebaseCollections.clubs)
             .doc(widget.clubId)
             .collection(FirebaseCollections.equipment)
@@ -1497,7 +1498,7 @@ class _EditEquipmentSheetState extends State<_EditEquipmentSheet> {
             .child('photo_${DateTime.now().millisecondsSinceEpoch}.jpg');
         await storageRef.putFile(File(_newPhotoFile!.path));
         final imageUrl = await storageRef.getDownloadURL();
-        await FirebaseFirestore.instance
+        await appFirestore
             .collection(FirebaseCollections.clubs)
             .doc(widget.clubId)
             .collection(FirebaseCollections.equipment)
@@ -1829,7 +1830,7 @@ class _EditEquipmentSheetState extends State<_EditEquipmentSheet> {
             ),
             const SizedBox(height: 8),
             StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-              stream: FirebaseFirestore.instance
+              stream: appFirestore
                   .collection(FirebaseCollections.users)
                   .snapshots(),
               builder: (context, userSnap) {
@@ -1900,7 +1901,7 @@ class _EditEquipmentSheetState extends State<_EditEquipmentSheet> {
             ),
             const SizedBox(height: 12),
             StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-              stream: FirebaseFirestore.instance
+              stream: appFirestore
                   .collection(FirebaseCollections.clubs)
                   .doc(widget.clubId)
                   .collection(FirebaseCollections.teams)
@@ -2074,7 +2075,7 @@ class _EditEquipmentSheetState extends State<_EditEquipmentSheet> {
     if (confirmed != true) return;
     setState(() => _saving = true);
     try {
-      await FirebaseFirestore.instance
+      await appFirestore
           .collection(FirebaseCollections.clubs)
           .doc(widget.clubId)
           .collection(FirebaseCollections.equipment)

@@ -1,6 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:viro_team/utils/firestore_instance.dart';
 import 'package:flutter/material.dart';
 import 'package:viro_team/pages/admin_coach_pages/admin_club_communication_page.dart';
 import 'package:viro_team/pages/admin_coach_pages/admin_equipment_page.dart';
@@ -67,7 +68,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
           ),
           StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
             stream: user != null
-                ? FirebaseFirestore.instance
+                ? appFirestore
                       .collection(FirebaseCollections.users)
                       .doc(user!.uid)
                       .snapshots()
@@ -133,7 +134,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
       ),
       body: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
         stream: user != null
-            ? FirebaseFirestore.instance
+            ? appFirestore
                   .collection(FirebaseCollections.users)
                   .doc(user!.uid)
                   .snapshots()
@@ -160,7 +161,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
 
           // Récupérer les données du club
           return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-            stream: FirebaseFirestore.instance
+            stream: appFirestore
                 .collection(FirebaseCollections.clubs)
                 .doc(clubId)
                 .snapshots(),
@@ -447,7 +448,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
     final viewerRole = _viewerRoleInClub(userData, clubId);
 
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance
+      stream: appFirestore
           .collection(FirebaseCollections.joinRequests)
           .where('clubId', isEqualTo: clubId)
           .where('status', isEqualTo: 'pending')
@@ -666,7 +667,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
       DateTime.now().subtract(const Duration(hours: 24)),
     );
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance
+      stream: appFirestore
           .collection(FirebaseCollections.clubs)
           .doc(clubId)
           .collection(FirebaseCollections.memberLeaves)
@@ -793,7 +794,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
     if (userId == null) return;
     setState(() => _processingRequestId = requestId);
     try {
-      final requestRef = FirebaseFirestore.instance
+      final requestRef = appFirestore
           .collection(FirebaseCollections.joinRequests)
           .doc(requestId);
 
@@ -804,7 +805,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
         });
 
         // Récupérer les données utilisateur existantes
-        final userDoc = await FirebaseFirestore.instance
+        final userDoc = await appFirestore
             .collection(FirebaseCollections.users)
             .doc(userId)
             .get();
@@ -828,7 +829,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
           if (existingPlayer == null) {
             // Premier club : créer la structure avec liste de clubs
             // Récupérer la licence depuis les données de la demande si disponible
-            final requestDoc = await FirebaseFirestore.instance
+            final requestDoc = await appFirestore
                 .collection(FirebaseCollections.joinRequests)
                 .doc(requestId)
                 .get();
@@ -871,7 +872,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
             // Vérifier qu'on n'ajoute pas un doublon
             if (!clubsList.any((c) => c['clubId'] == clubId)) {
               // Récupérer la licence depuis les données de la demande si disponible
-              final requestDoc = await FirebaseFirestore.instance
+              final requestDoc = await appFirestore
                   .collection(FirebaseCollections.joinRequests)
                   .doc(requestId)
                   .get();
@@ -917,7 +918,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
         };
 
         // Mettre à jour le document utilisateur
-        await FirebaseFirestore.instance.collection(FirebaseCollections.users).doc(userId).set({
+        await appFirestore.collection(FirebaseCollections.users).doc(userId).set({
           'hasPendingRequest': false,
           'roles': updatedRoles,
           'activeContext': newActiveContext,
@@ -928,7 +929,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
           final field = (normalizedRole == 'admin' || normalizedRole == 'coach')
               ? 'coaches'
               : 'members';
-          await FirebaseFirestore.instance
+          await appFirestore
               .collection(FirebaseCollections.clubs)
               .doc(clubId)
               .update({
@@ -940,8 +941,9 @@ class _AdminHomePageState extends State<AdminHomePage> {
           'status': 'refused',
           'respondedAt': FieldValue.serverTimestamp(),
         });
-        await FirebaseFirestore.instance.collection(FirebaseCollections.users).doc(userId).set({
+        await appFirestore.collection(FirebaseCollections.users).doc(userId).set({
           'hasPendingRequest': false,
+          if (clubId != null) 'lastProcessedJoinRequestClubId': clubId,
         }, SetOptions(merge: true));
       }
 
@@ -959,7 +961,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
 
   Widget _buildLoanRequestsSection(String clubId) {
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance
+      stream: appFirestore
           .collection(FirebaseCollections.clubs)
           .doc(clubId)
           .collection(FirebaseCollections.equipmentLoanRequests)
@@ -1257,7 +1259,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
 
   Widget _buildLoanChangeRequestsSection(String clubId) {
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance
+      stream: appFirestore
           .collection(FirebaseCollections.clubs)
           .doc(clubId)
           .collection(FirebaseCollections.equipmentLoanChangeRequests)
@@ -1516,7 +1518,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
       final caution = requestData['caution'] as num?;
 
       // Créer le prêt actif (remise non encore confirmée)
-      final loanRef = await FirebaseFirestore.instance
+      final loanRef = await appFirestore
           .collection(FirebaseCollections.clubs)
           .doc(clubId)
           .collection(FirebaseCollections.equipmentLoans)
@@ -1537,7 +1539,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
           });
 
       // Mettre à jour la demande (avec loanId pour annulation des prêts à venir)
-      await FirebaseFirestore.instance
+      await appFirestore
           .collection(FirebaseCollections.clubs)
           .doc(clubId)
           .collection(FirebaseCollections.equipmentLoanRequests)
@@ -1635,7 +1637,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
 
     try {
       final currentUser = FirebaseAuth.instance.currentUser;
-      await FirebaseFirestore.instance
+      await appFirestore
           .collection(FirebaseCollections.clubs)
           .doc(clubId)
           .collection(FirebaseCollections.equipmentLoanRequests)
@@ -1671,7 +1673,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
 
   Future<void> _markLoanReturned(String clubId, String loanId) async {
     try {
-      await FirebaseFirestore.instance
+      await appFirestore
           .collection(FirebaseCollections.clubs)
           .doc(clubId)
           .collection(FirebaseCollections.equipmentLoans)
@@ -1705,7 +1707,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
     final today = DateTime(now.year, now.month, now.day);
 
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance
+      stream: appFirestore
           .collection(FirebaseCollections.clubs)
           .doc(clubId)
           .collection(FirebaseCollections.equipmentLoans)
@@ -1880,7 +1882,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
     final today = DateTime(now.year, now.month, now.day);
 
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance
+      stream: appFirestore
           .collection(FirebaseCollections.clubs)
           .doc(clubId)
           .collection(FirebaseCollections.equipmentLoans)
@@ -2023,7 +2025,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
                           icon: Icons.handshake_outlined,
                           onConfirmed: () async {
                             try {
-                              await FirebaseFirestore.instance
+                              await appFirestore
                                   .collection(FirebaseCollections.clubs)
                                   .doc(clubId)
                                   .collection(
@@ -2087,7 +2089,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
     final today = DateTime(now.year, now.month, now.day);
 
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance
+      stream: appFirestore
           .collection(FirebaseCollections.clubs)
           .doc(clubId)
           .collection(FirebaseCollections.equipmentLoanRequests)
@@ -2380,7 +2382,7 @@ class _MembersCountCard extends StatelessWidget {
   Widget build(BuildContext context) {
     if (userId == null) {
       return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: FirebaseFirestore.instance.collection(FirebaseCollections.users).snapshots(),
+        stream: appFirestore.collection(FirebaseCollections.users).snapshots(),
         builder: (context, snap) {
           final allDocs = snap.data?.docs ?? [];
           final clubMembers = filterUsersByClub(allDocs, clubId);
@@ -2406,7 +2408,7 @@ class _MembersCountCard extends StatelessWidget {
       );
     }
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance
+      stream: appFirestore
           .collection(FirebaseCollections.users)
           .doc(userId)
           .snapshots(),
@@ -2420,7 +2422,7 @@ class _MembersCountCard extends StatelessWidget {
                 ? 'admin'
                 : (rolesInClub.contains('coach') ? 'coach' : null));
         return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-          stream: FirebaseFirestore.instance.collection(FirebaseCollections.users).snapshots(),
+          stream: appFirestore.collection(FirebaseCollections.users).snapshots(),
           builder: (context, snap) {
             final allDocs = snap.data?.docs ?? [];
             final clubMembers = filterUsersByClub(allDocs, clubId);
@@ -2457,7 +2459,7 @@ class _TeamsCountCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance
+      stream: appFirestore
           .collection(FirebaseCollections.clubs)
           .doc(clubId)
           .collection(FirebaseCollections.teams)

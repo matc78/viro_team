@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:viro_team/utils/firestore_instance.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:viro_team/constants/firebase_collections.dart';
@@ -208,7 +209,7 @@ class PlayerEventDetailsPage extends StatelessWidget {
     }
 
     try {
-      await FirebaseFirestore.instance
+      await appFirestore
           .collection(FirebaseCollections.clubs)
           .doc(clubId)
           .collection(FirebaseCollections.events)

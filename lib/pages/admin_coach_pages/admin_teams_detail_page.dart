@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:viro_team/utils/firestore_instance.dart';
 import 'package:flutter/material.dart';
 import 'package:viro_team/constants/firebase_collections.dart';
 import '../../theme/viro_theme.dart';
@@ -39,7 +40,7 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (ctx) => StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: FirebaseFirestore.instance.collection(FirebaseCollections.users).snapshots(),
+        stream: appFirestore.collection(FirebaseCollections.users).snapshots(),
         builder: (context, snapshot) {
           if (!snapshot.hasData) {
             return const Center(child: ViroLoader(size: 40));
@@ -139,7 +140,7 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
                           });
                           if (role == 'player') {
                             await updatePlayerClubsForTeam(
-                              FirebaseFirestore.instance,
+                              appFirestore,
                               userId,
                               widget.clubId,
                               add: true,
@@ -155,8 +156,9 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
                                   'teamName': teamName,
                                 },
                               ]),
+                              '_adminClubId': widget.clubId,
                             };
-                            await FirebaseFirestore.instance
+                            await appFirestore
                                 .collection(FirebaseCollections.users)
                                 .doc(userId)
                                 .set(userUpdate, SetOptions(merge: true));
@@ -233,7 +235,7 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
         }
 
         return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-          stream: FirebaseFirestore.instance
+          stream: appFirestore
               .collection(FirebaseCollections.users)
               .doc(currentUserId)
               .snapshots(),
@@ -427,7 +429,7 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
                                 });
                                 if (role == 'player') {
                                   await updatePlayerClubsForTeam(
-                                    FirebaseFirestore.instance,
+                                    appFirestore,
                                     userId,
                                     widget.clubId,
                                     add: false,
@@ -444,8 +446,9 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
                                             'teamName': teamName,
                                           },
                                         ]),
+                                    '_adminClubId': widget.clubId,
                                   };
-                                  await FirebaseFirestore.instance
+                                  await appFirestore
                                       .collection(FirebaseCollections.users)
                                       .doc(userId)
                                       .set(userUpdate, SetOptions(merge: true));
@@ -515,7 +518,7 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
     required bool add,
   }) async {
     if (teamName.isEmpty) return;
-    final eventsRef = FirebaseFirestore.instance
+    final eventsRef = appFirestore
         .collection(FirebaseCollections.clubs)
         .doc(widget.clubId)
         .collection(FirebaseCollections.events);

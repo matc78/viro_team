@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:viro_team/utils/firestore_instance.dart';
 
 /// Cache simple pour les documents Firestore au niveau de l'application
 /// Évite les requêtes redondantes pour le même document dans la même session
@@ -24,7 +25,7 @@ class DocumentCache {
     }
 
     // Récupérer depuis Firestore
-    final docRef = FirebaseFirestore.instance.doc(path);
+    final docRef = appFirestore.doc(path);
     final doc = await docRef.get();
 
     // Mettre en cache
@@ -58,7 +59,7 @@ class DocumentCache {
     // Récupérer les documents manquants depuis Firestore
     if (pathsToFetch.isNotEmpty) {
       final futures = pathsToFetch.map((path) => 
-        FirebaseFirestore.instance.doc(path).get()
+        appFirestore.doc(path).get()
       );
       final fetchedDocs = await Future.wait(futures);
 

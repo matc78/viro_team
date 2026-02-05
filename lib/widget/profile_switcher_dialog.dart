@@ -1,6 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:viro_team/utils/firestore_instance.dart';
 import 'package:viro_team/constants/firebase_collections.dart';
 import '../services/user_session.dart';
 import '../theme/viro_theme.dart';
@@ -50,7 +51,7 @@ class _ProfileSwitcherDialogState extends State<ProfileSwitcherDialog> {
       );
 
       try {
-        final snapshot = await FirebaseFirestore.instance
+        final snapshot = await appFirestore
             .collection(FirebaseCollections.clubs)
             .where(FieldPath.documentId, whereIn: batch)
             .get();

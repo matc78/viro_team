@@ -1,10 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../constants/firebase_collections.dart';
+import 'package:viro_team/utils/firestore_instance.dart';
 import '../utils/app_logger.dart';
 
 /// Service pour gérer les opérations liées aux événements
 class EventService {
-  final FirebaseFirestore _db = FirebaseFirestore.instance;
+  final FirebaseFirestore _db = appFirestore;
 
   /// Récupère un événement spécifique
   Future<DocumentSnapshot?> getEvent(String clubId, String eventId) async {

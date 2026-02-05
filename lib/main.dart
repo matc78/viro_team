@@ -323,6 +323,15 @@ class _AuthGate extends StatefulWidget {
 }
 
 class _AuthGateState extends State<_AuthGate> {
+  Timer? _retryTimer;
+  int _userDocRetryCount = 0;
+
+  @override
+  void dispose() {
+    _retryTimer?.cancel();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<User?>(
@@ -361,7 +370,25 @@ class _AuthGateState extends State<_AuthGate> {
               );
             }
             final currentUser = session.currentUser;
+            if (currentUser != null) {
+              _userDocRetryCount = 0;
+            }
             if (currentUser == null) {
+              if (_userDocRetryCount == 0) {
+                if (_retryTimer == null) {
+                  final uid = user.uid;
+                  _retryTimer = Timer(const Duration(milliseconds: 1500), () {
+                    if (!mounted) return;
+                    _retryTimer?.cancel();
+                    _retryTimer = null;
+                    setState(() => _userDocRetryCount = 1);
+                    context.read<UserSession>().loadUser(uid);
+                  });
+                }
+                return const Scaffold(
+                  body: Center(child: ViroLoader(size: 50)),
+                );
+              }
               Future.microtask(() async {
                 try {
                   await FirebaseAuth.instance.signOut();

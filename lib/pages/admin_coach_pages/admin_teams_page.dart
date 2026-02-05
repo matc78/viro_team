@@ -1,5 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:viro_team/utils/firestore_instance.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:viro_team/constants/firebase_collections.dart';
@@ -20,7 +21,7 @@ class AdminTeamsPage extends StatefulWidget {
 }
 
 class _AdminTeamsPageState extends State<AdminTeamsPage> {
-  final FirebaseFirestore _db = FirebaseFirestore.instance;
+  final FirebaseFirestore _db = appFirestore;
   final TeamService _teamService = TeamService();
   String? _clubSport;
   String? _clubLogoUrl;
@@ -274,7 +275,7 @@ class _AdminTeamsPageState extends State<AdminTeamsPage> {
       );
     }
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance.collection(FirebaseCollections.users).doc(userId).snapshots(),
+      stream: appFirestore.collection(FirebaseCollections.users).doc(userId).snapshots(),
       builder: (context, userSnap) {
         final userData = userSnap.data?.data();
         final rolesInClub = getAllUserRolesInClub(userData ?? {}, widget.clubId);
@@ -537,6 +538,7 @@ class _AdminTeamsPageState extends State<AdminTeamsPage> {
             'coachedTeams': FieldValue.arrayRemove([
               {'teamId': teamDoc.id, 'teamName': teamName},
             ]),
+            '_adminClubId': widget.clubId,
           }, SetOptions(merge: true));
         } else {
           await updatePlayerClubsForTeam(

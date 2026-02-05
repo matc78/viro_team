@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:viro_team/utils/firestore_instance.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:viro_team/constants/firebase_collections.dart';
 import 'package:intl/intl.dart';
@@ -50,7 +51,7 @@ class _AdminClubCommunicationPageState
       String? senderFirstName;
       String? senderLastName;
       if (_currentUserId.isNotEmpty) {
-        final userSnap = await FirebaseFirestore.instance
+        final userSnap = await appFirestore
             .collection(FirebaseCollections.users)
             .doc(_currentUserId)
             .get();
@@ -67,7 +68,7 @@ class _AdminClubCommunicationPageState
           ? <String>[]
           : _selectedIds;
 
-      await FirebaseFirestore.instance
+      await appFirestore
           .collection(FirebaseCollections.clubs)
           .doc(widget.clubId)
           .collection(FirebaseCollections.announcements)
@@ -203,7 +204,7 @@ class _AdminClubCommunicationPageState
     String message,
     int durationDays,
   ) async {
-    await FirebaseFirestore.instance
+    await appFirestore
         .collection(FirebaseCollections.clubs)
         .doc(widget.clubId)
         .collection(FirebaseCollections.announcements)
@@ -245,7 +246,7 @@ class _AdminClubCommunicationPageState
   }
 
   Future<void> _deleteAnnouncement(String docId) async {
-    await FirebaseFirestore.instance
+    await appFirestore
         .collection(FirebaseCollections.clubs)
         .doc(widget.clubId)
         .collection(FirebaseCollections.announcements)
@@ -267,7 +268,7 @@ class _AdminClubCommunicationPageState
           _isSending
               ? const Center(child: ViroLoader())
               : StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-                  stream: FirebaseFirestore.instance
+                  stream: appFirestore
                       .collection(FirebaseCollections.users)
                       .doc(_currentUserId)
                       .snapshots(),
@@ -440,7 +441,7 @@ class _AdminClubCommunicationPageState
   Widget _buildActiveCommunicationsSection({required bool isAdmin}) {
     final now = DateTime.now();
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
+      stream: appFirestore
           .collection(FirebaseCollections.clubs)
           .doc(widget.clubId)
           .collection(FirebaseCollections.announcements)
@@ -686,7 +687,7 @@ class _AdminClubCommunicationPageState
     }
     if (_selectedTargetType == 'Équipes') {
       return StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
+        stream: appFirestore
             .collection(FirebaseCollections.clubs)
             .doc(widget.clubId)
             .collection(FirebaseCollections.teams)
@@ -718,7 +719,7 @@ class _AdminClubCommunicationPageState
 
     if (_selectedTargetType == 'Catégories') {
       return StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
+        stream: appFirestore
             .collection(FirebaseCollections.clubs)
             .doc(widget.clubId)
             .collection(FirebaseCollections.teams)
@@ -758,7 +759,7 @@ class _AdminClubCommunicationPageState
 
     // Joueurs
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance.collection(FirebaseCollections.users).snapshots(),
+      stream: appFirestore.collection(FirebaseCollections.users).snapshots(),
       builder: (context, snapshot) {
         if (!snapshot.hasData) return const LinearProgressIndicator();
         final allDocs = snapshot.data!.docs

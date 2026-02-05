@@ -36,14 +36,34 @@ service cloud.firestore {
     // -------------------------------------------------------------------------
     // users/{userId}
     // Lecture : utilisateur connecté (nécessaire pour liste membres / join_requests).
-    // Écriture : uniquement sur son propre document.
-    // Note : pour renforcer la confidentialité, restreindre la lecture à son
-    // propre document et déléguer la liste des membres à une Cloud Function.
+    // Écriture : propriétaire OU admin du club lors d'acceptation/refus de demande.
+    // - Propriétaire : update/delete sur son propre document.
+    // - Admin accepte : le document mis à jour contient activeContext.clubId,
+    //   l'appelant doit être admin de ce club (isClubAdmin(activeContext.clubId)).
+    // - Admin refuse : le document peut contenir lastProcessedJoinRequestClubId,
+    //   l'appelant doit être admin de ce club.
     // -------------------------------------------------------------------------
+    function isClubAdminForUserWrite() {
+      let clubId = request.resource.data.get(['activeContext', 'clubId'], '');
+      return clubId != '' && isClubAdmin(clubId);
+    }
+    function isClubAdminForRefusedRequest() {
+      let clubId = request.resource.data.get('lastProcessedJoinRequestClubId', '');
+      return clubId != '' && isClubAdmin(clubId);
+    }
+    // Admin du club met à jour un autre user (transfert propriété, retrait équipe/club, changement rôle)
+    function isClubAdminForAdminClubId() {
+      let clubId = request.resource.data.get('_adminClubId', '');
+      return clubId != '' && isClubAdmin(clubId);
+    }
     match /users/{userId} {
       allow read: if request.auth != null;
       allow create: if request.auth != null && request.auth.uid == userId;
-      allow update, delete: if request.auth != null && request.auth.uid == userId;
+      allow update, delete: if request.auth != null
+        && (request.auth.uid == userId
+             || isClubAdminForUserWrite()
+             || isClubAdminForRefusedRequest()
+             || isClubAdminForAdminClubId());
     }
 
     // -------------------------------------------------------------------------

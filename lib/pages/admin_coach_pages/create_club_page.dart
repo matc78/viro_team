@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:viro_team/utils/firestore_instance.dart';
 import 'package:flutter/material.dart';
 import 'package:viro_team/constants/firebase_collections.dart';
 import '../../theme/viro_theme.dart';
@@ -67,7 +68,7 @@ class _CreateClubPageState extends State<CreateClubPage> {
 
       // 1. Création du document Club
       DocumentReference
-      clubRef = await FirebaseFirestore.instance.collection(FirebaseCollections.clubs).add({
+      clubRef = await appFirestore.collection(FirebaseCollections.clubs).add({
         'name': _nameController.text.trim(),
         'city': _cityController.text.trim(),
         'postalCode': _postalCodeController.text.trim(),
@@ -85,7 +86,7 @@ class _CreateClubPageState extends State<CreateClubPage> {
 
       // 2. Mise à jour de l'utilisateur avec la nouvelle structure multi-tenant
       // Récupérer les données existantes pour ne pas écraser
-      final userDoc = await FirebaseFirestore.instance
+      final userDoc = await appFirestore
           .collection(FirebaseCollections.users)
           .doc(user.uid)
           .get();
@@ -121,7 +122,7 @@ class _CreateClubPageState extends State<CreateClubPage> {
       };
 
       // Mettre à jour le document utilisateur avec la nouvelle structure
-      await FirebaseFirestore.instance.collection(FirebaseCollections.users).doc(user.uid).set({
+      await appFirestore.collection(FirebaseCollections.users).doc(user.uid).set({
         'roles': updatedRoles,
         'activeContext': newActiveContext,
         // Garder clubId et clubName pour compatibilité avec l'ancien système

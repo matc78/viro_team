@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:viro_team/utils/firestore_instance.dart';
 import 'package:flutter/material.dart';
 import 'package:viro_team/constants/firebase_collections.dart';
 import '../theme/viro_theme.dart';
@@ -50,7 +51,7 @@ class _AddProfilePageState extends State<AddProfilePage> {
     setState(() => _isUpdating = true);
 
     try {
-      final userDoc = await FirebaseFirestore.instance
+      final userDoc = await appFirestore
           .collection(FirebaseCollections.users)
           .doc(_uid)
           .get();
@@ -73,7 +74,7 @@ class _AddProfilePageState extends State<AddProfilePage> {
         return;
       }
 
-      final requestsRef = FirebaseFirestore.instance.collection(
+      final requestsRef = appFirestore.collection(
         'join_requests',
       );
 
@@ -140,7 +141,7 @@ class _AddProfilePageState extends State<AddProfilePage> {
       }
 
       // Marquer la demande en attente
-      await FirebaseFirestore.instance.collection(FirebaseCollections.users).doc(_uid).set({
+      await appFirestore.collection(FirebaseCollections.users).doc(_uid).set({
         'hasPendingRequest': true,
       }, SetOptions(merge: true));
 
@@ -253,7 +254,7 @@ class _AddProfilePageState extends State<AddProfilePage> {
       backgroundColor: ViroColors.background,
       appBar: AppBar(title: const Text("Ajouter un profil"), elevation: 0),
       body: StreamBuilder<DocumentSnapshot>(
-        stream: FirebaseFirestore.instance
+        stream: appFirestore
             .collection(FirebaseCollections.users)
             .doc(_uid)
             .snapshots(),

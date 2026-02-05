@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:viro_team/constants/firebase_collections.dart';
+import 'package:viro_team/utils/firestore_instance.dart';
 import 'package:viro_team/utils/app_logger.dart';
 
 /// Types de notifications (clés utilisées dans Firestore et Cloud Functions).
@@ -53,7 +54,7 @@ class NotificationPreferencesService {
   static final NotificationPreferencesService instance =
       NotificationPreferencesService._();
 
-  final FirebaseFirestore _db = FirebaseFirestore.instance;
+  final FirebaseFirestore _db = appFirestore;
 
   /// Récupère les préférences actuelles. Les types absents sont considérés activés (true).
   Future<Map<String, bool>> getPreferences(String uid) async {

@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:viro_team/utils/firestore_instance.dart';
 import 'package:flutter/material.dart';
 import 'package:viro_team/constants/firebase_collections.dart';
 import 'package:viro_team/pages/onboarding_page.dart';
@@ -91,7 +92,7 @@ class _AuthPageState extends State<AuthPage> {
         final user = cred.user;
         if (user != null) {
           try {
-            await FirebaseFirestore.instance.collection(FirebaseCollections.users).doc(user.uid).set({
+            await appFirestore.collection(FirebaseCollections.users).doc(user.uid).set({
               'firstName': _firstNameController.text.trim(),
               'lastName': _lastNameController.text.trim(),
               'email': user.email,
@@ -153,7 +154,7 @@ class _AuthPageState extends State<AuthPage> {
     if (user == null) return;
 
     // Récupération des données utilisateur
-    final userDoc = await FirebaseFirestore.instance
+    final userDoc = await appFirestore
         .collection(FirebaseCollections.users)
         .doc(user.uid)
         .get();

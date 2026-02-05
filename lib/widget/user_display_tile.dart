@@ -1,6 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:viro_team/utils/firestore_instance.dart';
 import 'package:viro_team/constants/firebase_collections.dart';
 import '../pages/profil_display_page.dart';
 import '../theme/viro_theme.dart';
@@ -92,7 +93,7 @@ class UserDisplayTile extends StatelessWidget {
     } else if (userId != null && userId!.isNotEmpty) {
       // Même source que ProfilDisplayPage : document users
       avatar = StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-        stream: FirebaseFirestore.instance
+        stream: appFirestore
             .collection(FirebaseCollections.users)
             .doc(userId)
             .snapshots(),

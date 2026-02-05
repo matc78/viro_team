@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:viro_team/utils/firestore_instance.dart';
 import 'package:viro_team/constants/firebase_collections.dart';
 import 'package:viro_team/notifications/notifications.dart';
 import 'package:viro_team/utils/app_logger.dart';
@@ -92,7 +93,7 @@ final class NotificationService {
     try {
       final token = await FirebaseMessaging.instance.getToken();
       if (token == null) return;
-      await FirebaseFirestore.instance
+      await appFirestore
           .collection(FirebaseCollections.users)
           .doc(uid)
           .set({'fcmToken': token}, SetOptions(merge: true));

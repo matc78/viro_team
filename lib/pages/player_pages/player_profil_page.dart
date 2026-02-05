@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:viro_team/utils/firestore_instance.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -41,7 +42,7 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
     }
 
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance
+      stream: appFirestore
           .collection(FirebaseCollections.users)
           .doc(user.uid)
           .snapshots(),
@@ -474,7 +475,7 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
               final last = lastController.text.trim();
               setState(() => _isSaving = true);
               try {
-                await FirebaseFirestore.instance
+                await appFirestore
                     .collection(FirebaseCollections.users)
                     .doc(user.uid)
                     .set({
@@ -520,7 +521,7 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
               try {
                 // verifyBeforeUpdateEmail envoie un email de validation puis change l'email
                 await user.verifyBeforeUpdateEmail(newEmail);
-                await FirebaseFirestore.instance
+                await appFirestore
                     .collection(FirebaseCollections.users)
                     .doc(user.uid)
                     .set({'email': newEmail}, SetOptions(merge: true));
@@ -569,7 +570,7 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
               final newPhone = controller.text.trim();
               setState(() => _isSaving = true);
               try {
-                await FirebaseFirestore.instance
+                await appFirestore
                     .collection(FirebaseCollections.users)
                     .doc(user.uid)
                     .set({'phone': newPhone}, SetOptions(merge: true));
@@ -788,7 +789,7 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
                 }
 
                 final uid = user.uid;
-                final firestore = FirebaseFirestore.instance;
+                final firestore = appFirestore;
 
                 // Récupérer les infos pour nettoyer club et demandes
                 final userDoc = await firestore
@@ -979,7 +980,7 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
   }
 
   Future<bool> _hasActiveLoanForClub(String clubId, String uid) async {
-    final snap = await FirebaseFirestore.instance
+    final snap = await appFirestore
         .collection(FirebaseCollections.clubs)
         .doc(clubId)
         .collection(FirebaseCollections.equipmentLoans)
@@ -1000,7 +1001,7 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
   ) async {
     setState(() => _isSaving = true);
     try {
-      final firestore = FirebaseFirestore.instance;
+      final firestore = appFirestore;
 
       // 1. Événements : retirer userId de teamMemberIds et attendance
       final eventsSnap = await firestore
@@ -1325,7 +1326,7 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
       final clubInfo = entry.value;
 
       try {
-        final clubDoc = await FirebaseFirestore.instance
+        final clubDoc = await appFirestore
             .collection(FirebaseCollections.clubs)
             .doc(clubId)
             .get();
@@ -1349,7 +1350,7 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
 
   Future<List<String>> _fetchTeamsForClub(String clubId, String userId) async {
     try {
-      final db = FirebaseFirestore.instance;
+      final db = appFirestore;
       final playerTeams = await db
           .collection(FirebaseCollections.clubs)
           .doc(clubId)
@@ -1514,7 +1515,7 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
     final logos = <String>[];
     final names = <String>[];
     for (final id in clubIds) {
-      final doc = await FirebaseFirestore.instance
+      final doc = await appFirestore
           .collection(FirebaseCollections.clubs)
           .doc(id)
           .get();
@@ -1550,7 +1551,7 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
       await storageRef.putFile(File(file.path));
       final url = await storageRef.getDownloadURL();
 
-      await FirebaseFirestore.instance.collection(FirebaseCollections.users).doc(user.uid).set({
+      await appFirestore.collection(FirebaseCollections.users).doc(user.uid).set({
         'avatarUrl': url,
       }, SetOptions(merge: true));
     } catch (e) {

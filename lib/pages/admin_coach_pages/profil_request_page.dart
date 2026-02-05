@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:viro_team/utils/firestore_instance.dart';
 import '../../constants/firebase_collections.dart';
 import '../../theme/viro_theme.dart';
 import '../../utils/app_logger.dart';
@@ -43,7 +44,7 @@ class _ProfilRequestPageState extends State<ProfilRequestPage> {
       return widget.message!;
     }
     if (widget.requestId.isEmpty) return "";
-    final doc = await FirebaseFirestore.instance
+    final doc = await appFirestore
         .collection(FirebaseCollections.joinRequests)
         .doc(widget.requestId)
         .get();
@@ -64,7 +65,7 @@ class _ProfilRequestPageState extends State<ProfilRequestPage> {
           final message = messageSnap.data ?? widget.message ?? "";
 
           return FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-            future: FirebaseFirestore.instance
+            future: appFirestore
                 .collection(FirebaseCollections.users)
                 .doc(widget.userId)
                 .get(),
@@ -187,7 +188,7 @@ class _ProfilRequestPageState extends State<ProfilRequestPage> {
     if (widget.userId == null) return;
     setState(() => _isProcessing = true);
     try {
-      final requestRef = FirebaseFirestore.instance
+      final requestRef = appFirestore
           .collection(FirebaseCollections.joinRequests)
           .doc(widget.requestId);
 
@@ -201,7 +202,7 @@ class _ProfilRequestPageState extends State<ProfilRequestPage> {
         final clubId = widget.clubId;
         final roleRequested = widget.roleRequested ?? 'player';
 
-        final userDoc = await FirebaseFirestore.instance
+        final userDoc = await appFirestore
             .collection(FirebaseCollections.users)
             .doc(userId)
             .get();
@@ -285,7 +286,7 @@ class _ProfilRequestPageState extends State<ProfilRequestPage> {
           'clubId': clubId,
         };
 
-        await FirebaseFirestore.instance.collection(FirebaseCollections.users).doc(userId).set({
+        await appFirestore.collection(FirebaseCollections.users).doc(userId).set({
           'hasPendingRequest': false,
           'roles': updatedRoles,
           'activeContext': newActiveContext,
@@ -299,7 +300,7 @@ class _ProfilRequestPageState extends State<ProfilRequestPage> {
               : normalizedRole == 'coach'
                   ? 'coaches'
                   : 'members';
-          await FirebaseFirestore.instance
+          await appFirestore
               .collection(FirebaseCollections.clubs)
               .doc(clubId)
               .update({
@@ -311,10 +312,14 @@ class _ProfilRequestPageState extends State<ProfilRequestPage> {
           'status': 'refused',
           'respondedAt': FieldValue.serverTimestamp(),
         });
-        await FirebaseFirestore.instance
+        await appFirestore
             .collection(FirebaseCollections.users)
             .doc(widget.userId)
-            .set({'hasPendingRequest': false}, SetOptions(merge: true));
+            .set({
+              'hasPendingRequest': false,
+              if (widget.clubId != null)
+                'lastProcessedJoinRequestClubId': widget.clubId,
+            }, SetOptions(merge: true));
       }
 
       await requestRef.delete();

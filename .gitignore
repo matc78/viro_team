@@ -43,3 +43,7 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Clés de compte de service Firebase — ne jamais committer
+**/serviceAccountKey*.json
+**/service-account*.json

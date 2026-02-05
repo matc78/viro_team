@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:viro_team/utils/firestore_instance.dart';
 import 'package:viro_team/constants/firebase_collections.dart';
 import '../theme/viro_theme.dart';
 import '../utils/firebase_error_handler.dart';
@@ -152,7 +153,7 @@ class _ClubSearchWidgetState extends State<ClubSearchWidget> {
   }
 
   Widget _buildClubList() {
-    Query query = FirebaseFirestore.instance.collection(FirebaseCollections.clubs);
+    Query query = appFirestore.collection(FirebaseCollections.clubs);
     if (_sportFilter != 'Tous') {
       query = query.where('sport', isEqualTo: _sportFilter);
     }

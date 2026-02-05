@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:viro_team/utils/firestore_instance.dart';
 import 'package:flutter/material.dart';
 import 'package:viro_team/constants/firebase_collections.dart';
 import '../../theme/viro_theme.dart';
@@ -31,7 +32,7 @@ class _PlayerInfosPageState extends State<PlayerInfosPage> {
     for (var i = 0; i < clubIds.length; i += 10) {
       final batch = clubIds.sublist(i, math.min(i + 10, clubIds.length));
       try {
-        final snapshot = await FirebaseFirestore.instance
+        final snapshot = await appFirestore
             .collection(FirebaseCollections.clubs)
             .where(FieldPath.documentId, whereIn: batch)
             .get();
@@ -87,7 +88,7 @@ class _PlayerInfosPageState extends State<PlayerInfosPage> {
         automaticallyImplyLeading: false,
       ),
       body: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-        stream: FirebaseFirestore.instance
+        stream: appFirestore
             .collection(FirebaseCollections.users)
             .doc(userId)
             .snapshots(),
@@ -258,7 +259,7 @@ class _ClubDetailsPage extends StatelessWidget {
   const _ClubDetailsPage({required this.clubId});
 
   Future<Map<String, dynamic>> _fetchClubStats() async {
-    final db = FirebaseFirestore.instance;
+    final db = appFirestore;
 
     // 1. Infos du club (source de vérité pour admins/coachs)
     final clubDoc = await db.collection(FirebaseCollections.clubs).doc(clubId).get();
@@ -524,7 +525,7 @@ class _StaffListPage extends StatelessWidget {
         backgroundColor: ViroColors.background,
       ),
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: FirebaseFirestore.instance.collection(FirebaseCollections.users).snapshots(),
+        stream: appFirestore.collection(FirebaseCollections.users).snapshots(),
         builder: (context, snapshot) {
           if (!snapshot.hasData) return const Center(child: ViroLoader());
 
@@ -651,7 +652,7 @@ class _ClubAnnouncementsList extends StatelessWidget {
   // Récupère les teamIds et catégories de l'utilisateur pour tous ses clubs
   Future<Map<String, Map<String, dynamic>>> _getUserClubsInfo() async {
     try {
-      final userDoc = await FirebaseFirestore.instance
+      final userDoc = await appFirestore
           .collection(FirebaseCollections.users)
           .doc(userId)
           .get();
@@ -679,7 +680,7 @@ class _ClubAnnouncementsList extends StatelessWidget {
                     .toList() ??
                 [];
             if (categories.isEmpty && teamIds.isNotEmpty) {
-              final teamsSnapshot = await FirebaseFirestore.instance
+              final teamsSnapshot = await appFirestore
                   .collection(FirebaseCollections.clubs)
                   .doc(clubIdFromClub)
                   .collection(FirebaseCollections.teams)
@@ -873,7 +874,7 @@ class _ClubAnnouncementsList extends StatelessWidget {
           clubsInfo[clubId] ?? {'teamIds': [], 'categories': []};
 
       return StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
+        stream: appFirestore
             .collection(FirebaseCollections.clubs)
             .doc(clubId)
             .collection(FirebaseCollections.announcements)
@@ -895,7 +896,7 @@ class _ClubAnnouncementsList extends StatelessWidget {
         clubsInfo[firstClubId] ?? {'teamIds': [], 'categories': []};
 
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
+      stream: appFirestore
           .collection(FirebaseCollections.clubs)
           .doc(firstClubId)
           .collection(FirebaseCollections.announcements)
@@ -909,7 +910,7 @@ class _ClubAnnouncementsList extends StatelessWidget {
               clubsInfo[secondClubId] ?? {'teamIds': [], 'categories': []};
 
           return StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
+            stream: appFirestore
                 .collection(FirebaseCollections.clubs)
                 .doc(secondClubId)
                 .collection(FirebaseCollections.announcements)

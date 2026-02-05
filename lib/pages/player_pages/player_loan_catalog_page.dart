@@ -1,6 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:viro_team/utils/firestore_instance.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -74,7 +75,7 @@ class _PlayerLoanCatalogPageState extends State<PlayerLoanCatalogPage>
         i + 10 > clubIds.length ? clubIds.length : i + 10,
       );
       try {
-        final snapshot = await FirebaseFirestore.instance
+        final snapshot = await appFirestore
             .collection(FirebaseCollections.clubs)
             .where(FieldPath.documentId, whereIn: batch)
             .get();
@@ -174,7 +175,7 @@ class _PlayerLoanCatalogPageState extends State<PlayerLoanCatalogPage>
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance
+      stream: appFirestore
           .collection(FirebaseCollections.users)
           .doc(_currentUserId)
           .snapshots(),
@@ -259,7 +260,7 @@ class _CatalogTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance
+      stream: appFirestore
           .collection(FirebaseCollections.clubs)
           .doc(clubId)
           .collection(FirebaseCollections.equipmentCatalog)
@@ -301,7 +302,7 @@ class _CatalogTab extends StatelessWidget {
         }
 
         return FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-          future: FirebaseFirestore.instance
+          future: appFirestore
               .collection(FirebaseCollections.clubs)
               .doc(clubId)
               .get(),
@@ -622,7 +623,7 @@ class _EquipmentCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance
+      stream: appFirestore
           .collection(FirebaseCollections.clubs)
           .doc(clubId)
           .collection(FirebaseCollections.equipment)
@@ -1012,7 +1013,7 @@ class _RequestLoanDialogState extends State<_RequestLoanDialog> {
       final maxQuantity = widget.catalogData['maxQuantity'] as int? ?? 1;
 
       // 1. Récupérer tous les prêts actifs pour cet équipement
-      final activeLoansSnapshot = await FirebaseFirestore.instance
+      final activeLoansSnapshot = await appFirestore
           .collection(FirebaseCollections.clubs)
           .doc(widget.clubId)
           .collection(FirebaseCollections.equipmentLoans)
@@ -1044,7 +1045,7 @@ class _RequestLoanDialogState extends State<_RequestLoanDialog> {
       }
 
       // 2. Récupérer les demandes acceptées en attente de récupération
-      final acceptedRequestsSnapshot = await FirebaseFirestore.instance
+      final acceptedRequestsSnapshot = await appFirestore
           .collection(FirebaseCollections.clubs)
           .doc(widget.clubId)
           .collection(FirebaseCollections.equipmentLoanRequests)
@@ -1363,7 +1364,7 @@ class _RequestLoanDialogState extends State<_RequestLoanDialog> {
     setState(() => _isSubmitting = true);
 
     try {
-      final userDoc = await FirebaseFirestore.instance
+      final userDoc = await appFirestore
           .collection(FirebaseCollections.users)
           .doc(widget.currentUserId)
           .get();
@@ -1377,7 +1378,7 @@ class _RequestLoanDialogState extends State<_RequestLoanDialog> {
 
       if (_isModificationMode && widget.loanId != null) {
         // Demande de modification : envoi vers equipment_loan_change_requests
-        await FirebaseFirestore.instance
+        await appFirestore
             .collection(FirebaseCollections.clubs)
             .doc(widget.clubId)
             .collection(FirebaseCollections.equipmentLoanChangeRequests)
@@ -1410,7 +1411,7 @@ class _RequestLoanDialogState extends State<_RequestLoanDialog> {
         }
       } else {
         // Nouvelle demande de prêt
-        await FirebaseFirestore.instance
+        await appFirestore
             .collection(FirebaseCollections.clubs)
             .doc(widget.clubId)
             .collection(FirebaseCollections.equipmentLoanRequests)
@@ -2178,7 +2179,7 @@ class _MyLoansTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance
+      stream: appFirestore
           .collection(FirebaseCollections.clubs)
           .doc(clubId)
           .collection(FirebaseCollections.equipmentLoans)
@@ -2198,7 +2199,7 @@ class _MyLoansTab extends StatelessWidget {
         }
         final loanDocs = loansSnap.data?.docs ?? [];
         return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-          stream: FirebaseFirestore.instance
+          stream: appFirestore
               .collection(FirebaseCollections.clubs)
               .doc(clubId)
               .collection(FirebaseCollections.equipmentLoanChangeRequests)
@@ -2751,7 +2752,7 @@ Future<void> _showLoanCancellationRequestDialog(
   final reason = reasonController.text.trim();
   if (reason.isEmpty) return;
   try {
-    final existing = await FirebaseFirestore.instance
+    final existing = await appFirestore
         .collection(FirebaseCollections.clubs)
         .doc(clubId)
         .collection(FirebaseCollections.equipmentLoanChangeRequests)
@@ -2769,7 +2770,7 @@ Future<void> _showLoanCancellationRequestDialog(
       }
       return;
     }
-    final userDoc = await FirebaseFirestore.instance
+    final userDoc = await appFirestore
         .collection(FirebaseCollections.users)
         .doc(currentUserId)
         .get();
@@ -2780,7 +2781,7 @@ Future<void> _showLoanCancellationRequestDialog(
     if (playerName.isEmpty) {
       playerName = userData['email'] as String? ?? 'Joueur';
     }
-    await FirebaseFirestore.instance
+    await appFirestore
         .collection(FirebaseCollections.clubs)
         .doc(clubId)
         .collection(FirebaseCollections.equipmentLoanChangeRequests)
@@ -2851,7 +2852,7 @@ Future<void> _showLoanModificationRequestDialog(
   final loanId = loanData['id'] as String?;
   final equipmentId = loanData['equipmentId'] as String?;
   if (loanId == null || equipmentId == null) return;
-  final existing = await FirebaseFirestore.instance
+  final existing = await appFirestore
       .collection(FirebaseCollections.clubs)
       .doc(clubId)
       .collection(FirebaseCollections.equipmentLoanChangeRequests)
@@ -2867,7 +2868,7 @@ Future<void> _showLoanModificationRequestDialog(
     );
     return;
   }
-  final clubDoc = await FirebaseFirestore.instance
+  final clubDoc = await appFirestore
       .collection(FirebaseCollections.clubs)
       .doc(clubId)
       .get();
@@ -2886,7 +2887,7 @@ Future<void> _showLoanModificationRequestDialog(
             .map((k) => int.tryParse(k) ?? 0)
             .where((e) => e >= 1 && e <= 7)
             .toSet();
-  final catalogDoc = await FirebaseFirestore.instance
+  final catalogDoc = await appFirestore
       .collection(FirebaseCollections.clubs)
       .doc(clubId)
       .collection(FirebaseCollections.equipmentCatalog)
@@ -2940,7 +2941,7 @@ class _MyRequestsTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance
+      stream: appFirestore
           .collection(FirebaseCollections.clubs)
           .doc(clubId)
           .collection(FirebaseCollections.equipmentLoanRequests)
@@ -3010,7 +3011,7 @@ class _MyRequestsTab extends StatelessWidget {
             return bCreated.compareTo(aCreated);
           });
         return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-          stream: FirebaseFirestore.instance
+          stream: appFirestore
               .collection(FirebaseCollections.clubs)
               .doc(clubId)
               .collection(FirebaseCollections.equipmentLoanChangeRequests)

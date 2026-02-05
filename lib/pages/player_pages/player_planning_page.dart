@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:viro_team/utils/firestore_instance.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -70,7 +71,7 @@ class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance
+      stream: appFirestore
           .collection(FirebaseCollections.users)
           .doc(_currentUserId)
           .snapshots(),
@@ -184,7 +185,7 @@ class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
 
     // Créer les streams pour chaque club
     final streams = clubIds.map((clubId) {
-      return FirebaseFirestore.instance
+      return appFirestore
           .collection(FirebaseCollections.clubs)
           .doc(clubId)
           .collection(FirebaseCollections.events)
@@ -362,7 +363,7 @@ class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
     final List<Map<String, dynamic>> results = [];
     for (final clubId in clubIds) {
       try {
-        final doc = await FirebaseFirestore.instance
+        final doc = await appFirestore
             .collection(FirebaseCollections.clubs)
             .doc(clubId)
             .get();
@@ -421,7 +422,7 @@ class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
     String status,
   ) async {
     try {
-      await FirebaseFirestore.instance
+      await appFirestore
           .collection(FirebaseCollections.clubs)
           .doc(clubId)
           .collection(FirebaseCollections.events)
@@ -462,7 +463,7 @@ class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
 
     // Récupérer le nom du club
     return FutureBuilder<DocumentSnapshot>(
-      future: FirebaseFirestore.instance.collection(FirebaseCollections.clubs).doc(clubId).get(),
+      future: appFirestore.collection(FirebaseCollections.clubs).doc(clubId).get(),
       builder: (context, clubSnap) {
         final clubData = clubSnap.data?.data() as Map<String, dynamic>?;
         final clubName = clubData?['name'] as String? ?? "Club";

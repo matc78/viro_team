@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 /// Utilisation:
 /// ```dart
 /// PaginatedListWidget<DocumentSnapshot>(
-///   query: FirebaseFirestore.instance
+///   query: appFirestore
 ///       .collection('users')
 ///       .orderBy('lastName')
 ///       .limit(20),

@@ -1,12 +1,13 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../constants/firebase_collections.dart';
+import 'package:viro_team/utils/firestore_instance.dart';
 import '../models/user_model.dart';
 import '../utils/app_logger.dart';
 import '../utils/firebase_helpers.dart';
 
 /// Service pour gérer les opérations liées aux utilisateurs
 class UserService {
-  final FirebaseFirestore _db = FirebaseFirestore.instance;
+  final FirebaseFirestore _db = appFirestore;
 
   /// Récupère un utilisateur par son ID
   Future<UserModel?> getUserById(String userId) async {

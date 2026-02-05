@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:viro_team/utils/firestore_instance.dart';
 import 'package:flutter/material.dart';
 import '../../constants/firebase_collections.dart';
 import '../../theme/viro_theme.dart';
@@ -83,7 +84,7 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
                 ),
               ),
               StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                stream: FirebaseFirestore.instance
+                stream: appFirestore
                     .collection(FirebaseCollections.clubs)
                     .doc(widget.clubId)
                     .collection(FirebaseCollections.teams)
@@ -190,7 +191,7 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
                 child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                   // Récupérer tous les utilisateurs et filtrer côté client
                   // car la nouvelle structure utilise roles/activeContext
-                  stream: FirebaseFirestore.instance
+                  stream: appFirestore
                       .collection(FirebaseCollections.users)
                       .snapshots(),
                   builder: (context, snapshot) {
@@ -684,7 +685,7 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
     final startOfDay = DateTime.utc(now.year, now.month, now.day);
     final startOfDayMs = startOfDay.millisecondsSinceEpoch;
     // Une seule clause where pour éviter l'index composite ; filtre par date côté client
-    final snap = await FirebaseFirestore.instance
+    final snap = await appFirestore
         .collection(FirebaseCollections.clubs)
         .doc(widget.clubId)
         .collection(FirebaseCollections.memberRemovals)
@@ -705,7 +706,7 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
     String role,
   ) async {
     try {
-      await FirebaseFirestore.instance
+      await appFirestore
           .collection(FirebaseCollections.clubs)
           .doc(widget.clubId)
           .collection(FirebaseCollections.memberRemovals)
@@ -751,7 +752,7 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
 
     setState(() => _isRemoving = true);
     try {
-      final firestore = FirebaseFirestore.instance;
+      final firestore = appFirestore;
 
       if (role == 'player') {
         await _removePlayerFromClub(firestore, userId, data);
@@ -915,6 +916,7 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
         }
       }
     }
+    updates['_adminClubId'] = clubId;
     await firestore
         .collection(FirebaseCollections.users)
         .doc(uid)
@@ -978,6 +980,7 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
         }
       }
     }
+    updates['_adminClubId'] = clubId;
     await firestore
         .collection(FirebaseCollections.users)
         .doc(uid)
@@ -1038,6 +1041,7 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
         }
       }
     }
+    updates['_adminClubId'] = clubId;
     await firestore
         .collection(FirebaseCollections.users)
         .doc(uid)
@@ -1051,7 +1055,7 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
   }) async {
     setState(() => _isRemoving = true);
     try {
-      final firestore = FirebaseFirestore.instance;
+      final firestore = appFirestore;
       final clubId = widget.clubId;
       final roles = Map<String, dynamic>.from(data['roles'] as Map? ?? {});
 
@@ -1110,6 +1114,7 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
       final updates = <String, dynamic>{
         'roles': roles,
         if (newActiveContext != null) 'activeContext': newActiveContext,
+        '_adminClubId': clubId,
       };
       await firestore
           .collection(FirebaseCollections.users)

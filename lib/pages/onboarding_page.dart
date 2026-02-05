@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:viro_team/utils/firestore_instance.dart';
 import 'package:flutter/material.dart';
 import 'package:viro_team/constants/firebase_collections.dart';
 import '../theme/viro_theme.dart';
@@ -45,7 +46,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
       if (mounted) setState(() => _initialCheckDone = true);
       return;
     }
-    final doc = await FirebaseFirestore.instance
+    final doc = await appFirestore
         .collection(FirebaseCollections.users)
         .doc(user.uid)
         .get();
@@ -113,7 +114,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
         'clubId': firstClubId,
       };
 
-      await FirebaseFirestore.instance.collection(FirebaseCollections.users).doc(user.uid).set({
+      await appFirestore.collection(FirebaseCollections.users).doc(user.uid).set({
         'activeContext': newActiveContext,
         'clubId': firstClubId,
       }, SetOptions(merge: true));
@@ -139,7 +140,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
   Future<void> _loadUserPhone() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
-    final doc = await FirebaseFirestore.instance
+    final doc = await appFirestore
         .collection(FirebaseCollections.users)
         .doc(user.uid)
         .get();
@@ -177,12 +178,12 @@ class _OnboardingPageState extends State<OnboardingPage> {
     try {
       if (user == null) throw Exception("Utilisateur non connecté");
 
-      final requestsRef = FirebaseFirestore.instance.collection(
+      final requestsRef = appFirestore.collection(
         'join_requests',
       );
 
       // Récupérer les infos utilisateur
-      final userDoc = await FirebaseFirestore.instance
+      final userDoc = await appFirestore
           .collection(FirebaseCollections.users)
           .doc(user.uid)
           .get();
@@ -238,7 +239,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
         'lastClubRequested': _selectedClubName,
         'phone': _phoneController.text.trim(),
       };
-      await FirebaseFirestore.instance
+      await appFirestore
           .collection(FirebaseCollections.users)
           .doc(user.uid)
           .set(userUpdateData, SetOptions(merge: true));

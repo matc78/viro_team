@@ -1,6 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:viro_team/utils/firestore_instance.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../constants/firebase_collections.dart';
@@ -21,7 +22,7 @@ class ProfilDisplayPage extends StatelessWidget {
       return {'hasAccess': true, 'role': null};
     }
 
-    final currentUserDoc = await FirebaseFirestore.instance
+    final currentUserDoc = await appFirestore
         .collection(FirebaseCollections.users)
         .doc(currentUid)
         .get();
@@ -46,7 +47,7 @@ class ProfilDisplayPage extends StatelessWidget {
     final viewerClubIds = _getViewerPlayerClubIds(currentUserData);
     if (viewerClubIds.isEmpty) return {'hasAccess': false, 'role': finalRole};
 
-    final viewedUserDoc = await FirebaseFirestore.instance
+    final viewedUserDoc = await appFirestore
         .collection(FirebaseCollections.users)
         .doc(userId)
         .get();
@@ -111,7 +112,7 @@ class ProfilDisplayPage extends StatelessWidget {
     if (currentUid == null) return false;
 
     // Récupérer les données de l'utilisateur actuel
-    final currentUserDoc = await FirebaseFirestore.instance
+    final currentUserDoc = await appFirestore
         .collection(FirebaseCollections.users)
         .doc(currentUid)
         .get();
@@ -156,7 +157,7 @@ class ProfilDisplayPage extends StatelessWidget {
     if (role == 'coach') {
       try {
         // Récupérer toutes les équipes où le coach est dans coachIds
-        final teamsSnapshot = await FirebaseFirestore.instance
+        final teamsSnapshot = await appFirestore
             .collection(FirebaseCollections.clubs)
             .doc(clubId)
             .collection(FirebaseCollections.teams)
@@ -229,7 +230,7 @@ class ProfilDisplayPage extends StatelessWidget {
 
               try {
                 // Récupérer les données actuelles de l'utilisateur
-                final userDoc = await FirebaseFirestore.instance
+                final userDoc = await appFirestore
                     .collection(FirebaseCollections.users)
                     .doc(userId)
                     .get();
@@ -261,7 +262,7 @@ class ProfilDisplayPage extends StatelessWidget {
                 final updatedRoles = Map<String, dynamic>.from(roles);
                 updatedRoles['player'] = {...playerData, 'clubs': clubs};
 
-                await FirebaseFirestore.instance
+                await appFirestore
                     .collection(FirebaseCollections.users)
                     .doc(userId)
                     .update({'roles': updatedRoles});
@@ -296,7 +297,7 @@ class ProfilDisplayPage extends StatelessWidget {
         elevation: 0,
       ),
       body: StreamBuilder<DocumentSnapshot>(
-        stream: FirebaseFirestore.instance
+        stream: appFirestore
             .collection(FirebaseCollections.users)
             .doc(userId)
             .snapshots(),
@@ -930,7 +931,7 @@ class ProfilDisplayPage extends StatelessWidget {
       final clubInfo = entry.value;
 
       try {
-        final clubDoc = await FirebaseFirestore.instance
+        final clubDoc = await appFirestore
             .collection(FirebaseCollections.clubs)
             .doc(clubId)
             .get();
@@ -1058,7 +1059,7 @@ Future<List<String>> _fetchClubLogos(Map<String, dynamic> data) async {
   final clubIds = clubIdsSet.toList();
   for (final id in clubIds) {
     try {
-      final doc = await FirebaseFirestore.instance
+      final doc = await appFirestore
           .collection(FirebaseCollections.clubs)
           .doc(id)
           .get();
@@ -1072,7 +1073,7 @@ Future<List<String>> _fetchClubLogos(Map<String, dynamic> data) async {
 }
 
 Future<List<String>> _fetchTeams(String clubId, String uid) async {
-  final db = FirebaseFirestore.instance;
+  final db = appFirestore;
   final playerTeams = await db
       .collection(FirebaseCollections.clubs)
       .doc(clubId)

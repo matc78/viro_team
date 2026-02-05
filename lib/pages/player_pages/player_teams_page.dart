@@ -1,6 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:viro_team/utils/firestore_instance.dart';
 import 'package:flutter/material.dart';
 import 'package:viro_team/constants/firebase_collections.dart';
 import '../../theme/viro_theme.dart';
@@ -67,7 +68,7 @@ class _PlayerTeamsPageState extends State<PlayerTeamsPage> {
       body: Stack(
         children: [
           StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-            stream: FirebaseFirestore.instance
+            stream: appFirestore
                 .collection(FirebaseCollections.users)
                 .doc(_currentUserId)
                 .snapshots(),
@@ -124,7 +125,7 @@ class _PlayerTeamsPageState extends State<PlayerTeamsPage> {
   Widget _buildTeamsList(List<String> clubIds) {
     // Créer les streams pour chaque club
     final streams = clubIds.map((clubId) {
-      return FirebaseFirestore.instance
+      return appFirestore
           .collection(FirebaseCollections.clubs)
           .doc(clubId)
           .collection(FirebaseCollections.teams)
@@ -251,7 +252,7 @@ class _PlayerTeamsPageState extends State<PlayerTeamsPage> {
         final teamData = teamInfo['teamData'] as Map<String, dynamic>;
         final clubId = teamInfo['clubId'] as String;
         return FutureBuilder<DocumentSnapshot>(
-          future: FirebaseFirestore.instance
+          future: appFirestore
               .collection(FirebaseCollections.clubs)
               .doc(clubId)
               .get(),
