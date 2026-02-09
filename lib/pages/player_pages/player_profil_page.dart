@@ -14,6 +14,7 @@ import '../../constants/firebase_collections.dart';
 import '../../theme/viro_theme.dart';
 import '../../widget/viro_loader.dart';
 import '../../utils/app_logger.dart';
+import '../../utils/firebase_error_handler.dart';
 import '../auth_page.dart';
 import '../add_profile_page.dart';
 import '../notification_settings_page.dart';
@@ -485,7 +486,7 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
                 if (!context.mounted) return;
                 Navigator.pop(context);
               } catch (e) {
-                _showSnack("Impossible de mettre à jour le nom : $e");
+                _showSnack(FirebaseErrorHandler.getErrorMessage(e));
               } finally {
                 if (mounted) setState(() => _isSaving = false);
               }
@@ -532,9 +533,7 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
                 );
               } on FirebaseAuthException catch (e) {
                 _showSnack(
-                  e.code == 'requires-recent-login'
-                      ? "Reconnecte-toi puis réessaie."
-                      : (e.message ?? "Erreur lors du changement d'email"),
+                  FirebaseErrorHandler.getErrorMessage(e),
                 );
               } finally {
                 if (mounted) setState(() => _isSaving = false);
@@ -672,12 +671,7 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
                   context: {'userId': user.uid, 'errorCode': e.code},
                 );
                 _showSnack(
-                  e.code == 'wrong-password'
-                      ? "Mot de passe actuel incorrect."
-                      : (e.code == 'requires-recent-login'
-                            ? "Reconnecte-toi puis réessaie."
-                            : (e.message ??
-                                  "Erreur lors du changement de mot de passe")),
+                  FirebaseErrorHandler.getErrorMessage(e),
                 );
               } finally {
                 if (mounted) setState(() => _isSaving = false);
@@ -851,14 +845,14 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
                     content: Text(
                       e.code == 'requires-recent-login'
                           ? "Merci de te reconnecter puis de réessayer."
-                          : (e.message ?? "Suppression impossible"),
+                          : FirebaseErrorHandler.getErrorMessage(e),
                     ),
                   ),
                 );
               } catch (e) {
                 if (!context.mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text("Suppression impossible : $e")),
+                  SnackBar(content: Text(FirebaseErrorHandler.getErrorMessage(e))),
                 );
               }
             },
@@ -1170,7 +1164,7 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
         context: {'clubId': clubId, 'userId': uid},
       );
       if (mounted) {
-        _showSnack("Impossible de quitter le club : $e");
+        _showSnack(FirebaseErrorHandler.getErrorMessage(e));
       }
     } finally {
       if (mounted) setState(() => _isSaving = false);
@@ -1557,7 +1551,7 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Impossible de changer l'avatar : $e")),
+        SnackBar(content: Text(FirebaseErrorHandler.getErrorMessage(e))),
       );
     } finally {
       if (mounted) {

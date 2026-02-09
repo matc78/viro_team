@@ -4,6 +4,7 @@ import 'package:viro_team/utils/firestore_instance.dart';
 import '../../constants/firebase_collections.dart';
 import '../../theme/viro_theme.dart';
 import '../../utils/app_logger.dart';
+import '../../utils/firebase_error_handler.dart';
 import '../../widget/user_display_tile.dart';
 
 class ProfilRequestPage extends StatefulWidget {
@@ -347,7 +348,7 @@ class _ProfilRequestPageState extends State<ProfilRequestPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text("Action impossible : $e")));
+      ).showSnackBar(SnackBar(content: Text(FirebaseErrorHandler.getErrorMessage(e))));
     } finally {
       if (mounted) setState(() => _isProcessing = false);
     }

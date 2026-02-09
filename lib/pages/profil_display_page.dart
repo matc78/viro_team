@@ -8,6 +8,7 @@ import '../../constants/firebase_collections.dart';
 import '../../theme/viro_theme.dart';
 import '../../widget/viro_loader.dart';
 import '../../utils/firebase_helpers.dart';
+import '../../utils/firebase_error_handler.dart';
 
 class ProfilDisplayPage extends StatelessWidget {
   final String userId;
@@ -276,7 +277,7 @@ class ProfilDisplayPage extends StatelessWidget {
                 if (context.mounted) {
                   ScaffoldMessenger.of(
                     context,
-                  ).showSnackBar(SnackBar(content: Text("Erreur : $e")));
+                  ).showSnackBar(SnackBar(content: Text(FirebaseErrorHandler.getErrorMessage(e))));
                 }
               }
             },

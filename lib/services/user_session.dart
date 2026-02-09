@@ -100,6 +100,50 @@ class UserSession extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Si l'utilisateur a des rôles admin/coach mais pas de contexte actif valide,
+  /// restaure activeContext sur le premier profil disponible (priorité: admin_fondateur > admin > coach).
+  /// À appeler après reconnexion pour éviter d'afficher la mauvaise home.
+  Future<bool> restoreActiveContextIfNeeded() async {
+    final u = _currentUser;
+    if (u == null || u.activeContext?.isValid == true) return false;
+
+    String? role;
+    String? clubId;
+    if (u.roles.adminFondateur.isNotEmpty) {
+      role = 'admin_fondateur';
+      clubId = u.roles.adminFondateur.first;
+    } else if (u.roles.admin.isNotEmpty) {
+      role = 'admin';
+      clubId = u.roles.admin.first;
+    } else if (u.roles.coach.isNotEmpty) {
+      role = 'coach';
+      clubId = u.roles.coach.first.clubId;
+    }
+    if (role == null || clubId == null || clubId.isEmpty) return false;
+
+    try {
+      await appFirestore
+          .collection(FirebaseCollections.users)
+          .doc(u.uid)
+          .update({
+        'activeContext': {'role': role, 'clubId': clubId},
+      });
+      AppLogger.instance.info('Contexte actif restauré', {
+        'userId': u.uid,
+        'role': role,
+        'clubId': clubId,
+      });
+      return true;
+    } catch (e) {
+      AppLogger.instance.error(
+        'Erreur restauration contexte actif',
+        error: e,
+        context: {'userId': u.uid},
+      );
+      return false;
+    }
+  }
+
   /// Change le contexte actif (role + clubId)
   /// Met à jour activeContext dans Firestore
   Future<bool> switchContext(String role, String clubId) async {

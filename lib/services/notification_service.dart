@@ -21,6 +21,9 @@ final class NotificationService {
   RemoteMessage? _pendingInitialMessage;
   bool _initialized = false;
 
+  /// Évite d'appeler requestPermission() en parallèle (Firebase lève une exception sinon).
+  Future<void>? _permissionRequest;
+
   StreamSubscription<RemoteMessage>? _onMessageOpenedAppSubscription;
   StreamSubscription<RemoteMessage>? _onMessageSubscription;
   StreamSubscription<String?>? _onTokenRefreshSubscription;
@@ -71,18 +74,35 @@ final class NotificationService {
 
   /// À appeler lorsque l'utilisateur arrive sur une home page (après choix onboarding).
   /// Affiche la demande de permission (iOS / Android 13+), puis enregistre le token si [uid] est fourni.
+  /// Si une demande est déjà en cours, on attend sa fin au lieu d'en lancer une nouvelle.
   Future<void> requestPermissionIfNeeded(String? uid) async {
-    final settings = await FirebaseMessaging.instance.requestPermission(
-      alert: true,
-      badge: true,
-      sound: true,
-    );
-    if (settings.authorizationStatus == AuthorizationStatus.denied) {
-      AppLogger.instance.info('FCM: permissions refusées');
+    if (_permissionRequest != null) {
+      await _permissionRequest;
+      if (uid != null && uid.isNotEmpty) {
+        await updateTokenForUser(uid);
+      }
       return;
     }
-    if (uid != null && uid.isNotEmpty) {
-      await updateTokenForUser(uid);
+    Future<void> run() async {
+      final settings = await FirebaseMessaging.instance.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+      if (settings.authorizationStatus == AuthorizationStatus.denied) {
+        AppLogger.instance.info('FCM: permissions refusées');
+        return;
+      }
+      if (uid != null && uid.isNotEmpty) {
+        await updateTokenForUser(uid);
+      }
+    }
+
+    _permissionRequest = run();
+    try {
+      await _permissionRequest;
+    } finally {
+      _permissionRequest = null;
     }
   }
 

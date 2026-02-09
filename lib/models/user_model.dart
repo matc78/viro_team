@@ -45,6 +45,17 @@ class UserModel {
     this.hasPendingRequest = false,
   });
 
+  /// Parse une liste de chaînes depuis Firestore (List ou Map avec clés "0","1",...).
+  static List<String> _parseStringList(dynamic value) {
+    if (value is List) {
+      return value.whereType<String>().toList();
+    }
+    if (value is Map) {
+      return value.values.whereType<String>().toList();
+    }
+    return [];
+  }
+
   /// Parse depuis un document Firestore
   factory UserModel.fromFirestore(DocumentSnapshot<Map<String, dynamic>> doc) {
     final data = doc.data() ?? {};
@@ -118,21 +129,12 @@ class UserModel {
       }
     }
 
-    // Admin : liste de clubIds
-    final List<String> adminClubIds = [];
-    if (rolesData['admin'] is List) {
-      adminClubIds.addAll(
-        (rolesData['admin'] as List).whereType<String>(),
-      );
-    }
+    // Admin : liste de clubIds (Firestore peut renvoyer List ou Map avec clés "0","1",...)
+    final List<String> adminClubIds = _parseStringList(rolesData['admin']);
 
     // Admin fondateur : liste de clubIds (clubs fondés)
-    final List<String> adminFondateurClubIds = [];
-    if (rolesData['admin_fondateur'] is List) {
-      adminFondateurClubIds.addAll(
-        (rolesData['admin_fondateur'] as List).whereType<String>(),
-      );
-    }
+    final List<String> adminFondateurClubIds =
+        _parseStringList(rolesData['admin_fondateur']);
 
     final hasPending = data['hasPendingRequest'] == true;
 

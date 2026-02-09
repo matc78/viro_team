@@ -6,6 +6,7 @@ import '../../constants/firebase_collections.dart';
 import '../../theme/viro_theme.dart';
 import '../../utils/app_logger.dart';
 import '../../utils/firebase_helpers.dart';
+import '../../utils/firebase_error_handler.dart';
 import '../../widget/user_display_tile.dart';
 import '../profil_display_page.dart';
 
@@ -778,7 +779,7 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text("Impossible de retirer : $e")));
+        ).showSnackBar(SnackBar(content: Text(FirebaseErrorHandler.getErrorMessage(e))));
       }
     } finally {
       if (mounted) setState(() => _isRemoving = false);
@@ -1140,7 +1141,7 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Impossible de changer le rôle : $e")),
+          SnackBar(content: Text(FirebaseErrorHandler.getErrorMessage(e))),
         );
       }
     } finally {

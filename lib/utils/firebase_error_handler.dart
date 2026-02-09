@@ -97,7 +97,7 @@ class FirebaseErrorHandler {
               errorMessage.contains('unknownhostexception')) {
             return 'Problème de connexion internet. Vérifiez votre connexion réseau et réessayez.';
           }
-          return error.message ?? 'Une erreur est survenue : ${error.code}';
+          return 'Une erreur est survenue. Veuillez réessayer.';
       }
     }
     if (error is FirebaseAuthException) {
@@ -106,6 +106,8 @@ class FirebaseErrorHandler {
           return 'Aucun utilisateur trouvé avec cet email.';
         case 'wrong-password':
           return 'Mot de passe incorrect.';
+        case 'invalid-credential':
+          return 'Identifiant ou mot de passe incorrect. Veuillez réessayer.';
         case 'email-already-in-use':
           return 'Cet email est déjà utilisé.';
         case 'weak-password':
@@ -120,8 +122,10 @@ class FirebaseErrorHandler {
           return 'Cette opération n\'est pas autorisée.';
         case 'network-request-failed':
           return 'Erreur de connexion réseau. Vérifiez votre connexion internet.';
+        case 'requires-recent-login':
+          return 'Reconnectez-vous puis réessayez.';
         default:
-          return error.message ?? 'Erreur d\'authentification : ${error.code}';
+          return 'Une erreur est survenue lors de la connexion. Veuillez réessayer.';
       }
     }
 

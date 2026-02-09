@@ -1283,7 +1283,7 @@ class _RequestLoanDialogState extends State<_RequestLoanDialog> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text("Erreur de validation: $e"),
+            content: Text(FirebaseErrorHandler.getErrorMessage(e)),
             backgroundColor: Colors.red,
           ),
         );

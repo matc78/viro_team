@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:viro_team/utils/firestore_instance.dart';
+import 'package:viro_team/utils/firebase_error_handler.dart';
 import 'package:flutter/material.dart';
 import 'package:viro_team/constants/firebase_collections.dart';
 import '../theme/viro_theme.dart';
@@ -253,7 +254,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text("Erreur : $e")));
+        ).showSnackBar(SnackBar(content: Text(FirebaseErrorHandler.getErrorMessage(e))));
       }
     } finally {
       if (mounted) setState(() => _isUpdating = false);

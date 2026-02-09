@@ -325,6 +325,15 @@ class _AuthGate extends StatefulWidget {
 class _AuthGateState extends State<_AuthGate> {
   Timer? _retryTimer;
   int _userDocRetryCount = 0;
+  bool _restoreRequested = false;
+
+  @override
+  void didUpdateWidget(covariant _AuthGate oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.currentUserId != oldWidget.currentUserId) {
+      _restoreRequested = false;
+    }
+  }
 
   @override
   void dispose() {
@@ -400,6 +409,26 @@ class _AuthGateState extends State<_AuthGate> {
             final activeContext = currentUser.activeContext;
             final activeRole = activeContext?.role;
             final activeClubId = activeContext?.clubId;
+
+            final hasAdminOrCoachRole =
+                currentUser.roles.adminFondateur.isNotEmpty ||
+                currentUser.roles.admin.isNotEmpty ||
+                currentUser.roles.coach.isNotEmpty;
+
+            // Contexte actif manquant alors que l'utilisateur a un rôle admin/coach : on le restaure (ex. après reconnexion).
+            if (hasAdminOrCoachRole &&
+                (activeContext == null || !activeContext.isValid)) {
+              if (!_restoreRequested) {
+                _restoreRequested = true;
+                WidgetsBinding.instance.addPostFrameCallback((_) async {
+                  if (!mounted) return;
+                  await context.read<UserSession>().restoreActiveContextIfNeeded();
+                });
+              }
+              return const Scaffold(
+                body: Center(child: ViroLoader(size: 50)),
+              );
+            }
 
             if (!currentUser.hasAnyRole && activeContext == null) {
               return const OnboardingPage();

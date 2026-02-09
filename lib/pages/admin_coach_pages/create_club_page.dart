@@ -6,6 +6,7 @@ import 'package:viro_team/constants/firebase_collections.dart';
 import '../../theme/viro_theme.dart';
 import '../../widget/viro_loader.dart';
 import '../../utils/app_logger.dart';
+import '../../utils/firebase_error_handler.dart';
 import 'admin_home_page.dart';
 
 class CreateClubPage extends StatefulWidget {
@@ -157,7 +158,7 @@ class _CreateClubPageState extends State<CreateClubPage> {
         },
       );
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Erreur lors de la création : $e")),
+        SnackBar(content: Text(FirebaseErrorHandler.getErrorMessage(e))),
       );
     } finally {
       if (mounted) setState(() => _isLoading = false);

@@ -6,6 +6,7 @@ import 'package:viro_team/constants/firebase_collections.dart';
 import '../../theme/viro_theme.dart';
 import '../../utils/app_logger.dart';
 import '../../utils/firebase_helpers.dart';
+import '../../utils/firebase_error_handler.dart';
 import '../../widget/user_display_tile.dart';
 import '../../widget/viro_loader.dart';
 import '../profil_display_page.dart';
@@ -192,7 +193,7 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
                           if (mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
-                                content: Text("Erreur lors de l'ajout : $e"),
+                                content: Text(FirebaseErrorHandler.getErrorMessage(e)),
                               ),
                             );
                           }

@@ -585,7 +585,7 @@ class _AdminTeamsPageState extends State<AdminTeamsPage> {
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Erreur lors de la suppression : $e")),
+          SnackBar(content: Text(FirebaseErrorHandler.getErrorMessage(e))),
         );
       }
     } finally {

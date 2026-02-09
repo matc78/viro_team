@@ -14,6 +14,7 @@ import '../../constants/firebase_collections.dart';
 import '../../theme/viro_theme.dart';
 import '../../utils/equipment_helpers.dart';
 import '../../utils/firebase_helpers.dart';
+import '../../utils/firebase_error_handler.dart';
 
 class AdminEquipmentPage extends StatefulWidget {
   final String clubId;
@@ -134,9 +135,13 @@ class _InventoryTab extends StatelessWidget {
         }
         if (snap.hasError) {
           return Center(
-            child: Text(
-              "Erreur : ${snap.error}",
-              style: const TextStyle(color: ViroColors.error),
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Text(
+                FirebaseErrorHandler.getErrorMessage(snap.error),
+                style: const TextStyle(color: ViroColors.error),
+                textAlign: TextAlign.center,
+              ),
             ),
           );
         }
@@ -748,7 +753,7 @@ class _AddEquipmentDialogState extends State<_AddEquipmentDialog> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text("Erreur : $e")));
+        ).showSnackBar(SnackBar(content: Text(FirebaseErrorHandler.getErrorMessage(e))));
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -1514,7 +1519,7 @@ class _EditEquipmentSheetState extends State<_EditEquipmentSheet> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text("Erreur : $e")));
+        ).showSnackBar(SnackBar(content: Text(FirebaseErrorHandler.getErrorMessage(e))));
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -2090,7 +2095,7 @@ class _EditEquipmentSheetState extends State<_EditEquipmentSheet> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text("Erreur : $e")));
+        ).showSnackBar(SnackBar(content: Text(FirebaseErrorHandler.getErrorMessage(e))));
       }
     } finally {
       if (mounted) setState(() => _saving = false);

@@ -498,7 +498,7 @@ class _LoanCatalogSection extends StatelessWidget {
                       } catch (e) {
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text("Erreur : $e")),
+                            SnackBar(content: Text(FirebaseErrorHandler.getErrorMessage(e))),
                           );
                         }
                       }
@@ -700,7 +700,7 @@ class _LoanAllowedDaysDialogState extends State<_LoanAllowedDaysDialog> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text("Erreur : $e")));
+        ).showSnackBar(SnackBar(content: Text(FirebaseErrorHandler.getErrorMessage(e))));
       }
     }
   }
@@ -1472,7 +1472,7 @@ class _CatalogItemDialogState extends State<_CatalogItemDialog> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text("Erreur : $e")));
+        ).showSnackBar(SnackBar(content: Text(FirebaseErrorHandler.getErrorMessage(e))));
       }
     } finally {
       if (mounted) {
@@ -3784,7 +3784,7 @@ class _LoanRequestCard extends StatelessWidget {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text("Erreur : $e"),
+            content: Text(FirebaseErrorHandler.getErrorMessage(e)),
             backgroundColor: ViroColors.error,
           ),
         );
@@ -3881,7 +3881,7 @@ class _LoanRequestCard extends StatelessWidget {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text("Erreur : $e"),
+            content: Text(FirebaseErrorHandler.getErrorMessage(e)),
             backgroundColor: ViroColors.error,
           ),
         );

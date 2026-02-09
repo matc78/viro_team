@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:viro_team/services/notification_preferences_service.dart';
 import 'package:viro_team/theme/viro_theme.dart';
+import 'package:viro_team/utils/firebase_error_handler.dart';
 import 'package:viro_team/widget/viro_loader.dart';
 
 /// Page permettant d'activer ou désactiver les notifications par type.
@@ -93,7 +94,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
         setState(() => _enablingAll = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text("Impossible d'enregistrer : $e"),
+            content: Text(FirebaseErrorHandler.getErrorMessage(e)),
             backgroundColor: ViroColors.error,
           ),
         );
@@ -119,7 +120,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
         setState(() => _updating.remove(type));
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text("Impossible d'enregistrer : $e"),
+            content: Text(FirebaseErrorHandler.getErrorMessage(e)),
             backgroundColor: ViroColors.error,
           ),
         );

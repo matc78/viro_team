@@ -6,6 +6,7 @@ import 'package:viro_team/constants/firebase_collections.dart';
 import 'package:intl/intl.dart';
 import '../../theme/viro_theme.dart';
 import '../../utils/firebase_helpers.dart';
+import '../../utils/firebase_error_handler.dart';
 import '../../widget/user_display_tile.dart';
 import '../../widget/viro_loader.dart';
 
@@ -91,7 +92,7 @@ class _AdminClubCommunicationPageState
     } catch (e) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text("Erreur lors de l'envoi : $e")));
+      ).showSnackBar(SnackBar(content: Text(FirebaseErrorHandler.getErrorMessage(e))));
     } finally {
       if (mounted) setState(() => _isSending = false);
     }

@@ -18,6 +18,7 @@ import '../../theme/viro_theme.dart';
 import '../../widget/viro_loader.dart';
 import '../../utils/app_logger.dart';
 import '../../utils/firebase_helpers.dart';
+import '../../utils/firebase_error_handler.dart';
 import '../../services/user_session.dart';
 import '../auth_page.dart';
 import '../onboarding_page.dart';
@@ -616,7 +617,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text("Erreur : $e"),
+                        content: Text(FirebaseErrorHandler.getErrorMessage(e)),
                       ),
                     );
                   }
@@ -768,7 +769,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
                 );
                 ScaffoldMessenger.of(
                   context,
-                ).showSnackBar(SnackBar(content: Text("Erreur : $e")));
+                ).showSnackBar(SnackBar(content: Text(FirebaseErrorHandler.getErrorMessage(e))));
               }
             },
             child: const Text("Enregistrer"),
@@ -1122,7 +1123,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
       if (mounted) {
         Navigator.of(context).pop();
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Erreur lors de la suppression du club : $e")),
+          SnackBar(content: Text(FirebaseErrorHandler.getErrorMessage(e))),
         );
       }
       AppLogger.instance.error(
@@ -1363,7 +1364,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
       if (mounted) {
         Navigator.of(context).pop();
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Erreur lors du transfert : $e")),
+          SnackBar(content: Text(FirebaseErrorHandler.getErrorMessage(e))),
         );
       }
       AppLogger.instance.error(
@@ -1445,7 +1446,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
           );
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("Erreur suppression compte : ${e.message}")),
+            SnackBar(content: Text(FirebaseErrorHandler.getErrorMessage(e))),
           );
         }
       }
@@ -1454,7 +1455,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
       if (mounted) {
         Navigator.of(context).pop();
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Erreur suppression compte : $e")),
+          SnackBar(content: Text(FirebaseErrorHandler.getErrorMessage(e))),
         );
       }
       return;
@@ -1502,7 +1503,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Erreur lors du changement de logo : $e")),
+        SnackBar(content: Text(FirebaseErrorHandler.getErrorMessage(e))),
       );
     }
   }
@@ -1751,7 +1752,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
         if (mounted) {
           ScaffoldMessenger.of(
             context,
-          ).showSnackBar(SnackBar(content: Text("Erreur : $e")));
+          ).showSnackBar(SnackBar(content: Text(FirebaseErrorHandler.getErrorMessage(e))));
         }
       }
     }
@@ -1846,7 +1847,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Impossible de mettre à jour l'avatar : $e")),
+          SnackBar(content: Text(FirebaseErrorHandler.getErrorMessage(e))),
         );
       }
     } finally {
@@ -1911,7 +1912,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text("Impossible de mettre à jour le nom : $e"),
+                      content: Text(FirebaseErrorHandler.getErrorMessage(e)),
                     ),
                   );
                 }
@@ -1967,12 +1968,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text(
-                        e.code == 'requires-recent-login'
-                            ? "Reconnectez-vous puis réessayez."
-                            : (e.message ??
-                                  "Erreur lors du changement d'email"),
-                      ),
+                      content: Text(FirebaseErrorHandler.getErrorMessage(e)),
                     ),
                   );
                 }
@@ -2023,7 +2019,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text("Erreur lors de la mise à jour : $e"),
+                      content: Text(FirebaseErrorHandler.getErrorMessage(e)),
                     ),
                   );
                 }
@@ -2131,14 +2127,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text(
-                        e.code == 'wrong-password'
-                            ? "Mot de passe actuel incorrect."
-                            : (e.code == 'requires-recent-login'
-                                  ? "Reconnectez-vous puis réessayez."
-                                  : (e.message ??
-                                        "Erreur lors du changement de mot de passe")),
-                      ),
+                      content: Text(FirebaseErrorHandler.getErrorMessage(e)),
                     ),
                   );
                 }

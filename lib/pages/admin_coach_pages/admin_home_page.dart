@@ -16,6 +16,7 @@ import '../../constants/firebase_collections.dart';
 import '../../services/notification_service.dart';
 import '../../theme/viro_theme.dart';
 import '../../utils/firebase_helpers.dart';
+import '../../utils/firebase_error_handler.dart';
 import '../../widget/profile_switcher_dialog.dart';
 import '../../widget/sport_score_widget.dart';
 import '../../widget/sport_timer_widget.dart';
@@ -953,7 +954,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text("Action impossible : $e")));
+      ).showSnackBar(SnackBar(content: Text(FirebaseErrorHandler.getErrorMessage(e))));
     } finally {
       if (mounted) setState(() => _processingRequestId = null);
     }
@@ -969,15 +970,16 @@ class _AdminHomePageState extends State<AdminHomePage> {
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
-          final error = snapshot.error.toString();
+          final error = snapshot.error;
+          final errorStr = error.toString();
           // Vérifier si c'est une erreur d'index manquant
-          if (error.contains('index') || error.contains('requires an index')) {
+          if (errorStr.contains('index') || errorStr.contains('requires an index')) {
             return _InfoCard(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    "Index Firestore requis",
+                    "Données temporairement indisponibles",
                     style: TextStyle(
                       color: Colors.redAccent,
                       fontWeight: FontWeight.bold,
@@ -985,13 +987,8 @@ class _AdminHomePageState extends State<AdminHomePage> {
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    "Un index composite est nécessaire pour cette requête.",
+                    "Un réglage technique est en cours. Réessayez plus tard ou contactez l'administrateur du club.",
                     style: TextStyle(color: Colors.redAccent),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    "Erreur: $error",
-                    style: const TextStyle(color: Colors.grey, fontSize: 12),
                   ),
                 ],
               ),
@@ -999,7 +996,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
           }
           return _InfoCard(
             child: Text(
-              "Erreur de chargement: $error",
+              FirebaseErrorHandler.getErrorMessage(error),
               style: const TextStyle(color: Colors.redAccent),
             ),
           );
@@ -1435,7 +1432,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text("Erreur : $e")));
+      ).showSnackBar(SnackBar(content: Text(FirebaseErrorHandler.getErrorMessage(e))));
     } finally {
       if (mounted) setState(() => _processingLoanRequestId = null);
     }
@@ -1567,7 +1564,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text("Erreur : $e"),
+            content: Text(FirebaseErrorHandler.getErrorMessage(e)),
             backgroundColor: ViroColors.error,
           ),
         );
@@ -1662,7 +1659,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text("Erreur : $e"),
+            content: Text(FirebaseErrorHandler.getErrorMessage(e)),
             backgroundColor: ViroColors.error,
           ),
         );
@@ -1694,7 +1691,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text("Erreur : $e"),
+            content: Text(FirebaseErrorHandler.getErrorMessage(e)),
             backgroundColor: ViroColors.error,
           ),
         );
@@ -2045,7 +2042,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
                               if (context.mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
-                                    content: Text("Erreur : $e"),
+                                    content: Text(FirebaseErrorHandler.getErrorMessage(e)),
                                     backgroundColor: Colors.red,
                                   ),
                                 );
