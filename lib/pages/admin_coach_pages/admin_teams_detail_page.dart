@@ -192,7 +192,7 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
                             },
                           );
                           if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
+                            ScaffoldMessenger.of(ctx).showSnackBar(
                               SnackBar(
                                 content: Text(FirebaseErrorHandler.getErrorMessage(e)),
                               ),
