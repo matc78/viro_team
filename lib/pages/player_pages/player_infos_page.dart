@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:viro_team/constants/firebase_collections.dart';
 import '../../theme/viro_theme.dart';
 import '../../utils/firebase_helpers.dart';
+import '../../utils/avatar_moderation.dart';
 import '../../widget/player_bottom_nav.dart';
 import '../../widget/user_display_tile.dart';
 import '../../widget/viro_loader.dart';
@@ -587,7 +588,7 @@ class _StaffListPage extends StatelessWidget {
                     userId: uid,
                     firstName: data['firstName'] as String?,
                     lastName: data['lastName'] as String?,
-                    avatarUrl: data['avatarUrl'] as String?,
+                    avatarUrl: effectiveAvatarUrl(data),
                     navigateOnTap: false,
                     textStyle: const TextStyle(
                       fontWeight: FontWeight.bold,

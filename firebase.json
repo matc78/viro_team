@@ -34,5 +34,11 @@
         }
       }
     }
-  }
+  },
+  "storage": [
+    {
+      "bucket": "viroteam-75303.firebasestorage.app",
+      "rules": "storage.rules"
+    }
+  ]
 }

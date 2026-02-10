@@ -152,5 +152,14 @@ service cloud.firestore {
         && (resource.data.userId == request.auth.uid
              || isClubAdmin(resource.data.clubId));
     }
+
+    // -------------------------------------------------------------------------
+    // avatar_moderation_logs (traçabilité modération avatars)
+    // Écriture : uniquement par le backend (Cloud Functions, Admin SDK).
+    // Lecture : refusée côté client (réservé admin/support via console ou outil interne).
+    // -------------------------------------------------------------------------
+    match /avatar_moderation_logs/{logId} {
+      allow read, write: if false;
+    }
   }
 }

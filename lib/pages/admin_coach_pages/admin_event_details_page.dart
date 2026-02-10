@@ -4,6 +4,7 @@ import 'package:viro_team/services/event_service.dart';
 import 'package:intl/intl.dart';
 import '../../theme/viro_theme.dart';
 import '../../utils/firebase_helpers.dart';
+import '../../utils/avatar_moderation.dart';
 import '../../widget/user_display_tile.dart';
 import '../../widget/viro_loader.dart';
 
@@ -346,7 +347,7 @@ class AdminEventDetailsPage extends StatelessWidget {
               userId: userId,
               firstName: user['firstName'] as String?,
               lastName: user['lastName'] as String?,
-              avatarUrl: user['avatarUrl'] as String?,
+              avatarUrl: effectiveAvatarUrl(user),
               textStyle: const TextStyle(fontWeight: FontWeight.w600),
             ),
           ),

@@ -29,6 +29,13 @@
             {
               "client_id": "396501317680-afnku6clj84s00aa5f8ejcjm4oigphom.apps.googleusercontent.com",
               "client_type": 3
+            },
+            {
+              "client_id": "396501317680-d94lrua9ulfad571djclnb5aajmsfi4e.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.viroteam.viroTeam"
+              }
             }
           ]
         }

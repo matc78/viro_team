@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:viro_team/utils/firestore_instance.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
@@ -15,6 +16,7 @@ import '../../theme/viro_theme.dart';
 import '../../widget/viro_loader.dart';
 import '../../utils/app_logger.dart';
 import '../../utils/firebase_error_handler.dart';
+import '../../utils/avatar_moderation.dart';
 import '../auth_page.dart';
 import '../add_profile_page.dart';
 import '../notification_settings_page.dart';
@@ -32,6 +34,9 @@ class PlayerProfilPage extends StatefulWidget {
 class _PlayerProfilPageState extends State<PlayerProfilPage> {
   bool _isSaving = false;
   bool _isUploadingAvatar = false;
+  bool _hasShownAvatarRejectedThisSession = false;
+  bool _hasClearedStalePendingThisSession = false;
+  String? _lastAvatarUrl;
 
   @override
   Widget build(BuildContext context) {
@@ -100,8 +105,12 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
         if (legacyClubId != null) clubIdsSet.add(legacyClubId);
 
         final List<String> clubIds = clubIdsSet.toList();
-        final avatarUrl = data?['avatarUrl'] as String?;
+        final avatarUrl = effectiveAvatarUrl(data);
         final email = data?['email'] as String? ?? user.email ?? "";
+        if (avatarUrl != null && avatarUrl.isNotEmpty) _lastAvatarUrl = avatarUrl;
+
+        _showAvatarModerationRejectedIfNeeded(context, user.uid, data);
+        _clearStaleAvatarModerationPendingIfNeeded(context, user.uid, data);
 
         return Scaffold(
           backgroundColor: const Color(0xFFF8F9FA),
@@ -129,11 +138,14 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
                     final clubNamesText = names.isNotEmpty
                         ? names.join(', ')
                         : null;
+                    final avatarModerationPending =
+                        data?['avatarModerationPending'] == true;
                     return _buildHeader(
                       "$displayFirst $displayLast",
                       clubNamesText,
                       logos,
                       avatarUrl,
+                      avatarModerationPending: avatarModerationPending,
                     );
                   },
                 ),
@@ -235,6 +247,34 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
                     }
                   },
                 ),
+                _buildMenuCard(
+                  icon: Icons.flag_outlined,
+                  title: "Signaler un contenu",
+                  subtitle: "Signaler un contenu inapproprié ou illégal",
+                  onTap: () async {
+                    final uri = Uri(
+                      scheme: 'mailto',
+                      path: AppUrls.signalementContenuEmail,
+                      query: 'subject=${Uri.encodeComponent(AppUrls.signalementContenuSubject)}',
+                    );
+                    try {
+                      final launched = await launchUrl(uri);
+                      if (!launched && context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                              content: Text("Impossible d'ouvrir le client mail")),
+                        );
+                      }
+                    } catch (_) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                              content: Text("Impossible d'ouvrir le client mail")),
+                        );
+                      }
+                    }
+                  },
+                ),
                 const SizedBox(height: 24),
 
                 _buildSectionHeader("PARAMÈTRES AVANCÉS"),
@@ -313,27 +353,65 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
     String fullName,
     String? clubName,
     List<String> clubLogos,
-    String? avatarUrl,
-  ) {
+    String? avatarUrl, {
+    bool avatarModerationPending = false,
+  }) {
     return Column(
       children: [
         Center(
           child: Stack(
             clipBehavior: Clip.none,
             children: [
-              CircleAvatar(
-                radius: 55,
-                backgroundColor: ViroColors.primary.withValues(alpha: 0.1),
-                backgroundImage: (avatarUrl != null && avatarUrl.isNotEmpty)
-                    ? CachedNetworkImageProvider(avatarUrl)
-                    : null,
-                child: (avatarUrl == null || avatarUrl.isEmpty)
-                    ? const Icon(
-                        Icons.person,
-                        size: 55,
-                        color: ViroColors.primary,
-                      )
-                    : null,
+              Stack(
+                alignment: Alignment.center,
+                children: [
+                  CircleAvatar(
+                    radius: 55,
+                    backgroundColor: ViroColors.primary.withValues(alpha: 0.1),
+                    backgroundImage: (avatarUrl != null && avatarUrl.isNotEmpty)
+                        ? CachedNetworkImageProvider(avatarUrl)
+                        : null,
+                    child: (avatarUrl == null || avatarUrl.isEmpty)
+                        ? const Icon(
+                            Icons.person,
+                            size: 55,
+                            color: ViroColors.primary,
+                          )
+                        : null,
+                  ),
+                  if (avatarModerationPending)
+                    Positioned.fill(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(55),
+                        child: Container(
+                          color: Colors.black54,
+                          child: const Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                SizedBox(
+                                  height: 24,
+                                  width: 24,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                                SizedBox(height: 6),
+                                Text(
+                                  "Vérification en cours...",
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
               ),
               Positioned(
                 bottom: 0,
@@ -1537,22 +1615,27 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
         _isUploadingAvatar = true;
       });
 
+      await appFirestore.collection(FirebaseCollections.users).doc(user.uid).set({
+        'avatarModerationPending': true,
+      }, SetOptions(merge: true));
+
       final storageRef = FirebaseStorage.instance
           .ref()
-          .child('users')
+          .child(kReleaseMode ? 'users' : 'users_test')
           .child(user.uid)
           .child('avatar_${DateTime.now().millisecondsSinceEpoch}.png');
       await storageRef.putFile(File(file.path));
-      final url = await storageRef.getDownloadURL();
-
-      await appFirestore.collection(FirebaseCollections.users).doc(user.uid).set({
-        'avatarUrl': url,
-      }, SetOptions(merge: true));
-    } catch (e) {
+      // avatarUrl est mis à jour par la Cloud Function après modération (OK ou rejet)
+    } catch (e, stack) {
+      debugPrint("_pickAvatar ERROR: $e");
+      debugPrint("_pickAvatar stackTrace: $stack");
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(FirebaseErrorHandler.getErrorMessage(e))),
       );
+      await appFirestore.collection(FirebaseCollections.users).doc(user.uid).set({
+        'avatarModerationPending': false,
+      }, SetOptions(merge: true));
     } finally {
       if (mounted) {
         setState(() {
@@ -1561,5 +1644,60 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
         });
       }
     }
+  }
+
+  /// Si avatarUrl est déjà présent mais avatarModerationPending reste true (état incohérent), on efface le flag une fois.
+  void _clearStaleAvatarModerationPendingIfNeeded(
+    BuildContext context,
+    String uid,
+    Map<String, dynamic>? userData,
+  ) {
+    if (_hasClearedStalePendingThisSession) return;
+    final pending = userData?['avatarModerationPending'] == true;
+    final url = userData?['avatarUrl'] as String?;
+    if (!pending || url == null || url.isEmpty) return;
+    _hasClearedStalePendingThisSession = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      try {
+        await appFirestore.collection(FirebaseCollections.users).doc(uid).set({
+          'avatarModerationPending': FieldValue.delete(),
+        }, SetOptions(merge: true));
+      } catch (_) {}
+    });
+  }
+
+  void _showAvatarModerationRejectedIfNeeded(
+    BuildContext context,
+    String uid,
+    Map<String, dynamic>? userData,
+  ) {
+    if (userData?['avatarModerationRejected'] != true ||
+        _hasShownAvatarRejectedThisSession) return;
+    _hasShownAvatarRejectedThisSession = true;
+    // Invalider le cache pour l'URL rejetée afin que l'avatar n'affiche plus l'image
+    if (_lastAvatarUrl != null) {
+      CachedNetworkImage.evictFromCache(_lastAvatarUrl!);
+      _lastAvatarUrl = null;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final message = userData?['avatarModerationReason'] as String? ??
+          "Votre photo de profil n'a pas été acceptée. Veuillez choisir une photo appropriée.";
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
+      _clearAvatarModerationRejected(uid);
+    });
+  }
+
+  Future<void> _clearAvatarModerationRejected(String uid) async {
+    try {
+      await appFirestore.collection(FirebaseCollections.users).doc(uid).set({
+        'avatarModerationRejected': false,
+        'avatarModerationRejectedAt': FieldValue.delete(),
+        'avatarModerationReason': FieldValue.delete(),
+      }, SetOptions(merge: true));
+    } catch (_) {}
   }
 }

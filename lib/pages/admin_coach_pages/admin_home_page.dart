@@ -17,6 +17,7 @@ import '../../services/notification_service.dart';
 import '../../theme/viro_theme.dart';
 import '../../utils/firebase_helpers.dart';
 import '../../utils/firebase_error_handler.dart';
+import '../../utils/avatar_moderation.dart';
 import '../../widget/profile_switcher_dialog.dart';
 import '../../widget/sport_score_widget.dart';
 import '../../widget/sport_timer_widget.dart';
@@ -75,7 +76,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
                       .snapshots()
                 : null,
             builder: (context, snap) {
-              final avatarUrl = snap.data?.data()?['avatarUrl'] as String?;
+              final avatarUrl = effectiveAvatarUrl(snap.data?.data());
               return GestureDetector(
                 onTap: () {
                   Navigator.of(context).push(

@@ -7,6 +7,7 @@ import '../../theme/viro_theme.dart';
 import '../../utils/app_logger.dart';
 import '../../utils/firebase_helpers.dart';
 import '../../utils/firebase_error_handler.dart';
+import '../../utils/avatar_moderation.dart';
 import '../../widget/user_display_tile.dart';
 import '../profil_display_page.dart';
 
@@ -348,7 +349,7 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
                         final userId = doc.id;
                         final firstName = data['firstName'] as String? ?? "";
                         final lastName = data['lastName'] as String? ?? "";
-                        final avatarUrl = data['avatarUrl'] as String?;
+                        final avatarUrl = effectiveAvatarUrl(data);
 
                         // Pour les joueurs, afficher la catégorie
                         // Pour les admins/coachs, ne pas afficher de catégorie

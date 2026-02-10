@@ -1,0 +1,25 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Admin : avatars/{uid}.jpg — seul l'utilisateur peut écrire le sien
+    match /avatars/{fileName} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && fileName == request.auth.uid + '.jpg';
+    }
+    // Admin test : avatars_test/{uid}.jpg
+    match /avatars_test/{fileName} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && fileName == request.auth.uid + '.jpg';
+    }
+    // Player : users/{uid}/avatar_*.png — seul l'utilisateur peut écrire dans son dossier
+    match /users/{userId}/{allPaths=**} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+    // Player test : users_test/{uid}/avatar_*.png
+    match /users_test/{userId}/{allPaths=**} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}

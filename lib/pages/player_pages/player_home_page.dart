@@ -20,6 +20,7 @@ import 'player_loan_catalog_page.dart';
 
 import '../../services/notification_service.dart';
 import '../../theme/viro_theme.dart';
+import '../../utils/avatar_moderation.dart';
 import '../../widget/player_bottom_nav.dart';
 import '../../widget/profile_switcher_dialog.dart';
 import '../../widget/user_display_tile.dart';
@@ -209,7 +210,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
                 .doc(_currentUserId)
                 .snapshots(),
             builder: (context, snap) {
-              final avatarUrl = snap.data?.data()?['avatarUrl'] as String?;
+              final avatarUrl = effectiveAvatarUrl(snap.data?.data());
               return GestureDetector(
                 onTap: () => Navigator.push(
                   context,
@@ -579,7 +580,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
                                       userId: senderId,
                                       firstName: uData?['firstName'] as String?,
                                       lastName: uData?['lastName'] as String?,
-                                      avatarUrl: uData?['avatarUrl'] as String?,
+                                      avatarUrl: effectiveAvatarUrl(uData),
                                       compact: true,
                                       textStyle: TextStyle(
                                         fontSize: 12,

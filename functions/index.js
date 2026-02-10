@@ -1,47 +1,51 @@
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
+const { getDownloadURL } = require("firebase-admin/storage");
+const { getFirestore } = require("firebase-admin/firestore");
 
 admin.initializeApp();
 
-const db = admin.firestore();
+const dbTest = getFirestore("test");
+const dbProd = getFirestore("prod");
+
+/** Seuils Safe Search : on rejette si VERY_LIKELY, LIKELY ou VERIFIED pour adult, racy, violence */
+const REJECT_LIKELIHOODS = ["VERY_LIKELY", "LIKELY", "VERIFIED"];
 
 /**
  * Envoie une notification FCM aux admins/coachs du club lorsqu'une nouvelle
  * demande d'adhésion (join_requests) est créée.
  */
-exports.onJoinRequestCreated = functions.firestore
-  .document("join_requests/{requestId}")
-  .onCreate(async (snap, context) => {
-    const requestId = context.params.requestId;
-    const data = snap.data();
+const makeOnJoinRequestCreated = (db) => async (snap, context) => {
+  const requestId = context.params.requestId;
+  const data = snap.data();
 
-    console.log("onJoinRequestCreated: déclenché, requestId=", requestId);
+  console.log("onJoinRequestCreated: déclenché, requestId=", requestId);
 
-    const clubId = data.clubId;
-    const clubName = String(data.clubName || "");
-    const userId = String(data.userId || "");
-    const roleRequested = String(data.roleRequested || "player");
-    const firstName = String(data.firstName || "").trim();
-    const lastName = String(data.lastName || "").trim();
-    const message = String(data.message || "").trim();
+  const clubId = data.clubId;
+  const clubName = String(data.clubName || "");
+  const userId = String(data.userId || "");
+  const roleRequested = String(data.roleRequested || "player");
+  const firstName = String(data.firstName || "").trim();
+  const lastName = String(data.lastName || "").trim();
+  const message = String(data.message || "").trim();
 
-    // Libellé du rôle pour la notif
-    const roleLabels = {
-      player: "Membre",
-      coach: "Coach",
-      admin_fondateur: "Admin fondateur",
-    };
-    const roleLabel = roleLabels[roleRequested] || roleRequested;
+  // Libellé du rôle pour la notif
+  const roleLabels = {
+    player: "Membre",
+    coach: "Coach",
+    admin_fondateur: "Admin fondateur",
+  };
+  const roleLabel = roleLabels[roleRequested] || roleRequested;
 
-    if (!clubId) {
-      console.warn(
-        "onJoinRequestCreated: clubId manquant, requestId=",
-        requestId,
-      );
-      return null;
-    }
+  if (!clubId) {
+    console.warn(
+      "onJoinRequestCreated: clubId manquant, requestId=",
+      requestId,
+    );
+    return null;
+  }
 
-    const clubDoc = await db.collection("clubs").doc(clubId).get();
+  const clubDoc = await db.collection("clubs").doc(clubId).get();
     if (!clubDoc.exists) {
       console.warn("onJoinRequestCreated: club introuvable, clubId=", clubId);
       return null;
@@ -151,19 +155,25 @@ exports.onJoinRequestCreated = functions.firestore
       console.error("onJoinRequestCreated: erreur FCM", err);
       throw err;
     }
-  });
+  };
+exports.onJoinRequestCreatedTest = functions.firestore
+  .database("test")
+  .document("join_requests/{requestId}")
+  .onCreate(makeOnJoinRequestCreated(dbTest));
+exports.onJoinRequestCreatedProd = functions.firestore
+  .database("prod")
+  .document("join_requests/{requestId}")
+  .onCreate(makeOnJoinRequestCreated(dbProd));
 
 /**
  * Envoie une notification FCM aux admins/coachs du club lorsqu'une nouvelle
  * demande de prêt (equipment_loan_requests) est créée.
  */
-exports.onLoanRequestCreated = functions.firestore
-  .document("clubs/{clubId}/equipment_loan_requests/{requestId}")
-  .onCreate(async (snap, context) => {
-    const { clubId, requestId } = context.params;
-    const data = snap.data();
+const makeOnLoanRequestCreated = (db) => async (snap, context) => {
+  const { clubId, requestId } = context.params;
+  const data = snap.data();
 
-    console.log("onLoanRequestCreated: déclenché, clubId=", clubId, "requestId=", requestId);
+  console.log("onLoanRequestCreated: déclenché, clubId=", clubId, "requestId=", requestId);
 
     const playerId = String(data.playerId || "");
     const playerName = String(data.playerName || "").trim();
@@ -266,29 +276,35 @@ exports.onLoanRequestCreated = functions.firestore
       console.error("onLoanRequestCreated: erreur FCM", err);
       throw err;
     }
-  });
+  };
+exports.onLoanRequestCreatedTest = functions.firestore
+  .database("test")
+  .document("clubs/{clubId}/equipment_loan_requests/{requestId}")
+  .onCreate(makeOnLoanRequestCreated(dbTest));
+exports.onLoanRequestCreatedProd = functions.firestore
+  .database("prod")
+  .document("clubs/{clubId}/equipment_loan_requests/{requestId}")
+  .onCreate(makeOnLoanRequestCreated(dbProd));
 
 /**
  * Envoie une notification FCM à l'utilisateur lorsqu'une demande d'adhésion
  * est acceptée ou refusée (mise à jour du champ status).
  */
-exports.onJoinRequestUpdated = functions.firestore
-  .document("join_requests/{requestId}")
-  .onUpdate(async (change, context) => {
-    const requestId = context.params.requestId;
-    const before = change.before.data();
-    const after = change.after.data();
+const makeOnJoinRequestUpdated = (db) => async (change, context) => {
+  const requestId = context.params.requestId;
+  const before = change.before.data();
+  const after = change.after.data();
 
-    const newStatus = String(after?.status || "");
-    if (newStatus !== "accepted" && newStatus !== "refused") {
-      return null;
-    }
-    const oldStatus = String(before?.status || "");
-    if (oldStatus === "accepted" || oldStatus === "refused") {
-      return null;
-    }
+  const newStatus = String(after?.status || "");
+  if (newStatus !== "accepted" && newStatus !== "refused") {
+    return null;
+  }
+  const oldStatus = String(before?.status || "");
+  if (oldStatus === "accepted" || oldStatus === "refused") {
+    return null;
+  }
 
-    const userId = String(after?.userId || "");
+  const userId = String(after?.userId || "");
     const clubId = String(after?.clubId || "");
     const clubName = String(after?.clubName || "");
     const roleRequested = String(after?.roleRequested || "player");
@@ -354,30 +370,36 @@ exports.onJoinRequestUpdated = functions.firestore
       console.error("onJoinRequestUpdated: erreur FCM", err);
       throw err;
     }
-  });
+  };
+exports.onJoinRequestUpdatedTest = functions.firestore
+  .database("test")
+  .document("join_requests/{requestId}")
+  .onUpdate(makeOnJoinRequestUpdated(dbTest));
+exports.onJoinRequestUpdatedProd = functions.firestore
+  .database("prod")
+  .document("join_requests/{requestId}")
+  .onUpdate(makeOnJoinRequestUpdated(dbProd));
 
 /**
  * Envoie une notification FCM au joueur lorsqu'une demande de prêt
  * est acceptée ou refusée (mise à jour du champ status).
  */
-exports.onLoanRequestUpdated = functions.firestore
-  .document("clubs/{clubId}/equipment_loan_requests/{requestId}")
-  .onUpdate(async (change, context) => {
-    const { clubId, requestId } = context.params;
-    const after = change.after.data();
+const makeOnLoanRequestUpdated = (db) => async (change, context) => {
+  const { clubId, requestId } = context.params;
+  const after = change.after.data();
 
-    const newStatus = String(after?.status || "");
-    if (newStatus !== "accepted" && newStatus !== "refused") {
-      return null;
-    }
+  const newStatus = String(after?.status || "");
+  if (newStatus !== "accepted" && newStatus !== "refused") {
+    return null;
+  }
 
-    const before = change.before.data();
-    const oldStatus = String(before?.status || "");
-    if (oldStatus === "accepted" || oldStatus === "refused") {
-      return null;
-    }
+  const before = change.before.data();
+  const oldStatus = String(before?.status || "");
+  if (oldStatus === "accepted" || oldStatus === "refused") {
+    return null;
+  }
 
-    const playerId = String(after?.playerId || "");
+  const playerId = String(after?.playerId || "");
     const equipmentName = String(after?.equipmentName || "").trim();
     const adminResponse = String(after?.adminResponse || "").trim();
 
@@ -451,16 +473,22 @@ exports.onLoanRequestUpdated = functions.firestore
       console.error("onLoanRequestUpdated: erreur FCM", err);
       throw err;
     }
-  });
+  };
+exports.onLoanRequestUpdatedTest = functions.firestore
+  .database("test")
+  .document("clubs/{clubId}/equipment_loan_requests/{requestId}")
+  .onUpdate(makeOnLoanRequestUpdated(dbTest));
+exports.onLoanRequestUpdatedProd = functions.firestore
+  .database("prod")
+  .document("clubs/{clubId}/equipment_loan_requests/{requestId}")
+  .onUpdate(makeOnLoanRequestUpdated(dbProd));
 
 /**
  * Envoie une notification FCM aux admins/coachs du club lorsqu'un membre,
  * coach ou admin quitte le club (création dans member_leaves).
  */
-exports.onMemberLeaveCreated = functions.firestore
-  .document("clubs/{clubId}/member_leaves/{leaveId}")
-  .onCreate(async (snap, context) => {
-    const { clubId, leaveId } = context.params;
+const makeOnMemberLeaveCreated = (db) => async (snap, context) => {
+  const { clubId, leaveId } = context.params;
     const data = snap.data();
 
     console.log(
@@ -571,16 +599,22 @@ exports.onMemberLeaveCreated = functions.firestore
       console.error("onMemberLeaveCreated: erreur FCM", err);
       throw err;
     }
-  });
+  };
+exports.onMemberLeaveCreatedTest = functions.firestore
+  .database("test")
+  .document("clubs/{clubId}/member_leaves/{leaveId}")
+  .onCreate(makeOnMemberLeaveCreated(dbTest));
+exports.onMemberLeaveCreatedProd = functions.firestore
+  .database("prod")
+  .document("clubs/{clubId}/member_leaves/{leaveId}")
+  .onCreate(makeOnMemberLeaveCreated(dbProd));
 
 /**
  * Envoie une notification FCM aux admins/coachs du club lorsqu'un prêt
  * est marqué comme retourné (equipment_loans status -> returned).
  */
-exports.onEquipmentLoanUpdated = functions.firestore
-  .document("clubs/{clubId}/equipment_loans/{loanId}")
-  .onUpdate(async (change, context) => {
-    const { clubId, loanId } = context.params;
+const makeOnEquipmentLoanUpdated = (db) => async (change, context) => {
+  const { clubId, loanId } = context.params;
     const before = change.before.data();
     const after = change.after.data();
 
@@ -685,7 +719,15 @@ exports.onEquipmentLoanUpdated = functions.firestore
       console.error("onEquipmentLoanUpdated: erreur FCM", err);
       throw err;
     }
-  });
+  };
+exports.onEquipmentLoanUpdatedTest = functions.firestore
+  .database("test")
+  .document("clubs/{clubId}/equipment_loans/{loanId}")
+  .onUpdate(makeOnEquipmentLoanUpdated(dbTest));
+exports.onEquipmentLoanUpdatedProd = functions.firestore
+  .database("prod")
+  .document("clubs/{clubId}/equipment_loans/{loanId}")
+  .onUpdate(makeOnEquipmentLoanUpdated(dbProd));
 
 /**
  * Résout les userId destinataires d'une annonce selon targetType et targetIds.
@@ -755,13 +797,11 @@ async function resolveAnnouncementRecipients(db, clubId, targetType, targetIds) 
  * Envoie une notification FCM aux destinataires lorsqu'une nouvelle
  * annonce club est créée (clubs/{clubId}/announcements).
  */
-exports.onAnnouncementCreated = functions.firestore
-  .document("clubs/{clubId}/announcements/{announcementId}")
-  .onCreate(async (snap, context) => {
-    const { clubId, announcementId } = context.params;
-    const data = snap.data();
+const makeOnAnnouncementCreated = (db) => async (snap, context) => {
+  const { clubId, announcementId } = context.params;
+  const data = snap.data();
 
-    const message = String(data.message || "").trim();
+  const message = String(data.message || "").trim();
     const senderFirstName = String(data.senderFirstName || "").trim();
     const senderLastName = String(data.senderLastName || "").trim();
     const targetType = String(data.targetType || "Tous les membres").trim();
@@ -848,16 +888,22 @@ exports.onAnnouncementCreated = functions.firestore
       console.error("onAnnouncementCreated: erreur FCM", err);
       throw err;
     }
-  });
+  };
+exports.onAnnouncementCreatedTest = functions.firestore
+  .database("test")
+  .document("clubs/{clubId}/announcements/{announcementId}")
+  .onCreate(makeOnAnnouncementCreated(dbTest));
+exports.onAnnouncementCreatedProd = functions.firestore
+  .database("prod")
+  .document("clubs/{clubId}/announcements/{announcementId}")
+  .onCreate(makeOnAnnouncementCreated(dbProd));
 
 /**
  * Envoie une notification FCM aux membres concernés (teamMemberIds)
  * lorsqu'un nouvel événement est créé.
  */
-exports.onEventCreated = functions.firestore
-  .document("clubs/{clubId}/events/{eventId}")
-  .onCreate(async (snap, context) => {
-    const { clubId, eventId } = context.params;
+const makeOnEventCreated = (db) => async (snap, context) => {
+  const { clubId, eventId } = context.params;
     const data = snap.data();
 
     const teamMemberIds = Array.isArray(data.teamMemberIds)
@@ -947,18 +993,24 @@ exports.onEventCreated = functions.firestore
       console.error("onEventCreated: erreur FCM", err);
       throw err;
     }
-  });
+  };
+exports.onEventCreatedTest = functions.firestore
+  .database("test")
+  .document("clubs/{clubId}/events/{eventId}")
+  .onCreate(makeOnEventCreated(dbTest));
+exports.onEventCreatedProd = functions.firestore
+  .database("prod")
+  .document("clubs/{clubId}/events/{eventId}")
+  .onCreate(makeOnEventCreated(dbProd));
 
 /**
  * Envoie une notification FCM aux membres concernés lorsqu'un événement
  * est modifié (date, heure, titre, lieu ou liste des participants).
  */
-exports.onEventUpdated = functions.firestore
-  .document("clubs/{clubId}/events/{eventId}")
-  .onUpdate(async (change, context) => {
-    const { clubId, eventId } = context.params;
-    const before = change.before.data();
-    const after = change.after.data();
+const makeOnEventUpdated = (db) => async (change, context) => {
+  const { clubId, eventId } = context.params;
+  const before = change.before.data();
+  const after = change.after.data();
 
     const relevantFields = [
       "date",
@@ -1049,7 +1101,15 @@ exports.onEventUpdated = functions.firestore
       console.error("onEventUpdated: erreur FCM", err);
       throw err;
     }
-  });
+  };
+exports.onEventUpdatedTest = functions.firestore
+  .database("test")
+  .document("clubs/{clubId}/events/{eventId}")
+  .onUpdate(makeOnEventUpdated(dbTest));
+exports.onEventUpdatedProd = functions.firestore
+  .database("prod")
+  .document("clubs/{clubId}/events/{eventId}")
+  .onUpdate(makeOnEventUpdated(dbProd));
 
 /**
  * Parse startTime string "HH:mm" or "H:mm" into { hours, minutes }.
@@ -1076,36 +1136,33 @@ function parseStartTime(startTimeStr) {
  * pour les événements qui commencent dans 1 à 2 heures (fenêtre 1h).
  * Exécuté toutes les heures.
  */
-exports.scheduledEventReminder = functions.pubsub
-  .schedule("every 1 hours")
-  .timeZone("Europe/Paris")
-  .onRun(async (context) => {
-    const now = new Date();
-    const inOneHour = new Date(now.getTime() + 60 * 60 * 1000);
-    const inTwoHours = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+async function runEventReminderForDb(db) {
+  const now = new Date();
+  const inOneHour = new Date(now.getTime() + 60 * 60 * 1000);
+  const inTwoHours = new Date(now.getTime() + 2 * 60 * 60 * 1000);
 
-    const year = now.getUTCFullYear();
-    const month = now.getUTCMonth();
-    const day = now.getUTCDate();
-    const todayStart = new Date(Date.UTC(year, month, day, 0, 0, 0, 0));
-    const tomorrowEnd = new Date(Date.UTC(year, month, day + 2, 0, 0, 0, 0));
+  const year = now.getUTCFullYear();
+  const month = now.getUTCMonth();
+  const day = now.getUTCDate();
+  const todayStart = new Date(Date.UTC(year, month, day, 0, 0, 0, 0));
+  const tomorrowEnd = new Date(Date.UTC(year, month, day + 2, 0, 0, 0, 0));
 
-    const clubsSnap = await db.collection("clubs").get();
-    const messaging = admin.messaging();
-    let totalSent = 0;
+  const clubsSnap = await db.collection("clubs").get();
+  const messaging = admin.messaging();
+  let sent = 0;
 
-    for (const clubDoc of clubsSnap.docs) {
-      const clubId = clubDoc.id;
-      const clubData = clubDoc.data();
-      const clubName = String(clubData?.name || "").trim();
+  for (const clubDoc of clubsSnap.docs) {
+    const clubId = clubDoc.id;
+    const clubData = clubDoc.data();
+    const clubName = String(clubData?.name || "").trim();
 
-      const eventsSnap = await db
-        .collection("clubs")
-        .doc(clubId)
-        .collection("events")
-        .where("date", ">=", todayStart)
-        .where("date", "<=", tomorrowEnd)
-        .get();
+    const eventsSnap = await db
+      .collection("clubs")
+      .doc(clubId)
+      .collection("events")
+      .where("date", ">=", todayStart)
+      .where("date", "<=", tomorrowEnd)
+      .get();
 
       for (const eventDoc of eventsSnap.docs) {
         const eventId = eventDoc.id;
@@ -1198,7 +1255,7 @@ exports.scheduledEventReminder = functions.pubsub
             android: payload.android,
             apns: payload.apns,
           });
-          totalSent += result.successCount;
+          sent += result.successCount;
           console.log(
             "scheduledEventReminder: rappel envoyé eventId=",
             eventId,
@@ -1212,9 +1269,170 @@ exports.scheduledEventReminder = functions.pubsub
       }
     }
 
+  return sent;
+}
+
+exports.scheduledEventReminder = functions.pubsub
+  .schedule("every 1 hours")
+  .timeZone("Europe/Paris")
+  .onRun(async (context) => {
+    const totalSent =
+      (await runEventReminderForDb(dbTest)) + (await runEventReminderForDb(dbProd));
     console.log(
       "scheduledEventReminder: terminé, total notifs envoyées=",
       totalSent,
     );
     return null;
+  });
+
+/**
+ * Modération des avatars : après chaque upload (chemins avatars/ ou users/.../avatar_...png),
+ * appelle Vision API Safe Search. Si adult, racy ou violence est LIKELY ou VERIFIED,
+ * supprime le fichier et met à jour Firestore (avatarUrl effacé, avatarModerationRejected).
+ * Si OK : met avatarUrl, avatarModerationOk true, et efface les champs rejet.
+ * Retourne { uid, database: 'test'|'prod' } selon le chemin (test = uniquement base test, prod = uniquement base prod).
+ */
+function parseAvatarUidFromPath(name) {
+  if (!name || typeof name !== "string") return null;
+  const avatarsTestMatch = name.match(/^avatars_test\/([^/]+)\.jpg$/i);
+  if (avatarsTestMatch) return { uid: avatarsTestMatch[1], database: "test" };
+  const avatarsMatch = name.match(/^avatars\/([^/]+)\.jpg$/i);
+  if (avatarsMatch) return { uid: avatarsMatch[1], database: "prod" };
+  const usersTestMatch = name.match(/^users_test\/([^/]+)\/avatar_.*\.png$/i);
+  if (usersTestMatch) return { uid: usersTestMatch[1], database: "test" };
+  const usersMatch = name.match(/^users\/([^/]+)\/avatar_.*\.png$/i);
+  if (usersMatch) return { uid: usersMatch[1], database: "prod" };
+  return null;
+}
+
+const STORAGE_BUCKET = "viroteam-75303.firebasestorage.app";
+
+function logError(prefix, err) {
+  const msg = err && err.message ? err.message : String(err);
+  const code = err && err.code !== undefined ? err.code : "(no code)";
+  const stack = err && err.stack ? err.stack : "";
+  console.error(prefix, "message=", msg, "code=", code);
+  if (stack) console.error(prefix, "stack=", stack);
+}
+
+exports.onAvatarUploadFinalized = functions.storage
+  .bucket(STORAGE_BUCKET)
+  .object()
+  .onFinalize(async (object) => {
+    const name = object.name;
+    const bucket = object.bucket;
+    console.log("onAvatarUploadFinalized: déclenché name=", name, "bucket=", bucket);
+
+    const parsed = parseAvatarUidFromPath(name);
+    if (!parsed) {
+      console.log("onAvatarUploadFinalized: chemin non avatar, ignoré name=", name);
+      return null;
+    }
+    const { uid, database } = parsed;
+    const db = database === "test" ? dbTest : dbProd;
+    console.log("onAvatarUploadFinalized: uid=", uid, "database=", database);
+
+    try {
+      const vision = require("@google-cloud/vision");
+      const imageUri = `gs://${bucket}/${name}`;
+      const visionClient = new vision.ImageAnnotatorClient();
+      let safeSearch;
+      try {
+        const [result] = await visionClient.safeSearchDetection({
+          image: { source: { imageUri } },
+        });
+        safeSearch = result.safeSearchAnnotation;
+        if (!safeSearch) {
+          console.warn("onAvatarUploadFinalized: pas de safeSearchAnnotation, name=", name);
+          return null;
+        }
+        console.log("onAvatarUploadFinalized: Safe Search OK adult=", safeSearch.adult, "racy=", safeSearch.racy, "violence=", safeSearch.violence);
+      } catch (err) {
+        logError("onAvatarUploadFinalized: Vision API ERROR", err);
+        return null;
+      }
+
+      const toReject =
+        REJECT_LIKELIHOODS.includes(safeSearch.adult) ||
+        REJECT_LIKELIHOODS.includes(safeSearch.racy) ||
+        REJECT_LIKELIHOODS.includes(safeSearch.violence);
+
+      if (!toReject) {
+        console.log("onAvatarUploadFinalized: contenu OK, pas de rejet");
+        let downloadUrl = null;
+        const fileRef = admin.storage().bucket(bucket).file(name);
+        try {
+          downloadUrl = await getDownloadURL(fileRef);
+        } catch (err) {
+          logError("onAvatarUploadFinalized: getDownloadURL (OK) ERROR", err);
+          try {
+            const [url] = await fileRef.getSignedUrl({
+              version: "v4",
+              action: "read",
+              expires: new Date(Date.now() + 10 * 365 * 24 * 60 * 60 * 1000),
+            });
+            downloadUrl = url;
+          } catch (err2) {
+            logError("onAvatarUploadFinalized: getSignedUrl (OK) fallback ERROR", err2);
+          }
+        }
+        const update = {
+          avatarModerationPending: admin.firestore.FieldValue.delete(),
+          avatarModerationOk: true,
+          avatarModerationRejected: admin.firestore.FieldValue.delete(),
+          avatarModerationRejectedAt: admin.firestore.FieldValue.delete(),
+          avatarModerationReason: admin.firestore.FieldValue.delete(),
+        };
+        if (downloadUrl) update.avatarUrl = downloadUrl;
+        await db.collection("users").doc(uid).set(update, { merge: true });
+        console.log(
+          "onAvatarUploadFinalized: Firestore mis à jour (modération OK), avatarUrl=",
+          !!downloadUrl,
+        );
+        return null;
+      }
+
+      const scores = {
+        adult: safeSearch.adult,
+        racy: safeSearch.racy,
+        violence: safeSearch.violence,
+      };
+      console.log("onAvatarUploadFinalized: REJET uid=", uid, "name=", name, "scores=", scores);
+
+      try {
+        await admin.storage().bucket(bucket).file(name).delete();
+        console.log("onAvatarUploadFinalized: fichier supprimé");
+      } catch (err) {
+        logError("onAvatarUploadFinalized: suppression fichier ERROR", err);
+      }
+
+      const rejectUpdate = {
+        avatarUrl: admin.firestore.FieldValue.delete(),
+        avatarModerationOk: false,
+        avatarModerationRejected: true,
+        avatarModerationRejectedAt: admin.firestore.FieldValue.serverTimestamp(),
+        avatarModerationReason: "Photo non conforme. Veuillez choisir une photo appropriée.",
+        avatarModerationPending: admin.firestore.FieldValue.delete(),
+      };
+      await db.collection("users").doc(uid).set(rejectUpdate, { merge: true });
+      console.log("onAvatarUploadFinalized: Firestore users mis à jour (rejet, avatarUrl effacé)");
+
+      const logEntry = {
+        uid,
+        storagePath: name,
+        bucket,
+        scores,
+        rejectedAt: admin.firestore.FieldValue.serverTimestamp(),
+      };
+      try {
+        await db.collection("avatar_moderation_logs").add(logEntry);
+      } catch (e) {
+        logError("onAvatarUploadFinalized: avatar_moderation_logs (optionnel) ERROR", e);
+      }
+
+      return null;
+    } catch (err) {
+      logError("onAvatarUploadFinalized: ERREUR INATTENDUE", err);
+      throw err;
+    }
   });

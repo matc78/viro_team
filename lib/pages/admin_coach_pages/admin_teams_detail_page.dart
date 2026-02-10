@@ -7,6 +7,7 @@ import '../../theme/viro_theme.dart';
 import '../../utils/app_logger.dart';
 import '../../utils/firebase_helpers.dart';
 import '../../utils/firebase_error_handler.dart';
+import '../../utils/avatar_moderation.dart';
 import '../../widget/user_display_tile.dart';
 import '../../widget/viro_loader.dart';
 import '../profil_display_page.dart';
@@ -118,7 +119,7 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
                         userId: userId,
                         firstName: user['firstName'] as String?,
                         lastName: user['lastName'] as String?,
-                        avatarUrl: user['avatarUrl'] as String?,
+                        avatarUrl: effectiveAvatarUrl(user),
                         navigateOnTap: false,
                         textStyle: const TextStyle(
                           fontSize: 16,
@@ -407,7 +408,7 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
                         userId: userId,
                         firstName: userData['firstName'] as String?,
                         lastName: userData['lastName'] as String?,
-                        avatarUrl: userData['avatarUrl'] as String?,
+                        avatarUrl: effectiveAvatarUrl(userData),
                         navigateOnTap: false,
                         textStyle: const TextStyle(
                           fontSize: 14,

@@ -5,6 +5,7 @@ import '../../constants/firebase_collections.dart';
 import '../../theme/viro_theme.dart';
 import '../../utils/app_logger.dart';
 import '../../utils/firebase_error_handler.dart';
+import '../../utils/avatar_moderation.dart';
 import '../../widget/user_display_tile.dart';
 
 class ProfilRequestPage extends StatefulWidget {
@@ -88,7 +89,7 @@ class _ProfilRequestPageState extends State<ProfilRequestPage> {
                       userId: widget.userId,
                       firstName: widget.firstName,
                       lastName: widget.lastName,
-                      avatarUrl: data['avatarUrl'] as String?,
+                      avatarUrl: effectiveAvatarUrl(data),
                       fallback: widget.userId ?? "Membre",
                       textStyle: const TextStyle(
                         fontSize: 22,

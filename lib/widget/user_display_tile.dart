@@ -6,6 +6,7 @@ import 'package:viro_team/constants/firebase_collections.dart';
 import '../pages/profil_display_page.dart';
 import '../theme/viro_theme.dart';
 import '../utils/formatters.dart';
+import '../utils/avatar_moderation.dart';
 
 /// Affiche le prénom et nom d'un utilisateur formatés, avec un avatar (initiales ou photo),
 /// et rend le tout cliquable pour ouvrir [ProfilDisplayPage] lorsque [userId] est fourni.
@@ -107,8 +108,8 @@ class UserDisplayTile extends StatelessWidget {
             );
           }
           final data = snapshot.data!.data() ?? {};
-          // Même condition que profil_display_page pour l'avatar
-          final url = _urlFromDynamic(data['avatarUrl']);
+          // Même condition que profil_display_page pour l'avatar (modération OK)
+          final url = effectiveAvatarUrl(data);
           final hasUrl = url != null && url.isNotEmpty;
           if (hasUrl) {
             return _buildAvatarFromUrl(

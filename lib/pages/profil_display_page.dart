@@ -9,6 +9,7 @@ import '../../theme/viro_theme.dart';
 import '../../widget/viro_loader.dart';
 import '../../utils/firebase_helpers.dart';
 import '../../utils/firebase_error_handler.dart';
+import '../../utils/avatar_moderation.dart';
 
 class ProfilDisplayPage extends StatelessWidget {
   final String userId;
@@ -337,28 +338,25 @@ class ProfilDisplayPage extends StatelessWidget {
                               Stack(
                                 clipBehavior: Clip.none,
                                 children: [
-                                  CircleAvatar(
-                                    radius: 60,
-                                    backgroundColor: ViroColors.primary
-                                        .withValues(alpha: 0.1),
-                                    backgroundImage:
-                                        (data['avatarUrl'] != null &&
-                                            (data['avatarUrl'] as String)
-                                                .isNotEmpty)
-                                        ? CachedNetworkImageProvider(
-                                            data['avatarUrl'],
-                                          )
-                                        : null,
-                                    child:
-                                        (data['avatarUrl'] == null ||
-                                            (data['avatarUrl'] as String)
-                                                .isEmpty)
-                                        ? const Icon(
-                                            Icons.person,
-                                            size: 60,
-                                            color: ViroColors.primary,
-                                          )
-                                        : null,
+                                  Builder(
+                                    builder: (context) {
+                                      final url = effectiveAvatarUrl(data);
+                                      return CircleAvatar(
+                                        radius: 60,
+                                        backgroundColor: ViroColors.primary
+                                            .withValues(alpha: 0.1),
+                                        backgroundImage: url != null
+                                            ? CachedNetworkImageProvider(url)
+                                            : null,
+                                        child: url == null
+                                            ? const Icon(
+                                                Icons.person,
+                                                size: 60,
+                                                color: ViroColors.primary,
+                                              )
+                                            : null,
+                                      );
+                                    },
                                   ),
                                   // Satellites des clubs
                                   for (int i = 0; i < logos.length; i++)

@@ -8,6 +8,7 @@ import '../../constants/firebase_collections.dart';
 import '../../theme/viro_theme.dart';
 import '../../utils/app_logger.dart';
 import '../../utils/firebase_helpers.dart';
+import '../../utils/avatar_moderation.dart';
 
 class AdminAddEventPage extends StatefulWidget {
   final String clubId;
@@ -351,7 +352,7 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
                       final name =
                           "${first.isNotEmpty ? first[0].toUpperCase() + first.substring(1).toLowerCase() : ''} ${last.toUpperCase()}"
                               .trim();
-                      final avatar = userData['avatarUrl'] as String?;
+                      final avatar = effectiveAvatarUrl(userData);
                       final checked = _selectedPlayersMatch.contains(id);
                       return CheckboxListTile(
                         dense: true,

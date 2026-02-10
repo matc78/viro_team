@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:viro_team/constants/firebase_collections.dart';
 import '../../theme/viro_theme.dart';
 import '../../utils/firebase_helpers.dart';
+import '../../utils/avatar_moderation.dart';
 import '../../widget/user_display_tile.dart';
 import '../../widget/viro_loader.dart';
 import '../profil_display_page.dart';
@@ -469,7 +470,7 @@ class _MemberTile extends StatelessWidget {
         userId: userId,
         firstName: userData['firstName'] as String?,
         lastName: userData['lastName'] as String?,
-        avatarUrl: userData['avatarUrl'] as String?,
+        avatarUrl: effectiveAvatarUrl(userData),
         navigateOnTap: false,
         textStyle: const TextStyle(fontSize: 13),
       ),
