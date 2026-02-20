@@ -1000,6 +1000,13 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
           .toList();
       r['admin'] = list;
     }
+    if (r['admin_fondateur'] is List) {
+      final list = (r['admin_fondateur'] as List)
+          .whereType<String>()
+          .where((c) => c != clubId)
+          .toList();
+      r['admin_fondateur'] = list;
+    }
     if (r['coach'] is List) {
       final list = (r['coach'] as List).toList();
       final filtered = <dynamic>[];
