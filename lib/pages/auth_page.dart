@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart' show defaultTargetPlatform, TargetPlatform;
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -147,6 +148,7 @@ class _AuthPageState extends State<AuthPage> {
     }
 
     if (authSuccess) {
+      TextInput.finishAutofillContext();
       await _handleNavigation();
     } else {
       if (mounted) setState(() => _isLoading = false);
@@ -335,9 +337,10 @@ class _AuthPageState extends State<AuthPage> {
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24.0),
-          child: Form(
-            key: _formKey,
-            child: Column(
+          child: AutofillGroup(
+            child: Form(
+              key: _formKey,
+              child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 // Utilisation du logo JPG selon tes assets
@@ -383,6 +386,7 @@ class _AuthPageState extends State<AuthPage> {
 
                 TextFormField(
                   controller: _emailController,
+                  autofillHints: const [AutofillHints.email],
                   decoration: const InputDecoration(
                     labelText: "Email",
                     prefixIcon: Icon(Icons.email_outlined),
@@ -395,6 +399,8 @@ class _AuthPageState extends State<AuthPage> {
                 TextFormField(
                   controller: _passwordController,
                   obscureText: true,
+                  autofillHints:
+                      _isLogin ? [AutofillHints.password] : [AutofillHints.newPassword],
                   decoration: const InputDecoration(
                     labelText: "Mot de passe",
                     prefixIcon: Icon(Icons.lock_outline),
@@ -408,6 +414,7 @@ class _AuthPageState extends State<AuthPage> {
                   TextFormField(
                     controller: _confirmPasswordController,
                     obscureText: true,
+                    autofillHints: const [AutofillHints.newPassword],
                     decoration: const InputDecoration(
                       labelText: "Confirmer le mot de passe",
                       prefixIcon: Icon(Icons.lock_reset_outlined),
@@ -477,6 +484,7 @@ class _AuthPageState extends State<AuthPage> {
               ],
             ),
           ),
+        ),
         ),
       ),
     );
