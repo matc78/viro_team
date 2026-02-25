@@ -6,6 +6,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:provider/provider.dart';
@@ -42,6 +43,29 @@ void main() {
     () async {
       // 1. Toujours ajouter cette ligne pour Firebase
       WidgetsFlutterBinding.ensureInitialized();
+
+      // Orientation : portrait uniquement sur téléphone, libre sur tablette
+      final views = WidgetsBinding.instance.platformDispatcher.views;
+      if (views.isNotEmpty) {
+        final view = views.first;
+        final physicalSize = view.physicalSize;
+        final dpr = view.devicePixelRatio;
+        final shortestSide = (physicalSize.width < physicalSize.height
+                ? physicalSize.width
+                : physicalSize.height) /
+            dpr;
+        final isTablet = shortestSide >= 600;
+        await SystemChrome.setPreferredOrientations(
+          isTablet
+              ? [
+                  DeviceOrientation.portraitUp,
+                  DeviceOrientation.portraitDown,
+                  DeviceOrientation.landscapeLeft,
+                  DeviceOrientation.landscapeRight,
+                ]
+              : [DeviceOrientation.portraitUp],
+        );
+      }
 
       try {
         // 2. Initialiser Firebase avec les options générées
