@@ -103,7 +103,9 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
           .collection(FirebaseCollections.clubs)
           .doc(widget.clubId)
           .get();
-      final clubName = clubSnap.data()?['name'] as String? ?? "";
+      final clubData = clubSnap.data();
+      final clubName = clubData?['name'] as String? ?? "";
+      final clubSport = clubData?['sport'] as String?;
 
       // Récupération de la catégorie pour les entraînements/matchs (utilisée pour les filtres)
       String? categoryForEvent = _selectedCategoriesAudience.isNotEmpty
@@ -200,6 +202,7 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
           'teamMemberIds': audienceMembers,
           'creatorId': FirebaseAuth.instance.currentUser?.uid,
           'clubName': clubName,
+          'clubSport': clubSport,
         });
       }
 

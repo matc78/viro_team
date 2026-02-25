@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:viro_team/utils/club_emoji_utils.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:viro_team/utils/firestore_instance.dart';
 import 'package:flutter/material.dart';
@@ -26,10 +27,12 @@ class _PlayerInfosPageState extends State<PlayerInfosPage> {
   String? _selectedClubId;
   bool _initialized = false;
   Map<String, String> _clubNamesCache = {};
+  Map<String, String> _clubSportsCache = {};
 
   Future<void> _loadClubNames(List<String> clubIds) async {
     if (clubIds.isEmpty) return;
     final Map<String, String> names = {};
+    final Map<String, String> sports = {};
     for (var i = 0; i < clubIds.length; i += 10) {
       final batch = clubIds.sublist(i, math.min(i + 10, clubIds.length));
       try {
@@ -38,7 +41,10 @@ class _PlayerInfosPageState extends State<PlayerInfosPage> {
             .where(FieldPath.documentId, whereIn: batch)
             .get();
         for (var doc in snapshot.docs) {
-          names[doc.id] = doc.data()['name'] as String? ?? doc.id;
+          final data = doc.data();
+          names[doc.id] = data['name'] as String? ?? doc.id;
+          final sport = data['sport'] as String?;
+          if (sport != null && sport.isNotEmpty) sports[doc.id] = sport;
         }
       } catch (_) {
         for (var id in batch) {
@@ -46,7 +52,10 @@ class _PlayerInfosPageState extends State<PlayerInfosPage> {
         }
       }
     }
-    if (mounted) setState(() => _clubNamesCache = names);
+    if (mounted) setState(() {
+      _clubNamesCache = names;
+      _clubSportsCache = sports;
+    });
   }
 
   void _ensureInitialized(List<String> allClubIds) {
@@ -168,6 +177,7 @@ class _PlayerInfosPageState extends State<PlayerInfosPage> {
                   userId: userId,
                   hasMultipleClubs: allClubIds.length > 1,
                   clubNames: _clubNamesCache,
+                  clubSports: _clubSportsCache,
                 ),
               ),
             ],
@@ -200,7 +210,7 @@ class _PlayerInfosPageState extends State<PlayerInfosPage> {
               (id) => DropdownMenuItem(
                 value: id,
                 child: Text(
-                  _clubNamesCache[id] ?? id,
+                  formatClubNameWithEmoji(_clubNamesCache[id] ?? id, _clubSportsCache[id]),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
@@ -396,7 +406,7 @@ class _ClubDetailsPage extends StatelessWidget {
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  clubData?['name'] ?? "Club Inconnu",
+                  formatClubNameWithEmoji(clubData?['name'] ?? "Club Inconnu", clubData?['sport'] as String?),
                   style: const TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
@@ -642,12 +652,14 @@ class _ClubAnnouncementsList extends StatelessWidget {
   final String userId;
   final bool hasMultipleClubs;
   final Map<String, String>? clubNames;
+  final Map<String, String>? clubSports;
 
   const _ClubAnnouncementsList({
     required this.clubIds,
     required this.userId,
     this.hasMultipleClubs = false,
     this.clubNames,
+    this.clubSports,
   });
 
   // Récupère les teamIds et catégories de l'utilisateur pour tous ses clubs
@@ -802,7 +814,7 @@ class _ClubAnnouncementsList extends StatelessWidget {
                 ),
                 const SizedBox(width: 6),
                 Text(
-                  clubNames?[cid] ?? cid,
+                  formatClubNameWithEmoji(clubNames?[cid] ?? cid, clubSports?[cid]),
                   style: TextStyle(
                     fontSize: 12,
                     color: Colors.grey[700],

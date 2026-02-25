@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:viro_team/utils/firestore_instance.dart';
+import 'package:viro_team/utils/club_emoji_utils.dart';
 import 'package:viro_team/constants/firebase_collections.dart';
 import '../theme/viro_theme.dart';
 import '../utils/firebase_error_handler.dart';
@@ -251,7 +252,7 @@ class _ClubSearchWidgetState extends State<ClubSearchWidget> {
                 visualDensity: VisualDensity.compact,
                 selected: isSelected,
                 title: Text(
-                  club['name'],
+                  formatClubNameWithEmoji(club['name'] as String, club['sport'] as String?),
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 14,

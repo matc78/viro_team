@@ -1,5 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:viro_team/utils/club_emoji_utils.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:viro_team/utils/firestore_instance.dart';
 import 'package:flutter/material.dart';
@@ -674,7 +675,8 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
       final data = snaps[i].data();
       final name = data?['name'] as String? ?? 'Club';
       final logoUrl = data?['logoUrl'] as String?;
-      return <String, dynamic>{'id': id, 'name': name, 'logoUrl': logoUrl};
+      final sport = data?['sport'] as String?;
+      return <String, dynamic>{'id': id, 'name': name, 'logoUrl': logoUrl, 'sport': sport};
     }).toList();
   }
 
@@ -702,6 +704,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
                   c['id'] as String,
                   c['name'] as String,
                   c['logoUrl'] as String?,
+                  c['sport'] as String?,
                 ),
               )
               .toList(),
@@ -710,7 +713,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
     );
   }
 
-  Widget _buildClubCard(String clubId, String clubName, String? logoUrl) {
+  Widget _buildClubCard(String clubId, String clubName, String? logoUrl, String? sport) {
     final clubColor = _getClubColor(clubId);
     final hasLogo = logoUrl != null && logoUrl.isNotEmpty;
     return Material(
@@ -756,7 +759,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  clubName,
+                  formatClubNameWithEmoji(clubName, sport),
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
@@ -2022,8 +2025,9 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
               builder: (context, clubSnap) {
                 final clubData = clubSnap.data?.data() as Map<String, dynamic>?;
                 final clubName = clubData?['name'] as String? ?? "Club";
+                final sport = clubData?['sport'] as String?;
                 return Text(
-                  clubName,
+                  formatClubNameWithEmoji(clubName, sport),
                   style: TextStyle(
                     fontSize: 11,
                     color: clubColor,

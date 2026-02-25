@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:viro_team/utils/club_emoji_utils.dart';
 import 'package:viro_team/utils/firestore_instance.dart';
 import 'package:flutter/material.dart';
 import '../../constants/firebase_collections.dart';
@@ -14,12 +15,14 @@ import '../profil_display_page.dart';
 class AdminMembersPage extends StatefulWidget {
   final String clubId;
   final String clubName;
+  final String? clubSport;
   final String? currentViewerRole;
 
   const AdminMembersPage({
     super.key,
     required this.clubId,
     required this.clubName,
+    this.clubSport,
     this.currentViewerRole,
   });
 
@@ -53,7 +56,7 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text("Membres • ${widget.clubName}"),
+        title: Text("Membres • ${formatClubNameWithEmoji(widget.clubName, widget.clubSport)}"),
         centerTitle: true,
         actions: [
           if (canEdit)

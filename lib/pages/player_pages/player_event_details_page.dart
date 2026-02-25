@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:viro_team/utils/club_emoji_utils.dart';
 import 'package:viro_team/utils/firestore_instance.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -161,7 +162,7 @@ class PlayerEventDetailsPage extends StatelessWidget {
           const Divider(height: 30),
           _infoRow(Icons.location_on_outlined, "Lieu", location),
           const Divider(height: 30),
-          _infoRow(Icons.emoji_events_outlined, "Club", clubName),
+          _infoRow(Icons.emoji_events_outlined, "Club", formatClubNameWithEmoji(clubName, event['clubSport'] as String?)),
         ],
       ),
     );

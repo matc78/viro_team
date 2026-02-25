@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:viro_team/utils/club_emoji_utils.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:viro_team/utils/firestore_instance.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -147,12 +148,29 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
 
                 // --- SECTION : GESTION DU CLUB ---
                 _buildSectionTitle("GESTION DU CLUB"),
-                _buildMenuCard(
-                  icon: Icons.edit_location_alt_outlined,
-                  title: "Changer Nom du Club",
-                  subtitle: clubName,
-                  onTap: () => _showEditClubName(clubId, clubName),
-                ),
+                if (clubId.isNotEmpty)
+                  StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                    stream: _firestore
+                        .collection(FirebaseCollections.clubs)
+                        .doc(clubId)
+                        .snapshots(),
+                    builder: (context, clubSnap) {
+                      final sport = clubSnap.data?.data()?['sport'] as String?;
+                      return _buildMenuCard(
+                        icon: Icons.edit_location_alt_outlined,
+                        title: "Changer Nom du Club",
+                        subtitle: formatClubNameWithEmoji(clubName, sport),
+                        onTap: () => _showEditClubName(clubId, clubName),
+                      );
+                    },
+                  )
+                else
+                  _buildMenuCard(
+                    icon: Icons.edit_location_alt_outlined,
+                    title: "Changer Nom du Club",
+                    subtitle: clubName,
+                    onTap: () => _showEditClubName(clubId, clubName),
+                  ),
                 _buildMenuCard(
                   icon: Icons.image_outlined,
                   title: "Changer le logo du club",
@@ -2445,6 +2463,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
             .get();
         final clubData = clubDoc.data();
         clubInfo['clubName'] = (clubData?['name'] as String?) ?? "Club inconnu";
+        clubInfo['clubSport'] = clubData?['sport'] as String?;
 
         // Récupérer les équipes pour ce club
         final teams = await _fetchTeamsForClub(clubId, userId);
@@ -2490,6 +2509,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
 
   Widget _buildClubInfoInDialog(Map<String, dynamic> clubInfo, String userId) {
     final clubName = clubInfo['clubName'] as String? ?? "Club inconnu";
+    final clubSport = clubInfo['clubSport'] as String?;
     final roles = clubInfo['roles'] as List<String>;
     final license = clubInfo['license'] as String?;
     final teams = clubInfo['teams'] as List<String>? ?? [];
@@ -2506,7 +2526,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            clubName,
+            formatClubNameWithEmoji(clubName, clubSport),
             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
           ),
           const SizedBox(height: 6),

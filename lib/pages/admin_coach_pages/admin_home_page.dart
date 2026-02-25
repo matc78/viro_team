@@ -1,5 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:viro_team/utils/club_emoji_utils.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:viro_team/utils/firestore_instance.dart';
 import 'package:flutter/material.dart';
@@ -216,7 +217,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
                                 ).textTheme.headlineSmall,
                               ),
                               Text(
-                                clubName,
+                                formatClubNameWithEmoji(clubName, club['sport'] as String?),
                                 style: const TextStyle(
                                   color: ViroColors.primary,
                                   fontWeight: FontWeight.bold,
@@ -280,6 +281,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
                               _MembersCountCard(
                                 clubId: clubId,
                                 clubName: clubName,
+                                clubSport: club['sport'] as String?,
                                 userId: user?.uid,
                               ),
                               _TeamsCountCard(clubId: clubId),
@@ -366,7 +368,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
                                   ),
                                   const SizedBox(height: 8),
                                   Text(
-                                    clubName,
+                                    formatClubNameWithEmoji(clubName, club['sport'] as String?),
                                     style: const TextStyle(
                                       fontWeight: FontWeight.bold,
                                       color: Colors.grey,
@@ -2355,11 +2357,13 @@ class _InfoCard extends StatelessWidget {
 class _MembersCountCard extends StatelessWidget {
   final String clubId;
   final String clubName;
+  final String? clubSport;
   final String? userId;
 
   const _MembersCountCard({
     required this.clubId,
     required this.clubName,
+    this.clubSport,
     this.userId,
   });
 
@@ -2383,6 +2387,7 @@ class _MembersCountCard extends StatelessWidget {
                   builder: (_) => AdminMembersPage(
                     clubId: clubId,
                     clubName: clubName,
+                    clubSport: clubSport,
                     currentViewerRole: null,
                   ),
                 ),
@@ -2423,6 +2428,7 @@ class _MembersCountCard extends StatelessWidget {
                     builder: (_) => AdminMembersPage(
                       clubId: clubId,
                       clubName: clubName,
+                      clubSport: clubSport,
                       currentViewerRole: currentViewerRole,
                     ),
                   ),

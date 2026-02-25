@@ -1,5 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:viro_team/utils/club_emoji_utils.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:viro_team/utils/firestore_instance.dart';
 import 'package:flutter/material.dart';
@@ -617,6 +618,7 @@ class ProfilDisplayPage extends StatelessWidget {
   ) {
     final clubId = clubInfo['clubId'] as String;
     final clubName = clubInfo['clubName'] as String? ?? "Club inconnu";
+    final clubSport = clubInfo['clubSport'] as String?;
     final clubLogo = clubInfo['clubLogo'] as String? ?? "";
     final roles = clubInfo['roles'] as List<String>;
     final license = clubInfo['license'] as String?;
@@ -655,7 +657,7 @@ class ProfilDisplayPage extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        clubName,
+                        formatClubNameWithEmoji(clubName, clubSport),
                         style: const TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 16,
@@ -936,6 +938,7 @@ class ProfilDisplayPage extends StatelessWidget {
             .get();
         final clubData = clubDoc.data();
         clubInfo['clubName'] = (clubData?['name'] as String?) ?? "Club inconnu";
+        clubInfo['clubSport'] = clubData?['sport'] as String?;
         clubInfo['clubLogo'] = clubData?['logoUrl'] as String? ?? "";
       } catch (e) {
         clubInfo['clubName'] = "Club inconnu";

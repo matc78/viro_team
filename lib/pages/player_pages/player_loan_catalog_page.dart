@@ -1,6 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:viro_team/utils/club_emoji_utils.dart';
 import 'package:viro_team/utils/firestore_instance.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -35,6 +36,7 @@ class _PlayerLoanCatalogPageState extends State<PlayerLoanCatalogPage>
   String? _selectedClubId;
   bool _initialized = false;
   Map<String, String> _clubNamesCache = {};
+  Map<String, String> _clubSportsCache = {};
 
   // Extraire tous les clubIds du joueur depuis roles
   List<String> _extractClubIds(Map<String, dynamic>? userData) {
@@ -69,6 +71,7 @@ class _PlayerLoanCatalogPageState extends State<PlayerLoanCatalogPage>
   Future<void> _loadClubNames(List<String> clubIds) async {
     if (clubIds.isEmpty) return;
     final Map<String, String> names = {};
+    final Map<String, String> sports = {};
     for (var i = 0; i < clubIds.length; i += 10) {
       final batch = clubIds.sublist(
         i,
@@ -80,7 +83,10 @@ class _PlayerLoanCatalogPageState extends State<PlayerLoanCatalogPage>
             .where(FieldPath.documentId, whereIn: batch)
             .get();
         for (var doc in snapshot.docs) {
-          names[doc.id] = doc.data()['name'] as String? ?? doc.id;
+          final data = doc.data();
+          names[doc.id] = data['name'] as String? ?? doc.id;
+          final sport = data['sport'] as String?;
+          if (sport != null && sport.isNotEmpty) sports[doc.id] = sport;
         }
       } catch (_) {
         for (var id in batch) {
@@ -88,7 +94,10 @@ class _PlayerLoanCatalogPageState extends State<PlayerLoanCatalogPage>
         }
       }
     }
-    if (mounted) setState(() => _clubNamesCache = names);
+    if (mounted) setState(() {
+      _clubNamesCache = names;
+      _clubSportsCache = sports;
+    });
   }
 
   static const _keyLastClubId = 'player_loan_catalog_last_club_id';
@@ -156,7 +165,7 @@ class _PlayerLoanCatalogPageState extends State<PlayerLoanCatalogPage>
               (id) => DropdownMenuItem(
                 value: id,
                 child: Text(
-                  _clubNamesCache[id] ?? id,
+                  formatClubNameWithEmoji(_clubNamesCache[id] ?? id, _clubSportsCache[id]),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),

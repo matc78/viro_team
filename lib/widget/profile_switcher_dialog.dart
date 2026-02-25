@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:viro_team/utils/firestore_instance.dart';
+import 'package:viro_team/utils/club_emoji_utils.dart';
 import 'package:viro_team/constants/firebase_collections.dart';
 import '../services/user_session.dart';
 import '../theme/viro_theme.dart';
@@ -85,37 +86,11 @@ class _ProfileSwitcherDialogState extends State<ProfileSwitcherDialog> {
     }
   }
 
-  /// Émoji selon le sport du club ; "Autre" ou inconnu → ❓
-  static String _sportToEmoji(String? sport) {
-    if (sport == null || sport.isEmpty) return '❓';
-    if (sport.toLowerCase() == 'autre') return '❓';
-    switch (sport) {
-      case 'Football':
-        return '⚽';
-      case 'Basketball':
-        return '🏀';
-      case 'Tennis':
-        return '🎾';
-      case 'Volleyball':
-        return '🏐';
-      case 'Handball':
-        return '🤾';
-      case 'Rugby':
-        return '🏉';
-      case 'Judo':
-        return '🤼';
-      case 'Natation':
-        return '🏊';
-      default:
-        return '❓';
-    }
-  }
-
   /// Pour un joueur avec plusieurs clubs : chaîne d’émojis (un par club, ordre des clubs).
   String _playerClubsSportEmojis(List<String> clubIds) {
     if (clubIds.isEmpty) return '';
     return clubIds
-        .map((id) => _sportToEmoji(_clubSportsCache[id]))
+        .map((id) => sportToEmoji(_clubSportsCache[id]))
         .join(' ');
   }
 
@@ -375,7 +350,7 @@ class _ProfileSwitcherDialogState extends State<ProfileSwitcherDialog> {
                   final profile = grouped.profiles.first;
                   final isCurrent = grouped.isCurrent;
 
-                  // Pour les players avec plusieurs clubs : émojis des sports ; sinon nom du club
+                  // Pour les players avec plusieurs clubs : émojis des sports ; sinon nom du club avec emoji
                   String subtitle;
                   if (grouped.role == 'player' && grouped.clubCount > 1) {
                     final ids = grouped.profiles
@@ -385,7 +360,9 @@ class _ProfileSwitcherDialogState extends State<ProfileSwitcherDialog> {
                     subtitle = _playerClubsSportEmojis(ids);
                     if (subtitle.isEmpty) subtitle = '${grouped.clubCount} clubs';
                   } else {
-                    subtitle = _getClubName(targetClubId);
+                    final name = _getClubName(targetClubId);
+                    final sport = _clubSportsCache[targetClubId];
+                    subtitle = formatClubNameWithEmoji(name, sport);
                   }
 
                   final clubLogoUrl = _getClubLogo(targetClubId);

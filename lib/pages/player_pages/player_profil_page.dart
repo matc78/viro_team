@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:viro_team/utils/club_emoji_utils.dart';
 import 'package:viro_team/utils/firestore_instance.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
@@ -979,7 +980,7 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
                   children: [
                     Expanded(
                       child: Text(
-                        clubName,
+                        formatClubNameWithEmoji(clubName, clubInfo['clubSport'] as String?),
                         style: const TextStyle(
                           fontWeight: FontWeight.w600,
                           fontSize: 14,
@@ -1009,7 +1010,7 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
                                 context: context,
                                 builder: (ctx) => AlertDialog(
                                   title: const Text("Quitter le club"),
-                                  content: Text("Quitter le club $clubName ?"),
+                                  content: Text("Quitter le club ${formatClubNameWithEmoji(clubName, clubInfo['clubSport'] as String?)} ?"),
                                   actions: [
                                     TextButton(
                                       onPressed: () =>
@@ -1405,6 +1406,7 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
             .get();
         final clubData = clubDoc.data();
         clubInfo['clubName'] = (clubData?['name'] as String?) ?? "Club inconnu";
+        clubInfo['clubSport'] = clubData?['sport'] as String?;
 
         // Récupérer les équipes pour ce club
         final userId = FirebaseAuth.instance.currentUser?.uid ?? "";
@@ -1451,6 +1453,7 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
 
   Widget _buildClubInfoInDialog(Map<String, dynamic> clubInfo, String userId) {
     final clubName = clubInfo['clubName'] as String? ?? "Club inconnu";
+    final clubSport = clubInfo['clubSport'] as String?;
     final roles = clubInfo['roles'] as List<String>;
     final license = clubInfo['license'] as String?;
     final teams = clubInfo['teams'] as List<String>? ?? [];
@@ -1467,7 +1470,7 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            clubName,
+            formatClubNameWithEmoji(clubName, clubSport),
             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
           ),
           const SizedBox(height: 6),

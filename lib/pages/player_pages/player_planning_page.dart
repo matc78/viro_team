@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:viro_team/utils/club_emoji_utils.dart';
 import 'package:viro_team/utils/firestore_instance.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -467,6 +468,7 @@ class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
       builder: (context, clubSnap) {
         final clubData = clubSnap.data?.data() as Map<String, dynamic>?;
         final clubName = clubData?['name'] as String? ?? "Club";
+        final sport = clubData?['sport'] as String?;
 
         return Container(
           margin: const EdgeInsets.only(bottom: 12),
@@ -586,7 +588,7 @@ class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
                                   ),
                                   const SizedBox(width: 4),
                                   Text(
-                                    clubName,
+                                    formatClubNameWithEmoji(clubName, sport),
                                     style: TextStyle(
                                       fontSize: 11,
                                       fontWeight: FontWeight.w600,

@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:viro_team/utils/club_emoji_utils.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:viro_team/utils/firestore_instance.dart';
 import 'package:flutter/material.dart';
@@ -63,7 +64,7 @@ class _PlayerPendingPageState extends State<PlayerPendingPage> {
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  "Ta demande pour rejoindre le club \"${widget.clubName}\" est en cours d'examen par l'administrateur.",
+                  "Ta demande pour rejoindre le club \"${formatClubNameWithEmoji(widget.clubName, null)}\" est en cours d'examen par l'administrateur.",
                   textAlign: TextAlign.center,
                   style: const TextStyle(fontSize: 16, color: Colors.grey),
                 ),

@@ -1,5 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:viro_team/utils/club_emoji_utils.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:viro_team/utils/firestore_instance.dart';
 import 'package:flutter/material.dart';
@@ -261,10 +262,11 @@ class _PlayerTeamsPageState extends State<PlayerTeamsPage> {
             final clubData = clubSnap.data?.data() as Map<String, dynamic>?;
             final clubName = clubData?['name'] as String? ?? "Mon Club";
             final clubLogo = clubData?['logoUrl'] as String? ?? "";
+            final sport = clubData?['sport'] as String?;
             return _buildTeamCard(
               context,
               teamData,
-              clubName,
+              formatClubNameWithEmoji(clubName, sport),
               clubLogo,
               clubId,
             );
