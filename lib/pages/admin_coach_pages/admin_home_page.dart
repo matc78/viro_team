@@ -9,6 +9,7 @@ import 'package:viro_team/pages/admin_coach_pages/admin_loans_page.dart';
 import 'package:viro_team/pages/admin_coach_pages/admin_planning_page.dart';
 import 'package:viro_team/pages/admin_coach_pages/admin_teams_page.dart';
 import 'package:viro_team/pages/admin_coach_pages/profil_request_page.dart';
+import 'admin_coach_mode_page.dart';
 import 'admin_members_page.dart';
 import 'admin_profil_page.dart';
 import 'package:intl/intl.dart';
@@ -19,8 +20,6 @@ import '../../utils/firebase_helpers.dart';
 import '../../utils/firebase_error_handler.dart';
 import '../../utils/avatar_moderation.dart';
 import '../../widget/profile_switcher_dialog.dart';
-import '../../widget/sport_score_widget.dart';
-import '../../widget/sport_timer_widget.dart';
 import '../../widget/slide_to_confirm.dart';
 import '../../widget/user_display_tile.dart';
 import '../add_profile_page.dart';
@@ -206,53 +205,25 @@ class _AdminHomePageState extends State<AdminHomePage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Header Bienvenue avec Chronomètre
-                          Row(
+                          // Header Bienvenue
+                          Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      "Salut Coach ! 👋",
-                                      style: Theme.of(
-                                        context,
-                                      ).textTheme.headlineSmall,
-                                    ),
-                                    Text(
-                                      clubName,
-                                      style: const TextStyle(
-                                        color: ViroColors.primary,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 18,
-                                      ),
-                                    ),
-                                  ],
-                                ),
+                              Text(
+                                "Salut Coach ! 👋",
+                                style: Theme.of(
+                                  context,
+                                ).textTheme.headlineSmall,
                               ),
-                              const SizedBox(width: 12),
-                              Flexible(
-                                child: ConstrainedBox(
-                                  constraints: BoxConstraints(
-                                    maxWidth:
-                                        MediaQuery.of(context).size.width * 0.5,
-                                  ),
-                                  child: SportTimerWidget(
-                                    sport: club['sport'] as String?,
-                                    clubId: clubId,
-                                  ),
+                              Text(
+                                clubName,
+                                style: const TextStyle(
+                                  color: ViroColors.primary,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 18,
                                 ),
                               ),
                             ],
-                          ),
-
-                          const SizedBox(height: 30),
-
-                          // Scoreur adaptatif selon le sport
-                          SportScoreWidget(
-                            sport: club['sport'] as String?,
-                            clubId: clubId,
                           ),
 
                           const SizedBox(height: 30),
@@ -290,6 +261,22 @@ class _AdminHomePageState extends State<AdminHomePage> {
                             crossAxisSpacing: 15,
                             mainAxisSpacing: 15,
                             children: [
+                              _adminCard(
+                                title: "Mode Coach",
+                                count: "",
+                                icon: Icons.sports_score,
+                                color: ViroColors.accent,
+                                onTap: () {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) => AdminCoachModePage(
+                                        clubId: clubId,
+                                        sport: club['sport'] as String?,
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
                               _MembersCountCard(
                                 clubId: clubId,
                                 clubName: clubName,

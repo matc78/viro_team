@@ -6,11 +6,13 @@ import '../theme/viro_theme.dart';
 class SportScoreWidget extends StatefulWidget {
   final String? sport;
   final String clubId;
+  final ValueNotifier<int>? resetTrigger;
 
   const SportScoreWidget({
     super.key,
     required this.sport,
     required this.clubId,
+    this.resetTrigger,
   });
 
   @override
@@ -20,6 +22,7 @@ class SportScoreWidget extends StatefulWidget {
 class _SportScoreWidgetState extends State<SportScoreWidget> {
   late SharedPreferences _prefs;
   bool _isInitialized = false;
+  int _lastResetVersion = 0;
 
   // États pour chaque type de scoreur
   int _team1Score = 0;
@@ -45,6 +48,21 @@ class _SportScoreWidgetState extends State<SportScoreWidget> {
   void initState() {
     super.initState();
     _loadScore();
+    widget.resetTrigger?.addListener(_onResetTriggered);
+  }
+
+  @override
+  void dispose() {
+    widget.resetTrigger?.removeListener(_onResetTriggered);
+    super.dispose();
+  }
+
+  void _onResetTriggered() {
+    if (widget.resetTrigger != null &&
+        widget.resetTrigger!.value > _lastResetVersion) {
+      _lastResetVersion = widget.resetTrigger!.value;
+      _resetScore();
+    }
   }
 
   Future<void> _loadScore() async {
@@ -175,7 +193,7 @@ class _SportScoreWidgetState extends State<SportScoreWidget> {
         displayName,
         style: TextStyle(
           fontSize: 14,
-          color: Colors.grey[600],
+          color: Colors.black,
           fontWeight: FontWeight.w500,
         ),
       ),
@@ -235,6 +253,18 @@ class _SportScoreWidgetState extends State<SportScoreWidget> {
       _saveScore();
     });
   }
+
+  bool get _hasNonZeroScore =>
+      _team1Score > 0 ||
+      _team2Score > 0 ||
+      _team1Sets > 0 ||
+      _team2Sets > 0 ||
+      _team1Games > 0 ||
+      _team2Games > 0 ||
+      _team1TennisScore != '0' ||
+      _team2TennisScore != '0' ||
+      _team1JudoScore > 0 ||
+      _team2JudoScore > 0;
 
   void _resetScore() {
     setState(() {
@@ -304,6 +334,31 @@ class _SportScoreWidgetState extends State<SportScoreWidget> {
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
+                          if (_actionHistory.isNotEmpty) ...[
+                            IconButton(
+                              icon: const Icon(Icons.undo, size: 16),
+                              onPressed: _undoLastAction,
+                              tooltip: 'Annuler dernière action',
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                              color: ViroColors.primary,
+                            ),
+                            const SizedBox(width: 8),
+                          ],
+                          IconButton(
+                            icon: Icon(
+                              Icons.refresh,
+                              size: 16,
+                              color: _hasNonZeroScore
+                                  ? ViroColors.primary
+                                  : Colors.grey,
+                            ),
+                            onPressed: _resetScore,
+                            tooltip: 'Réinitialiser',
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                          ),
+                          const SizedBox(width: 8),
                           IconButton(
                             icon: Icon(
                               _isHidden
@@ -317,27 +372,7 @@ class _SportScoreWidgetState extends State<SportScoreWidget> {
                                 : 'Cacher le scoreur',
                             padding: EdgeInsets.zero,
                             constraints: const BoxConstraints(),
-                            color: Colors.grey,
-                          ),
-                          if (_actionHistory.isNotEmpty) ...[
-                            const SizedBox(width: 8),
-                            IconButton(
-                              icon: const Icon(Icons.undo, size: 16),
-                              onPressed: _undoLastAction,
-                              tooltip: 'Annuler dernière action',
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(),
-                              color: ViroColors.primary,
-                            ),
-                          ],
-                          const SizedBox(width: 8),
-                          IconButton(
-                            icon: const Icon(Icons.refresh, size: 16),
-                            onPressed: _resetScore,
-                            tooltip: 'Réinitialiser',
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(),
-                            color: Colors.grey,
+                            color: Colors.black,
                           ),
                         ],
                       ),
@@ -401,7 +436,7 @@ class _SportScoreWidgetState extends State<SportScoreWidget> {
                   const SizedBox(height: 4),
                   Text(
                     'Sets: $_team1Sets',
-                    style: TextStyle(fontSize: 16, color: Colors.grey[700]),
+                    style: const TextStyle(fontSize: 16, color: Colors.black),
                   ),
                   const SizedBox(height: 12),
                   FittedBox(
@@ -435,7 +470,7 @@ class _SportScoreWidgetState extends State<SportScoreWidget> {
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
-                color: Colors.grey,
+                color: Colors.black,
               ),
             ),
             Expanded(
@@ -454,7 +489,7 @@ class _SportScoreWidgetState extends State<SportScoreWidget> {
                   const SizedBox(height: 4),
                   Text(
                     'Sets: $_team2Sets',
-                    style: TextStyle(fontSize: 16, color: Colors.grey[700]),
+                    style: const TextStyle(fontSize: 16, color: Colors.black),
                   ),
                   const SizedBox(height: 12),
                   FittedBox(
@@ -523,7 +558,7 @@ class _SportScoreWidgetState extends State<SportScoreWidget> {
           style: TextStyle(
             fontSize: 24,
             fontWeight: FontWeight.bold,
-            color: Colors.grey,
+            color: Colors.black,
           ),
         ),
         Expanded(
@@ -590,7 +625,7 @@ class _SportScoreWidgetState extends State<SportScoreWidget> {
                   const SizedBox(height: 4),
                   Text(
                     'Games: $_team1Games | Sets: $_team1Sets',
-                    style: TextStyle(fontSize: 14, color: Colors.grey[700]),
+                    style: const TextStyle(fontSize: 14, color: Colors.black),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 12),
@@ -662,7 +697,7 @@ class _SportScoreWidgetState extends State<SportScoreWidget> {
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
-                color: Colors.grey,
+                color: Colors.black,
               ),
             ),
             Expanded(
@@ -681,7 +716,7 @@ class _SportScoreWidgetState extends State<SportScoreWidget> {
                   const SizedBox(height: 4),
                   Text(
                     'Games: $_team2Games | Sets: $_team2Sets',
-                    style: TextStyle(fontSize: 14, color: Colors.grey[700]),
+                    style: const TextStyle(fontSize: 14, color: Colors.black),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 12),
@@ -864,7 +899,7 @@ class _SportScoreWidgetState extends State<SportScoreWidget> {
           style: TextStyle(
             fontSize: 24,
             fontWeight: FontWeight.bold,
-            color: Colors.grey,
+            color: Colors.black,
           ),
         ),
         Expanded(
@@ -1004,7 +1039,7 @@ class _SportScoreWidgetState extends State<SportScoreWidget> {
           style: TextStyle(
             fontSize: 24,
             fontWeight: FontWeight.bold,
-            color: Colors.grey,
+            color: Colors.black,
           ),
         ),
         Expanded(
@@ -1146,7 +1181,7 @@ class _SportScoreWidgetState extends State<SportScoreWidget> {
           style: TextStyle(
             fontSize: 24,
             fontWeight: FontWeight.bold,
-            color: Colors.grey,
+            color: Colors.black,
           ),
         ),
         Expanded(

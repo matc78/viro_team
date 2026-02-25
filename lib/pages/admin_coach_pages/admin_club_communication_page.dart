@@ -261,6 +261,7 @@ class _AdminClubCommunicationPageState
       backgroundColor: ViroColors.background,
       appBar: AppBar(
         title: const Text("Communication Club"),
+        centerTitle: true,
         backgroundColor: ViroColors.background,
         elevation: 0,
       ),

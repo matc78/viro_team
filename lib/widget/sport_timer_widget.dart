@@ -7,8 +7,14 @@ import '../theme/viro_theme.dart';
 class SportTimerWidget extends StatefulWidget {
   final String clubId;
   final String? sport;
+  final ValueNotifier<int>? resetTrigger;
 
-  const SportTimerWidget({super.key, required this.clubId, this.sport});
+  const SportTimerWidget({
+    super.key,
+    required this.clubId,
+    this.sport,
+    this.resetTrigger,
+  });
 
   @override
   State<SportTimerWidget> createState() => _SportTimerWidgetState();
@@ -19,19 +25,32 @@ class _SportTimerWidgetState extends State<SportTimerWidget> {
   int _totalCentiseconds = 0;
   bool _isRunning = false;
   bool _isInitialized = false;
+  int _lastResetVersion = 0;
   late SharedPreferences _prefs;
 
   @override
   void initState() {
     super.initState();
     _loadTimer();
+    widget.resetTrigger?.addListener(_onResetTriggered);
   }
 
   @override
   void dispose() {
     _timer?.cancel();
+    widget.resetTrigger?.removeListener(_onResetTriggered);
     super.dispose();
   }
+
+  void _onResetTriggered() {
+    if (widget.resetTrigger != null &&
+        widget.resetTrigger!.value > _lastResetVersion) {
+      _lastResetVersion = widget.resetTrigger!.value;
+      _resetTimer();
+    }
+  }
+
+  bool _isHidden = false;
 
   Future<void> _loadTimer() async {
     _prefs = await SharedPreferences.getInstance();
@@ -40,6 +59,7 @@ class _SportTimerWidgetState extends State<SportTimerWidget> {
     setState(() {
       _totalCentiseconds = _prefs.getInt('${key}_centiseconds') ?? 0;
       _isRunning = _prefs.getBool('${key}_running') ?? false;
+      _isHidden = _prefs.getBool('${key}_hidden') ?? false;
       _isInitialized = true;
     });
 
@@ -52,6 +72,14 @@ class _SportTimerWidgetState extends State<SportTimerWidget> {
     final key = 'timer_${widget.clubId}_${widget.sport ?? 'default'}';
     await _prefs.setInt('${key}_centiseconds', _totalCentiseconds);
     await _prefs.setBool('${key}_running', _isRunning);
+    await _prefs.setBool('${key}_hidden', _isHidden);
+  }
+
+  void _toggleVisibility() {
+    setState(() {
+      _isHidden = !_isHidden;
+      _saveTimer();
+    });
   }
 
   void _startTimer() {
@@ -105,18 +133,14 @@ class _SportTimerWidgetState extends State<SportTimerWidget> {
       return const SizedBox.shrink();
     }
 
-    final isInactive = !_isRunning && _totalCentiseconds == 0;
-
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: isInactive ? Colors.grey[100] : Colors.white,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isInactive ? Colors.grey[300]! : ViroColors.borderColor,
-        ),
+        border: Border.all(color: ViroColors.borderColor),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.05),
@@ -128,73 +152,98 @@ class _SportTimerWidgetState extends State<SportTimerWidget> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            _formatTime(_totalCentiseconds),
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: isInactive ? Colors.grey[600] : ViroColors.primary,
-              fontFeatures: const [FontFeature.tabularFigures()],
-            ),
-          ),
-          const SizedBox(height: 6),
           Row(
-            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              if (!_isRunning)
-                ElevatedButton(
-                  onPressed: _startTimer,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: ViroColors.primary,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.all(8),
-                    minimumSize: const Size(40, 40),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  child: const Icon(
-                    Icons.play_arrow,
-                    size: 16,
-                    color: Colors.white,
-                  ),
-                )
-              else
-                ElevatedButton(
-                  onPressed: _pauseTimer,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: ViroColors.accent,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.all(8),
-                    minimumSize: const Size(40, 40),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  child: const Icon(Icons.pause, size: 16, color: Colors.white),
+              Text(
+                'Chronomètre',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black,
                 ),
-              const SizedBox(width: 8),
+              ),
+              const Spacer(),
               IconButton(
                 icon: Icon(
-                  Icons.refresh,
+                  _isHidden ? Icons.visibility : Icons.visibility_off,
                   size: 18,
-                  color: isInactive ? Colors.grey[400] : Colors.grey,
                 ),
-                onPressed: _resetTimer,
-                tooltip: 'Réinitialiser',
-                padding: const EdgeInsets.all(8),
-                constraints: const BoxConstraints(),
-                style: IconButton.styleFrom(
-                  backgroundColor: isInactive
-                      ? Colors.grey[200]
-                      : Colors.grey[100],
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
+                onPressed: _toggleVisibility,
+                tooltip: _isHidden ? 'Afficher' : 'Cacher',
               ),
             ],
           ),
+          if (!_isHidden) ...[
+            Text(
+              _formatTime(_totalCentiseconds),
+              style: const TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: ViroColors.primary,
+                fontFeatures: [FontFeature.tabularFigures()],
+              ),
+            ),
+            const SizedBox(height: 6),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (!_isRunning)
+                  ElevatedButton(
+                    onPressed: _startTimer,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: ViroColors.primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.all(8),
+                      minimumSize: const Size(40, 40),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: const Icon(
+                      Icons.play_arrow,
+                      size: 16,
+                      color: Colors.white,
+                    ),
+                  )
+                else
+                  ElevatedButton(
+                    onPressed: _pauseTimer,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: ViroColors.accent,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.all(8),
+                      minimumSize: const Size(40, 40),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: const Icon(Icons.pause, size: 16, color: Colors.white),
+                  ),
+                const SizedBox(width: 8),
+                IconButton(
+                  icon: Icon(
+                    Icons.refresh,
+                    size: 18,
+                    color: _totalCentiseconds > 0
+                        ? ViroColors.primary
+                        : Colors.grey,
+                  ),
+                  onPressed: _resetTimer,
+                  tooltip: 'Réinitialiser',
+                  padding: const EdgeInsets.all(8),
+                  constraints: const BoxConstraints(),
+                  style: IconButton.styleFrom(
+                    backgroundColor: _totalCentiseconds > 0
+                        ? ViroColors.primary.withValues(alpha: 0.15)
+                        : Colors.grey[100],
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );

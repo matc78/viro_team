@@ -54,6 +54,7 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
     return Scaffold(
       appBar: AppBar(
         title: Text("Membres • ${widget.clubName}"),
+        centerTitle: true,
         actions: [
           if (canEdit)
             IconButton(
