@@ -33,6 +33,10 @@ class UserModel {
   /// Indique si l'utilisateur a une demande (rejoindre un club, etc.) en attente
   final bool hasPendingRequest;
 
+  /// Indique si le profil a été complété (page post-connexion Google pour nom, prénom, téléphone).
+  /// Défaut true pour rétrocompatibilité avec les utilisateurs existants.
+  final bool profileCompleted;
+
   UserModel({
     required this.uid,
     this.email,
@@ -43,15 +47,29 @@ class UserModel {
     this.activeContext,
     required this.roles,
     this.hasPendingRequest = false,
+    this.profileCompleted = true,
   });
 
-  /// Parse une liste de chaînes depuis Firestore (List ou Map avec clés "0","1",...).
+  static PlayerClubInfo _parseClubInfo(Map<String, dynamic> m) {
+    return PlayerClubInfo(
+      clubId: m['clubId'] as String?,
+      teamIds: (m['teamIds'] as List?)?.whereType<String>().toList() ?? [],
+      teamNames: (m['teamNames'] as List?)?.whereType<String>().toList() ?? [],
+      categories: (m['categories'] as List?)?.whereType<String>().toList() ?? [],
+      license: m['license'] as String?,
+    );
+  }
+
+  /// Parse une liste de chaînes depuis Firestore (List, Map, ou String unique).
   static List<String> _parseStringList(dynamic value) {
     if (value is List) {
       return value.whereType<String>().toList();
     }
     if (value is Map) {
       return value.values.whereType<String>().toList();
+    }
+    if (value is String && value.isNotEmpty) {
+      return [value];
     }
     return [];
   }
@@ -80,18 +98,18 @@ class UserModel {
       
       List<PlayerClubInfo> clubs = [];
       
-      // Nouvelle structure : liste de clubs
-      if (playerData['clubs'] is List) {
-        final clubsList = playerData['clubs'] as List;
-        for (var clubItem in clubsList) {
+      // Nouvelle structure : liste de clubs (List ou Map "0","1",...)
+      final clubsRaw = playerData['clubs'];
+      if (clubsRaw is List) {
+        for (var clubItem in clubsRaw) {
           if (clubItem is Map) {
-            clubs.add(PlayerClubInfo(
-              clubId: clubItem['clubId'] as String?,
-              teamIds: (clubItem['teamIds'] as List?)?.whereType<String>().toList() ?? [],
-              teamNames: (clubItem['teamNames'] as List?)?.whereType<String>().toList() ?? [],
-              categories: (clubItem['categories'] as List?)?.whereType<String>().toList() ?? [],
-              license: clubItem['license'] as String?,
-            ));
+            clubs.add(_parseClubInfo(clubItem as Map<String, dynamic>));
+          }
+        }
+      } else if (clubsRaw is Map) {
+        for (var clubItem in clubsRaw.values) {
+          if (clubItem is Map) {
+            clubs.add(_parseClubInfo(clubItem as Map<String, dynamic>));
           }
         }
       }
@@ -133,10 +151,14 @@ class UserModel {
     final List<String> adminClubIds = _parseStringList(rolesData['admin']);
 
     // Admin fondateur : liste de clubIds (clubs fondés)
-    final List<String> adminFondateurClubIds =
-        _parseStringList(rolesData['admin_fondateur']);
+    final List<String> adminFondateurClubIds = _parseStringList(
+        rolesData['admin_fondateur'] ?? rolesData['adminFondateur']);
 
     final hasPending = data['hasPendingRequest'] == true;
+    final profileCompletedRaw = data['profileCompleted'];
+    final profileCompleted = identical(profileCompletedRaw, false)
+        ? false
+        : true;
 
     return UserModel(
       uid: doc.id,
@@ -153,6 +175,7 @@ class UserModel {
         adminFondateur: adminFondateurClubIds,
       ),
       hasPendingRequest: hasPending,
+      profileCompleted: profileCompleted,
     );
   }
 
@@ -236,6 +259,14 @@ class UserModel {
     clubIds.addAll(roles.admin);
     clubIds.addAll(roles.adminFondateur);
     return clubIds.toList();
+  }
+
+  /// Vérifie si le activeContext stocké correspond encore à un rôle réel de l'utilisateur.
+  /// Utile après reconnexion pour éviter d'afficher admin alors que l'utilisateur n'a plus ce rôle.
+  bool get isActiveContextCoherent {
+    final ctx = activeContext;
+    if (ctx == null || !ctx.isValid) return false;
+    return hasRoleInClub(ctx.role!, ctx.clubId!);
   }
 
   /// Vérifie si l'utilisateur a un rôle spécifique dans un club

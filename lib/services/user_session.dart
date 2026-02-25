@@ -15,9 +15,14 @@ class UserSession extends ChangeNotifier {
 
   UserModel? _currentUser;
   bool _isLoading = false;
+  bool _hasServerSnapshot = false;
 
   UserModel? get currentUser => _currentUser;
   bool get isLoading => _isLoading;
+
+  /// True après le premier snapshot venu du serveur (pas du cache).
+  /// Évite de restaurer activeContext sur des données Firestore en cache obsolètes.
+  bool get hasServerSnapshot => _hasServerSnapshot;
 
   /// Rôle actuel basé sur activeContext
   String? get currentRole => _currentUser?.activeContext?.role;
@@ -64,6 +69,7 @@ class UserSession extends ChangeNotifier {
   void startListening(String uid) {
     _subscription?.cancel();
     _isLoading = true;
+    _hasServerSnapshot = false;
     notifyListeners();
 
     _subscription = appFirestore
@@ -72,9 +78,22 @@ class UserSession extends ChangeNotifier {
         .snapshots()
         .listen(
           (doc) {
-            if (doc.exists) {
-              _currentUser = UserModel.fromFirestore(doc);
-            } else {
+            try {
+              if (!doc.metadata.isFromCache) _hasServerSnapshot = true;
+              if (doc.exists) {
+                _currentUser = UserModel.fromFirestore(doc);
+                final u = _currentUser!;
+                // Restaurer uniquement sur snapshot serveur pour éviter d'écraser avec des données cache obsolètes
+                if (!doc.metadata.isFromCache &&
+                    u.hasAnyRole &&
+                    !u.isActiveContextCoherent) {
+                  restoreActiveContextIfNeeded();
+                }
+              } else {
+                _currentUser = null;
+              }
+            } catch (e, st) {
+              AppLogger.instance.error('Erreur parsing UserModel', error: e, stackTrace: st, context: {'userId': uid});
               _currentUser = null;
             }
             _isLoading = false;
@@ -97,15 +116,20 @@ class UserSession extends ChangeNotifier {
     _subscription?.cancel();
     _subscription = null;
     _currentUser = null;
+    _hasServerSnapshot = false;
     notifyListeners();
   }
 
-  /// Si l'utilisateur a des rôles admin/coach mais pas de contexte actif valide,
-  /// restaure activeContext sur le premier profil disponible (priorité: admin_fondateur > admin > coach).
+  /// Restaure activeContext si celui-ci est manquant, invalide, ou obsolète
+  /// (l'utilisateur n'a plus le rôle/club indiqué).
+  /// Priorité : admin_fondateur > admin > coach > player.
   /// À appeler après reconnexion pour éviter d'afficher la mauvaise home.
   Future<bool> restoreActiveContextIfNeeded() async {
     final u = _currentUser;
-    if (u == null || u.activeContext?.isValid == true) return false;
+    if (u == null) return false;
+
+    // Ne rien faire si le contexte actuel est valide ET correspond aux rôles réels
+    if (u.isActiveContextCoherent) return false;
 
     String? role;
     String? clubId;
@@ -118,6 +142,9 @@ class UserSession extends ChangeNotifier {
     } else if (u.roles.coach.isNotEmpty) {
       role = 'coach';
       clubId = u.roles.coach.first.clubId;
+    } else if (u.roles.player != null && u.roles.player!.clubs.isNotEmpty) {
+      role = 'player';
+      clubId = u.roles.player!.clubs.first.clubId;
     }
     if (role == null || clubId == null || clubId.isEmpty) return false;
 

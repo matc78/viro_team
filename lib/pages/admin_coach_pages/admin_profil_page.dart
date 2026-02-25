@@ -18,6 +18,7 @@ import 'package:viro_team/services/notification_preferences_service.dart';
 import '../../theme/viro_theme.dart';
 import '../../widget/viro_loader.dart';
 import '../../utils/app_logger.dart';
+import '../../utils/auth_helper.dart';
 import '../../utils/firebase_helpers.dart';
 import '../../utils/firebase_error_handler.dart';
 import '../../utils/avatar_moderation.dart';
@@ -859,7 +860,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
   }
 
   Future<void> _handleSignOut(BuildContext context) async {
-    await _auth.signOut();
+    await signOutCompletely();
     if (context.mounted) {
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const AuthPage()),
@@ -1548,7 +1549,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
     }
 
     try {
-      await _auth.signOut();
+      await signOutCompletely();
     } catch (_) {}
 
     if (!mounted) return;

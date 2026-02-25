@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "396501317680-e88qed1nqntkqgdg611s9pp79qojn3p5.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.viroteam.viro_team",
+            "certificate_hash": "a3e739954643b39dc96eed71783deef3d184b163"
+          }
+        },
+        {
           "client_id": "396501317680-afnku6clj84s00aa5f8ejcjm4oigphom.apps.googleusercontent.com",
           "client_type": 3
         }

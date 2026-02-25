@@ -95,8 +95,9 @@ class _PlayerPendingPageState extends State<PlayerPendingPage> {
                 TextButton(
                   onPressed: _cancelRequest,
                   child: const Text(
-                    "Annuler et choisir un autre club",
-                    style: TextStyle(color: Colors.redAccent),
+                    "Faire une nouvelle demande ou Relancer une demande",
+                    style: TextStyle(color: ViroColors.primary),
+                    textAlign: TextAlign.center,
                   ),
                 ),
               ],

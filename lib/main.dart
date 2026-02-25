@@ -16,6 +16,7 @@ import 'pages/admin_coach_pages/admin_club_communication_page.dart';
 import 'pages/admin_coach_pages/admin_home_page.dart';
 import 'pages/admin_coach_pages/admin_loans_page.dart';
 import 'pages/auth_page.dart';
+import 'pages/complete_profile_page.dart';
 import 'pages/no_internet_page.dart';
 import 'pages/player_pages/player_home_page.dart';
 import 'pages/player_pages/player_event_details_page.dart';
@@ -26,6 +27,7 @@ import 'services/notification_service.dart';
 import 'services/user_session.dart';
 import 'theme/viro_theme.dart';
 import 'utils/app_logger.dart';
+import 'utils/auth_helper.dart';
 import 'utils/connectivity_checker.dart';
 import 'widget/fatal_error_app.dart';
 import 'widget/viro_loader.dart';
@@ -349,15 +351,6 @@ class _AuthGate extends StatefulWidget {
 class _AuthGateState extends State<_AuthGate> {
   Timer? _retryTimer;
   int _userDocRetryCount = 0;
-  bool _restoreRequested = false;
-
-  @override
-  void didUpdateWidget(covariant _AuthGate oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.currentUserId != oldWidget.currentUserId) {
-      _restoreRequested = false;
-    }
-  }
 
   @override
   void dispose() {
@@ -424,7 +417,7 @@ class _AuthGateState extends State<_AuthGate> {
               }
               Future.microtask(() async {
                 try {
-                  await FirebaseAuth.instance.signOut();
+                  await signOutCompletely();
                 } catch (_) {}
               });
               return const AuthPage();
@@ -434,24 +427,17 @@ class _AuthGateState extends State<_AuthGate> {
             final activeRole = activeContext?.role;
             final activeClubId = activeContext?.clubId;
 
-            final hasAdminOrCoachRole =
-                currentUser.roles.adminFondateur.isNotEmpty ||
-                currentUser.roles.admin.isNotEmpty ||
-                currentUser.roles.coach.isNotEmpty;
-
-            // Contexte actif manquant alors que l'utilisateur a un rôle admin/coach : on le restaure (ex. après reconnexion).
-            if (hasAdminOrCoachRole &&
-                (activeContext == null || !activeContext.isValid)) {
-              if (!_restoreRequested) {
-                _restoreRequested = true;
-                WidgetsBinding.instance.addPostFrameCallback((_) async {
-                  if (!mounted) return;
-                  await context.read<UserSession>().restoreActiveContextIfNeeded();
-                });
-              }
+            // Contexte actif manquant, invalide ou obsolète : afficher loader.
+            // La restauration est déclenchée par UserSession lors du premier snapshot serveur (pas cache).
+            if (currentUser.hasAnyRole && !currentUser.isActiveContextCoherent) {
               return const Scaffold(
                 body: Center(child: ViroLoader(size: 50)),
               );
+            }
+
+            // Utilisateur Google qui n'a pas complété son profil (nom, prénom, téléphone)
+            if (currentUser.profileCompleted == false) {
+              return const CompleteProfilePage();
             }
 
             if (!currentUser.hasAnyRole && activeContext == null) {

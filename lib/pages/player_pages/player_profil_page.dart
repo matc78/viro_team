@@ -15,6 +15,7 @@ import '../../constants/firebase_collections.dart';
 import '../../theme/viro_theme.dart';
 import '../../widget/viro_loader.dart';
 import '../../utils/app_logger.dart';
+import '../../utils/auth_helper.dart';
 import '../../utils/firebase_error_handler.dart';
 import '../../utils/avatar_moderation.dart';
 import '../auth_page.dart';
@@ -820,7 +821,7 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
           ElevatedButton(
             onPressed: () async {
               final userId = FirebaseAuth.instance.currentUser?.uid;
-              await FirebaseAuth.instance.signOut();
+              await signOutCompletely();
               AppLogger.instance.info('Déconnexion', {'userId': userId});
               if (!context.mounted) return;
               Navigator.pop(context); // close dialog
@@ -913,7 +914,7 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
 
                 // Supprimer le compte Firebase Auth
                 await user.delete();
-                await FirebaseAuth.instance.signOut();
+                await signOutCompletely();
 
                 if (context.mounted) _goToAuth(context);
               } on FirebaseAuthException catch (e) {

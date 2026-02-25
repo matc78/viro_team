@@ -1,5 +1,5 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:viro_team/utils/auth_helper.dart';
 import 'package:viro_team/pages/onboarding_page.dart';
 import '../../theme/viro_theme.dart';
 
@@ -63,7 +63,7 @@ class PlayerNoClubPage extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               TextButton.icon(
-                onPressed: () => FirebaseAuth.instance.signOut(),
+                onPressed: () => signOutCompletely(),
                 icon: const Icon(Icons.logout_rounded),
                 label: const Text("Se déconnecter"),
                 style: TextButton.styleFrom(foregroundColor: Colors.grey),

@@ -1,4 +1,6 @@
 import 'dart:io';
+
+import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/material.dart';
@@ -40,6 +42,13 @@ class FirebaseErrorHandler {
       stackTrace ?? StackTrace.current,
       fatal: false,
     );
+
+    // Erreur Google Sign-In ApiException 10 (DEVELOPER_ERROR) : SHA-1 ou config OAuth
+    if (error is PlatformException &&
+        error.code == 'sign_in_failed' &&
+        error.message?.contains('ApiException: 10') == true) {
+      return 'Configuration Google Sign-In incorrecte. Vérifiez que le SHA-1 de signature (debug/release) est ajouté dans Firebase Console > Paramètres du projet.';
+    }
 
     // Gestion des erreurs réseau (connexion internet)
     if (error is SocketException) {

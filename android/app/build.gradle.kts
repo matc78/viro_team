@@ -53,11 +53,20 @@ android {
             storeFile = keystoreStoreFile
             storePassword = keystoreProperties["storePassword"] as String?
         }
+        create("debugViro") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
     }
 
     buildTypes {
         release {
             signingConfig = signingConfigs.getByName("release")
+        }
+        debug {
+            signingConfig = signingConfigs.getByName("debugViro")
         }
     }
 }

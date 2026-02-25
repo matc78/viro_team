@@ -1,13 +1,18 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:viro_team/utils/firestore_instance.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show defaultTargetPlatform, TargetPlatform;
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:viro_team/constants/firebase_collections.dart';
 import 'package:viro_team/pages/onboarding_page.dart';
+import 'package:viro_team/utils/firestore_instance.dart';
+import 'package:viro_team/pages/admin_coach_pages/admin_home_page.dart';
 import 'player_pages/player_home_page.dart';
 import '../theme/viro_theme.dart';
 import '../widget/viro_loader.dart';
 import '../utils/app_logger.dart';
+import '../utils/auth_helper.dart';
 import '../utils/firebase_error_handler.dart';
 
 class AuthPage extends StatefulWidget {
@@ -116,7 +121,7 @@ class _AuthPageState extends State<AuthPage> {
             );
             FirebaseErrorHandler.showErrorSnackBar(context, e);
             // Déconnecter l'utilisateur si la création du document échoue
-            await FirebaseAuth.instance.signOut();
+            await signOutCompletely();
             return;
           }
         }
@@ -148,12 +153,116 @@ class _AuthPageState extends State<AuthPage> {
     }
   }
 
-  // Nouvelle logique de redirection
+  /// Extrait prénom et nom depuis displayName (ex: "Jean Dupont" -> prénom="Jean", nom="Dupont")
+  (String firstName, String lastName) _parseDisplayName(String? displayName) {
+    if (displayName == null || displayName.trim().isEmpty) {
+      return ('', '');
+    }
+    final parts = displayName.trim().split(RegExp(r'\s+'));
+    final firstName = parts.firstOrNull ?? '';
+    final lastName = parts.skip(1).join(' ');
+    return (firstName, lastName);
+  }
+
+  Future<void> _signInWithGoogle() async {
+    setState(() => _isLoading = true);
+
+    try {
+      // Android : Web client ID (client_type 3) depuis google-services.json
+      // iOS : utilise le client par défaut du GoogleService-Info.plist
+      final serverClientId = defaultTargetPlatform == TargetPlatform.android
+          ? '396501317680-afnku6clj84s00aa5f8ejcjm4oigphom.apps.googleusercontent.com'
+          : null;
+      final googleSignIn = GoogleSignIn(serverClientId: serverClientId);
+      final googleUser = await googleSignIn.signIn();
+      if (googleUser == null) {
+        if (mounted) setState(() => _isLoading = false);
+        return;
+      }
+
+      final googleAuth = await googleUser.authentication;
+      final credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+
+      final userCredential =
+          await FirebaseAuth.instance.signInWithCredential(credential);
+      final user = userCredential.user;
+      if (user == null) {
+        if (mounted) setState(() => _isLoading = false);
+        return;
+      }
+
+      final isNewUser = userCredential.additionalUserInfo?.isNewUser == true;
+
+      if (isNewUser) {
+        final (firstName, lastName) = _parseDisplayName(user.displayName);
+        try {
+          await appFirestore
+              .collection(FirebaseCollections.users)
+              .doc(user.uid)
+              .set({
+            'firstName': firstName,
+            'lastName': lastName,
+            'email': user.email,
+            'avatarUrl': user.photoURL,
+            'createdAt': FieldValue.serverTimestamp(),
+            'profileCompleted': false,
+          }, SetOptions(merge: true));
+          AppLogger.instance.info(
+            'Compte Google créé',
+            {
+              'userId': user.uid,
+              'email': user.email,
+              'firstName': firstName,
+              'lastName': lastName,
+            },
+          );
+        } catch (e) {
+          AppLogger.instance.error(
+            'Erreur création document utilisateur Google',
+            error: e,
+            context: {'userId': user.uid},
+          );
+          FirebaseErrorHandler.showErrorSnackBar(context, e);
+          await signOutCompletely();
+          if (mounted) setState(() => _isLoading = false);
+          return;
+        }
+      } else {
+        AppLogger.instance.info(
+          'Connexion Google réussie',
+          {'userId': user.uid, 'email': user.email},
+        );
+        // Navigation explicite pour éviter le blocage sur la page de connexion
+        // (l'AuthGate peut avoir un délai/race avec UserSession)
+        await _handleNavigation();
+      }
+    } on FirebaseAuthException catch (e) {
+      AppLogger.instance.error(
+        'Erreur connexion Google',
+        error: e,
+        context: {'errorCode': e.code},
+      );
+      FirebaseErrorHandler.showErrorSnackBar(context, e);
+    } catch (e) {
+      AppLogger.instance.error(
+        'Erreur inattendue connexion Google',
+        error: e,
+      );
+      FirebaseErrorHandler.showErrorSnackBar(context, e);
+    }
+
+    if (mounted) setState(() => _isLoading = false);
+  }
+
+  // Redirection après connexion - utilise activeContext/roles pour éviter
+  // d'afficher PlayerHomePage quand l'utilisateur est admin/coach.
   Future<void> _handleNavigation() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    // Récupération des données utilisateur
     final userDoc = await appFirestore
         .collection(FirebaseCollections.users)
         .doc(user.uid)
@@ -161,21 +270,53 @@ class _AuthPageState extends State<AuthPage> {
 
     if (!mounted) return;
 
-    final data = userDoc.data();
-    final hasPendingRequest = data?['hasPendingRequest'] == true;
-    final hasClub = data?['clubId'] != null;
+    final data = userDoc.data() ?? {};
+    final activeContext = data['activeContext'] as Map<String, dynamic>?;
+    final activeRole = activeContext?['role'] as String?;
+    final hasPendingRequest = data['hasPendingRequest'] == true;
+    final roles = data['roles'] as Map<String, dynamic>? ?? {};
+    final hasAdminOrCoach = _hasRoleIn(roles, 'admin_fondateur') ||
+        _hasRoleIn(roles, 'admin') ||
+        _hasRoleIn(roles, 'coach');
+    final hasPlayer = roles['player'] != null;
 
-    if (hasPendingRequest || hasClub) {
-      // Soit déjà membre, soit en attente : on atterrit sur HomePage
+    if (hasPendingRequest) {
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => const PlayerHomePage()),
       );
-    } else {
-      // Pas de club ni de demande en cours : sélection de rôle
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const OnboardingPage()),
-      );
+      return;
     }
+    if (activeRole == 'admin_fondateur' ||
+        activeRole == 'admin' ||
+        activeRole == 'coach') {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const AdminHomePage()),
+      );
+      return;
+    }
+    if (activeRole == 'player' || (hasPlayer && !hasAdminOrCoach)) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const PlayerHomePage()),
+      );
+      return;
+    }
+    if (hasAdminOrCoach) {
+      // Rôle admin/coach mais pas d'activeContext : AuthGate gérera la restauration
+      return;
+    }
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (_) => const OnboardingPage()),
+    );
+  }
+
+  bool _hasRoleIn(Map<String, dynamic> roles, String roleKey) {
+    final val = roles[roleKey] ??
+        (roleKey == 'admin_fondateur' ? roles['adminFondateur'] : null);
+    if (val == null) return false;
+    if (val is List) return val.isNotEmpty;
+    if (val is Map) return val.isNotEmpty;
+    if (val is String) return val.isNotEmpty;
+    return false;
   }
 
   @override
@@ -293,6 +434,34 @@ class _AuthPageState extends State<AuthPage> {
                     child: _isLoading
                         ? const ViroLoader(size: 30)
                         : Text(_isLogin ? "SE CONNECTER" : "CRÉER UN COMPTE"),
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    const Expanded(child: Divider()),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Text(
+                        "ou",
+                        style: TextStyle(
+                          color: Colors.grey[600],
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                    const Expanded(child: Divider()),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  height: 55,
+                  child: OutlinedButton.icon(
+                    onPressed: _isLoading ? null : _signInWithGoogle,
+                    icon: const FaIcon(FontAwesomeIcons.google, size: 20),
+                    label: const Text("Continuer avec Google"),
                   ),
                 ),
 
