@@ -24,6 +24,7 @@ class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
   DateTime _selectedDate = DateTime.now();
   final String _currentUserId = FirebaseAuth.instance.currentUser?.uid ?? "";
   Map<String, dynamic>? _userData;
+  final ScrollController _dayScrollController = ScrollController();
 
   // Liste des jours pour le sélecteur horizontal (4 semaines = 28 jours)
   List<DateTime> _getDays() {
@@ -70,57 +71,91 @@ class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
   }
 
   @override
+  void dispose() {
+    _dayScrollController.dispose();
+    super.dispose();
+  }
+
+  void _scrollToCenterSelectedDay(int selectedIndex) {
+    const itemWidth = 77.0; // 65 + 6 + 6 (container + margins)
+    // Avec le padding symétrique, l'offset pour centrer l'item i est i * itemWidth
+    final targetOffset = selectedIndex * itemWidth;
+    final maxOffset = _dayScrollController.position.maxScrollExtent;
+    final clampedOffset = targetOffset.clamp(0.0, maxOffset);
+    _dayScrollController.animateTo(
+      clampedOffset,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-      stream: appFirestore
-          .collection(FirebaseCollections.users)
-          .doc(_currentUserId)
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(body: Center(child: ViroLoader(size: 60)));
-        }
-        _userData = snapshot.data?.data();
-        return Scaffold(
-          backgroundColor: ViroColors.background,
-          appBar: AppBar(
-            title: const Text("Mon Planning"),
-            centerTitle: true,
-            elevation: 0,
-            automaticallyImplyLeading: false,
+    return Scaffold(
+      backgroundColor: ViroColors.background,
+      appBar: AppBar(
+        title: const Text("Mon Planning"),
+        centerTitle: true,
+        elevation: 0,
+        automaticallyImplyLeading: false,
+      ),
+      body: Column(
+        children: [
+          _buildDaySelector(context),
+          Expanded(
+            child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+              stream: appFirestore
+                  .collection(FirebaseCollections.users)
+                  .doc(_currentUserId)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: ViroLoader(size: 60));
+                }
+                _userData = snapshot.data?.data();
+                return _buildEventList();
+              },
+            ),
           ),
-          body: Column(
-            children: [
-              _buildDaySelector(),
-              Expanded(child: _buildEventList()),
-            ],
-          ),
-          bottomNavigationBar: playerBottomNav(
-            context,
-            currentIndex: 1,
-            clubId: widget.clubId,
-          ),
-        );
-      },
+        ],
+      ),
+      bottomNavigationBar: playerBottomNav(
+        context,
+        currentIndex: 1,
+        clubId: widget.clubId,
+      ),
     );
   }
 
   // --- SÉLECTEUR DE JOURS HORIZONTAL ---
-  Widget _buildDaySelector() {
+  Widget _buildDaySelector(BuildContext context) {
     final days = _getDays();
+    const itemWidth = 77.0; // 65 + 6 + 6 (container + margins)
+    final viewportWidth = MediaQuery.of(context).size.width;
+    final sidePadding = (viewportWidth - itemWidth) / 2;
+
     return Container(
       height: 110,
       padding: const EdgeInsets.symmetric(vertical: 12),
       color: Colors.white,
       child: ListView.builder(
+        controller: _dayScrollController,
         scrollDirection: Axis.horizontal,
+        padding: EdgeInsets.symmetric(horizontal: sidePadding),
         itemCount: days.length,
         itemBuilder: (context, index) {
           final day = days[index];
           final isSelected = DateUtils.isSameDay(day, _selectedDate);
 
           return GestureDetector(
-            onTap: () => setState(() => _selectedDate = day),
+            onTap: () {
+              setState(() => _selectedDate = day);
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (_dayScrollController.hasClients) {
+                  _scrollToCenterSelectedDay(index);
+                }
+              });
+            },
             child: Container(
               width: 65,
               margin: const EdgeInsets.symmetric(horizontal: 6),
