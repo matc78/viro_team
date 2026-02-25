@@ -65,12 +65,12 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
     }
   }
 
-  // Extraire tous les clubIds du joueur depuis roles
-  List<String> _extractClubIds(Map<String, dynamic>? userData) {
+  // Extraire les clubIds où le user a le rôle PLAYER uniquement
+  // (exclut fondateur, admin, coach — ces rôles ont leur propre interface)
+  List<String> _extractPlayerClubIds(Map<String, dynamic>? userData) {
     final Set<String> clubIdsSet = {};
     final roles = userData?['roles'] as Map<String, dynamic>? ?? {};
 
-    // Player
     if (roles['player'] is Map) {
       final playerData = roles['player'] as Map;
       // Nouvelle structure : liste de clubs
@@ -78,19 +78,17 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
         final clubs = (playerData['clubs'] as List).whereType<Map>();
         for (var club in clubs) {
           final clubId = club['clubId'] as String?;
-          if (clubId != null) clubIdsSet.add(clubId);
+          if (clubId != null && clubId.isNotEmpty) clubIdsSet.add(clubId);
         }
       }
       // Ancienne structure : clubId direct (compatibilité)
       else {
         final playerClubId = playerData['clubId'] as String?;
-        if (playerClubId != null) clubIdsSet.add(playerClubId);
+        if (playerClubId != null && playerClubId.isNotEmpty) {
+          clubIdsSet.add(playerClubId);
+        }
       }
     }
-
-    // Fallback pour compatibilité
-    final legacyClubId = userData?['clubId'] as String?;
-    if (legacyClubId != null) clubIdsSet.add(legacyClubId);
 
     return clubIdsSet.toList();
   }
@@ -157,7 +155,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
           final String clubName =
               userData?['clubName'] as String? ?? "Mon Club";
 
-          final allClubIds = _extractClubIds(userData);
+          final allClubIds = _extractPlayerClubIds(userData);
           // Utiliser le premier clubId pour la compatibilité avec les paramètres existants
           final primaryClubId = finalClubId.isNotEmpty
               ? finalClubId
