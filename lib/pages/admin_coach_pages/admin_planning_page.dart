@@ -21,6 +21,9 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
   String _filterTeam = "Choisir une équipe";
   String _filterCategory = "Choisir une catégorie";
   bool _deleteMode = false;
+  final ScrollController _dayScrollController = ScrollController();
+
+  static const double _dayItemWidth = 77.0; // 65 + 6 + 6 (container + margins)
 
   // Liste des jours pour le sélecteur horizontal (4 semaines = 28 jours)
   // Si un filtre est actif, retourne uniquement les jours avec des événements filtrés
@@ -35,6 +38,23 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
   // Vérifie si un filtre est actif
   bool _hasActiveFilter() {
     return !_filterTeam.startsWith("Choisir") || !_filterCategory.startsWith("Choisir");
+  }
+
+  void _scrollToCenterSelectedDay(int selectedIndex) {
+    final targetOffset = selectedIndex * _dayItemWidth;
+    final maxOffset = _dayScrollController.position.maxScrollExtent;
+    final clampedOffset = targetOffset.clamp(0.0, maxOffset);
+    _dayScrollController.animateTo(
+      clampedOffset,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  @override
+  void dispose() {
+    _dayScrollController.dispose();
+    super.dispose();
   }
 
   @override
@@ -185,25 +205,41 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
                 });
               }
 
+              final viewportWidth = MediaQuery.of(context).size.width;
+              final sidePadding = (viewportWidth - _dayItemWidth) / 2;
+
               return Container(
-                height: 100,
-                padding: const EdgeInsets.symmetric(vertical: 10),
+                height: 110,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                color: Colors.white,
                 child: ListView.builder(
+                  controller: _dayScrollController,
                   scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  padding: EdgeInsets.symmetric(horizontal: sidePadding),
                   itemCount: filteredDays.length,
                   itemBuilder: (context, index) {
                     final date = filteredDays[index];
                     final isSelected = DateUtils.isSameDay(date, _selectedDate);
                     return GestureDetector(
-                      onTap: () => setState(() => _selectedDate = date),
+                      onTap: () {
+                        setState(() => _selectedDate = date);
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          if (_dayScrollController.hasClients) {
+                            _scrollToCenterSelectedDay(index);
+                          }
+                        });
+                      },
                       child: Container(
-                        width: 60,
-                        margin: const EdgeInsets.only(right: 10),
+                        width: 65,
+                        margin: const EdgeInsets.symmetric(horizontal: 6),
                         decoration: BoxDecoration(
-                          color: isSelected ? ViroColors.primary : Colors.white,
+                          color: isSelected ? ViroColors.primary : Colors.grey[50],
                           borderRadius: BorderRadius.circular(15),
-                          border: Border.all(color: ViroColors.borderColor),
+                          border: Border.all(
+                            color: isSelected
+                                ? ViroColors.primary
+                                : ViroColors.borderColor,
+                          ),
                         ),
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -211,23 +247,25 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
                             Text(
                               DateFormat('E', 'fr_FR').format(date).toUpperCase(),
                               style: TextStyle(
+                                color: isSelected ? Colors.white : Colors.grey,
                                 fontSize: 12,
-                                color: isSelected ? Colors.white70 : Colors.grey,
+                                fontWeight: FontWeight.bold,
                               ),
                             ),
+                            const SizedBox(height: 4),
                             Text(
                               date.day.toString(),
                               style: TextStyle(
+                                color: isSelected ? Colors.white : Colors.black,
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,
-                                color: isSelected ? Colors.white : Colors.black,
                               ),
                             ),
                             Text(
                               DateFormat('MMM', 'fr_FR').format(date).toUpperCase(),
                               style: TextStyle(
-                                fontSize: 10,
                                 color: isSelected ? Colors.white70 : Colors.grey,
+                                fontSize: 10,
                               ),
                             ),
                           ],
@@ -243,27 +281,43 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
       );
     }
 
-    // Pas de filtre actif, afficher tous les jours
+    // Pas de filtre actif, afficher tous les jours (style joueur, centrage)
     final days = _getDays();
+    final viewportWidth = MediaQuery.of(context).size.width;
+    final sidePadding = (viewportWidth - _dayItemWidth) / 2;
+
     return Container(
-      height: 100,
-      padding: const EdgeInsets.symmetric(vertical: 10),
+      height: 110,
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      color: Colors.white,
       child: ListView.builder(
+        controller: _dayScrollController,
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
+        padding: EdgeInsets.symmetric(horizontal: sidePadding),
         itemCount: days.length,
         itemBuilder: (context, index) {
           final date = days[index];
           final isSelected = DateUtils.isSameDay(date, _selectedDate);
           return GestureDetector(
-            onTap: () => setState(() => _selectedDate = date),
+            onTap: () {
+              setState(() => _selectedDate = date);
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (_dayScrollController.hasClients) {
+                  _scrollToCenterSelectedDay(index);
+                }
+              });
+            },
             child: Container(
-              width: 60,
-              margin: const EdgeInsets.only(right: 10),
+              width: 65,
+              margin: const EdgeInsets.symmetric(horizontal: 6),
               decoration: BoxDecoration(
-                color: isSelected ? ViroColors.primary : Colors.white,
+                color: isSelected ? ViroColors.primary : Colors.grey[50],
                 borderRadius: BorderRadius.circular(15),
-                border: Border.all(color: ViroColors.borderColor),
+                border: Border.all(
+                  color: isSelected
+                      ? ViroColors.primary
+                      : ViroColors.borderColor,
+                ),
               ),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -271,23 +325,25 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
                   Text(
                     DateFormat('E', 'fr_FR').format(date).toUpperCase(),
                     style: TextStyle(
+                      color: isSelected ? Colors.white : Colors.grey,
                       fontSize: 12,
-                      color: isSelected ? Colors.white70 : Colors.grey,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
+                  const SizedBox(height: 4),
                   Text(
                     date.day.toString(),
                     style: TextStyle(
+                      color: isSelected ? Colors.white : Colors.black,
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
-                      color: isSelected ? Colors.white : Colors.black,
                     ),
                   ),
                   Text(
                     DateFormat('MMM', 'fr_FR').format(date).toUpperCase(),
                     style: TextStyle(
-                      fontSize: 10,
                       color: isSelected ? Colors.white70 : Colors.grey,
+                      fontSize: 10,
                     ),
                   ),
                 ],
@@ -515,31 +571,25 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
                       }
                     }
 
-                    return GestureDetector(
-                      onTap: () =>
-                          _deleteMode ? _onEventTap(docId, data) : null,
-                      child: InkWell(
-                        onTap: () {
-                          if (_deleteMode) {
-                            _onEventTap(docId, data);
-                          } else {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => AdminEventDetailsPage(
-                                  clubId: widget.clubId,
-                                  eventId: docId,
-                                ),
+                    return _buildEventCard(
+                      data,
+                      editing: _deleteMode,
+                      isSeasonCompleted: isSeasonCompleted,
+                      pendingCount: pendingCount,
+                      onTap: () {
+                        if (_deleteMode) {
+                          _onEventTap(docId, data);
+                        } else {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => AdminEventDetailsPage(
+                                clubId: widget.clubId,
+                                eventId: docId,
                               ),
-                            );
-                          }
-                        },
-                        child: _buildEventCard(
-                          data,
-                          editing: _deleteMode,
-                          isSeasonCompleted: isSeasonCompleted,
-                          pendingCount: pendingCount,
-                        ),
-                      ),
+                            ),
+                          );
+                        }
+                      },
                     );
                   },
                 );
@@ -580,16 +630,22 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
     bool editing = false,
     bool isSeasonCompleted = false,
     int pendingCount = 0,
+    VoidCallback? onTap,
   }) {
     final bool canceled = data['canceled'] == true;
-    final bool isMatch = data['type'] == 'Match';
-    Color typeColor = _getTypeColor(data['type']);
+    final bool allDay = data['startTime'] == null && data['endTime'] == null;
+    final String time =
+        allDay ? "ALL DAY" : (data['startTime']?.toString() ?? "--:--");
+    final String type = (data['title'] ?? data['type'] ?? "Événement").toString();
+    final String teamName = _audienceText(data);
+
+    final Color teamColor = _getTeamColor(teamName);
+
     final Map<String, dynamic> attendance = Map<String, dynamic>.from(
       data['attendance'] ?? {},
     );
     int presentCount = attendance.values.where((v) => v == 'present').length;
     int absentCount = attendance.values.where((v) => v == 'absent').length;
-    // fallback sur anciennes listes si map vide
     if (presentCount == 0 && absentCount == 0) {
       presentCount = _countList(data['presentIds']);
       absentCount = _countList(data['absentIds']);
@@ -598,163 +654,200 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
     final int unknownFromMembers = _countList(data['teamMemberIds']) > 0
         ? (_countList(data['teamMemberIds']) - totalResponded).clamp(0, 9999)
         : 0;
-    // Sans réponse = membres sans réponse + joueurs en attente (sans compte)
-    final int totalUnknown = unknownFromMembers + pendingCount;
-    final bool allDay = data['startTime'] == null && data['endTime'] == null;
+    final int noResponseCount = unknownFromMembers + pendingCount;
+
+    final Color borderColor = canceled
+        ? Colors.grey
+        : (isSeasonCompleted
+            ? Colors.grey.shade400
+            : teamColor.withValues(alpha: 0.5));
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: canceled
             ? Colors.grey.shade300
             : (isSeasonCompleted ? Colors.grey.shade100 : Colors.white),
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(
-          color: isSeasonCompleted
-              ? Colors.grey.shade400
-              : ViroColors.borderColor,
-        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: borderColor, width: 2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
-      child: Row(
-        children: [
-          if (editing)
-            Padding(
-              padding: const EdgeInsets.only(right: 10),
-              child: CircleAvatar(
-                radius: 14,
-                backgroundColor: Colors.redAccent.withValues(alpha: 0.9),
-                child: const Icon(Icons.remove, color: Colors.white, size: 18),
-              ),
-            ),
-          Column(
-            children: [
-              Text(
-                isMatch
-                    ? "RDV"
-                    : (allDay ? "ALL" : (data['startTime'] ?? "--:--")),
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                ),
-              ),
-              const Icon(Icons.arrow_drop_down, color: Colors.grey, size: 16),
-              Text(
-                isMatch
-                    ? (data['startTime'] ?? "--:--")
-                    : (allDay ? "DAY" : (data['endTime'] ?? "--:--")),
-                style: const TextStyle(
-                  color: Colors.black,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(width: 16),
-          Container(
-            width: 4,
-            height: 40,
-            decoration: BoxDecoration(
-              color: typeColor,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (canceled)
-                  const Text(
-                    "ANNULÉ",
-                    style: TextStyle(
-                      color: Colors.redAccent,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                if (isSeasonCompleted && !canceled)
-                  const Text(
-                    "SAISON TERMINÉE",
-                    style: TextStyle(
-                      color: Colors.orange,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 11,
-                    ),
-                  ),
-                Text(
-                  (data['title'] ?? data['type']).toUpperCase(),
-                  style: TextStyle(
-                    color: typeColor,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 10,
-                  ),
-                ),
-                Text(
-                  _truncate(_audienceText(data)),
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 15,
-                  ),
-                ),
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(
-                      Icons.location_on_outlined,
-                      size: 14,
-                      color: Colors.grey,
+                    if (editing)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 10),
+                        child: CircleAvatar(
+                          radius: 14,
+                          backgroundColor:
+                              Colors.redAccent.withValues(alpha: 0.9),
+                          child: const Icon(
+                            Icons.remove,
+                            color: Colors.white,
+                            size: 18,
+                          ),
+                        ),
+                      ),
+                    Container(
+                      width: 50,
+                      decoration: BoxDecoration(
+                        color: teamColor.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.access_time,
+                            size: 16,
+                            color: teamColor,
+                          ),
+                          Text(
+                            time,
+                            style: TextStyle(
+                              color: teamColor,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                    const SizedBox(width: 4),
-                    Text(
-                      _truncate(data['location'] ?? "Stade du club"),
-                      style: const TextStyle(color: Colors.grey, fontSize: 12),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  type.toUpperCase(),
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 13,
+                                    color: teamColor,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (canceled)
+                            const Text(
+                              "ANNULÉ",
+                              style: TextStyle(
+                                color: Colors.red,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                              ),
+                            ),
+                          if (isSeasonCompleted && !canceled)
+                            const Text(
+                              "SAISON TERMINÉE",
+                              style: TextStyle(
+                                color: Colors.orange,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 11,
+                              ),
+                            ),
+                          const SizedBox(height: 4),
+                          Text(
+                            _truncate(teamName),
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.location_on_outlined,
+                                size: 14,
+                                color: Colors.grey,
+                              ),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Text(
+                                  _truncate(
+                                    data['location']?.toString() ??
+                                        "Stade du club",
+                                  ),
+                                  style: const TextStyle(
+                                    color: Colors.grey,
+                                    fontSize: 13,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _buildPresenceNumber(presentCount, ViroColors.primary),
+                    const SizedBox(width: 16),
+                    _buildPresenceNumber(absentCount, Colors.red),
+                    const SizedBox(width: 16),
+                    _buildPresenceNumber(noResponseCount, Colors.orange),
                   ],
                 ),
               ],
             ),
           ),
-          if (!editing)
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.thumb_up, size: 16, color: ViroColors.primary),
-                const SizedBox(width: 4),
-                Text(
-                  "$presentCount",
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(width: 10),
-                const Icon(Icons.thumb_down, size: 16, color: Colors.redAccent),
-                const SizedBox(width: 4),
-                Text(
-                  "$absentCount",
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(width: 10),
-                const Icon(Icons.help_outline, size: 16, color: Colors.orange),
-                const SizedBox(width: 4),
-                Text(
-                  "$totalUnknown",
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
-              ],
-            ),
-        ],
+        ),
       ),
     );
   }
 
-  Color _getTypeColor(String type) {
-    switch (type) {
-      case 'Entraînement':
-        return Colors.blue;
-      case 'Match':
-        return Colors.orange;
-      case 'Évènement':
-        return Colors.purple;
-      default:
-        return Colors.yellow;
-    }
+  /// Couleur déterministe par équipe (pour bordure, bloc heure, type).
+  Color _getTeamColor(String teamName) {
+    if (teamName.isEmpty) return ViroColors.primary;
+    final index = teamName.hashCode.abs() % ViroColors.clubPalette.length;
+    return ViroColors.clubPalette[index];
+  }
+
+  Widget _buildPresenceNumber(int count, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        '$count',
+        style: TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.bold,
+          color: color,
+        ),
+      ),
+    );
   }
 
   int _timeToMinutes(dynamic time) {

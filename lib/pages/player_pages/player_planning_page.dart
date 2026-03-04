@@ -452,6 +452,25 @@ class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
     return matchTeam || matchCat;
   }
 
+  /// Récupère les IDs des joueurs en attente (pending_members) de l'équipe.
+  static Future<List<String>> _getPendingPlayerIdsForTeam(
+    String clubId,
+    String teamName,
+  ) async {
+    if (teamName.isEmpty) return [];
+    final snap = await appFirestore
+        .collection(FirebaseCollections.clubs)
+        .doc(clubId)
+        .collection(FirebaseCollections.teams)
+        .where('name', isEqualTo: teamName)
+        .limit(1)
+        .get();
+    if (snap.docs.isEmpty) return [];
+    final data = snap.docs.first.data();
+    final list = data['pendingPlayerIds'] as List?;
+    return list?.whereType<String>().toList() ?? [];
+  }
+
   Future<void> _updateAttendance(
     String clubId,
     String eventId,
@@ -489,21 +508,36 @@ class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
     final myStatus = attendance[_currentUserId]?.toString() ?? 'none';
     final presentCount = attendance.values.where((v) => v == 'present').length;
     final absentCount = attendance.values.where((v) => v == 'absent').length;
-    final noResponseCount = attendance.values
-        .where((v) => v != 'present' && v != 'absent')
-        .length;
+    final teamMemberIds = (data['teamMemberIds'] as List<dynamic>?) ?? [];
     final hasNotResponded = myStatus != 'present' && myStatus != 'absent';
 
     // Récupérer la couleur du club
     final clubColor = _getClubColor(clubId);
 
-    // Récupérer le nom du club
-    return FutureBuilder<DocumentSnapshot>(
-      future: appFirestore.collection(FirebaseCollections.clubs).doc(clubId).get(),
-      builder: (context, clubSnap) {
-        final clubData = clubSnap.data?.data() as Map<String, dynamic>?;
+    // Récupérer le nom du club et le nombre de pending pour calculer les sans réponse
+    return FutureBuilder<Map<String, dynamic>>(
+      future: () async {
+        final clubDoc = await appFirestore
+            .collection(FirebaseCollections.clubs)
+            .doc(clubId)
+            .get();
+        final pendingIds = await _getPendingPlayerIdsForTeam(clubId, teamName);
+        return {
+          'club': clubDoc,
+          'pendingCount': pendingIds.length,
+        };
+      }(),
+      builder: (context, snap) {
+        final clubDoc = snap.data?['club'] as DocumentSnapshot?;
+        final pendingCount = (snap.data?['pendingCount'] as int?) ?? 0;
+        final clubData = clubDoc?.data() as Map<String, dynamic>?;
         final clubName = clubData?['name'] as String? ?? "Club";
         final sport = clubData?['sport'] as String?;
+
+        // Total convoqués = membres avec compte + pending ; sans réponse = total - présents - absents
+        final totalConvoqued = teamMemberIds.length + pendingCount;
+        final noResponseCount =
+            (totalConvoqued - presentCount - absentCount).clamp(0, totalConvoqued);
 
         return Container(
           margin: const EdgeInsets.only(bottom: 12),
@@ -699,8 +733,8 @@ class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
                               ),
                               label: const Text("Présent"),
                               style: OutlinedButton.styleFrom(
-                                foregroundColor: ViroColors.success,
-                                side: BorderSide(color: ViroColors.success),
+                                foregroundColor: ViroColors.primary,
+                                side: BorderSide(color: ViroColors.primary),
                               ),
                             ),
                           ),
@@ -712,8 +746,8 @@ class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
                               icon: const Icon(Icons.cancel_outlined, size: 18),
                               label: const Text("Absent"),
                               style: OutlinedButton.styleFrom(
-                                foregroundColor: Colors.red.shade700,
-                                side: BorderSide(color: Colors.red.shade700),
+                                foregroundColor: Colors.red,
+                                side: BorderSide(color: Colors.red),
                               ),
                             ),
                           ),

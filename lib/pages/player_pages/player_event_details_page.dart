@@ -25,6 +25,25 @@ class PlayerEventDetailsPage extends StatelessWidget {
 
   static final EventService _eventService = EventService();
 
+  /// Récupère les IDs des joueurs en attente (pending_members) de l'équipe.
+  static Future<List<String>> _getPendingPlayerIdsForTeam(
+    String clubId,
+    String teamName,
+  ) async {
+    if (teamName.isEmpty) return [];
+    final snap = await appFirestore
+        .collection(FirebaseCollections.clubs)
+        .doc(clubId)
+        .collection(FirebaseCollections.teams)
+        .where('name', isEqualTo: teamName)
+        .limit(1)
+        .get();
+    if (snap.docs.isEmpty) return [];
+    final data = snap.docs.first.data();
+    final list = data['pendingPlayerIds'] as List?;
+    return list?.whereType<String>().toList() ?? [];
+  }
+
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<DocumentSnapshot?>(
@@ -55,26 +74,51 @@ class PlayerEventDetailsPage extends StatelessWidget {
         );
         final List<dynamic> teamMembers = event['teamMemberIds'] ?? [];
 
+        final String currentUserId =
+            FirebaseAuth.instance.currentUser?.uid ?? "";
+
         return Scaffold(
           backgroundColor: ViroColors.background,
           appBar: AppBar(title: Text(type), elevation: 0),
-          body: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // --- HEADER INFO ---
-                _buildEventHeader(date, event, team, categories),
+          body: FutureBuilder<List<String>>(
+            future: _getPendingPlayerIdsForTeam(clubId, team),
+            initialData: const <String>[],
+            builder: (context, pendingSnap) {
+              final pendingPlayerIds = pendingSnap.data ?? [];
+              return SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // --- HEADER INFO ---
+                    _buildEventHeader(date, event, team, categories),
 
-                // --- INFOS PRATIQUES ---
-                _buildInfoSection(location, event),
+                    // --- INFOS PRATIQUES ---
+                    _buildInfoSection(location, event),
 
-                // --- STATISTIQUES ---
-                _buildAttendanceSummary(attendance),
+                    // --- STATISTIQUES (cliquables pour les joueurs) ---
+                    _buildAttendanceSummary(
+                      context,
+                      attendance,
+                      teamMembers,
+                      clubId,
+                      eventId,
+                      currentUserId,
+                      pendingCount: pendingPlayerIds.length,
+                    ),
 
-                // --- LISTES DES JOUEURS ---
-                _buildAttendanceTabs(context, attendance, teamMembers),
-              ],
-            ),
+                    // --- LISTES DES JOUEURS ---
+                    _buildAttendanceTabs(
+                      context,
+                      attendance,
+                      teamMembers,
+                      clubId,
+                      eventId,
+                      pendingPlayerIds,
+                    ),
+                  ],
+                ),
+              );
+            },
           ),
         );
       },
@@ -199,7 +243,7 @@ class PlayerEventDetailsPage extends StatelessWidget {
     BuildContext context,
     String clubId,
     String eventId,
-    String newStatus,
+    String? newStatus,
   ) async {
     final String uid = FirebaseAuth.instance.currentUser?.uid ?? "";
     if (uid.isEmpty) {
@@ -211,17 +255,27 @@ class PlayerEventDetailsPage extends StatelessWidget {
     }
 
     try {
-      await appFirestore
-          .collection(FirebaseCollections.clubs)
-          .doc(clubId)
-          .collection(FirebaseCollections.events)
-          .doc(eventId)
-          .update({'attendance.$uid': newStatus});
+      if (newStatus == null) {
+        // Sans réponse : retirer l'entrée
+        await appFirestore
+            .collection(FirebaseCollections.clubs)
+            .doc(clubId)
+            .collection(FirebaseCollections.events)
+            .doc(eventId)
+            .update({'attendance.$uid': FieldValue.delete()});
+      } else {
+        await appFirestore
+            .collection(FirebaseCollections.clubs)
+            .doc(clubId)
+            .collection(FirebaseCollections.events)
+            .doc(eventId)
+            .update({'attendance.$uid': newStatus});
+      }
       AppLogger.instance.info('Mise à jour de présence', {
         'userId': uid,
         'clubId': clubId,
         'eventId': eventId,
-        'status': newStatus,
+        'status': newStatus ?? 'none',
       });
     } catch (e) {
       AppLogger.instance.error(
@@ -231,76 +285,207 @@ class PlayerEventDetailsPage extends StatelessWidget {
           'userId': uid,
           'clubId': clubId,
           'eventId': eventId,
-          'status': newStatus,
+          'status': newStatus ?? 'none',
         },
       );
       FirebaseErrorHandler.showErrorSnackBar(context, e);
     }
   }
 
-  Widget _buildAttendanceSummary(Map<String, dynamic> attendance) {
+  Widget _buildAttendanceSummary(
+    BuildContext context,
+    Map<String, dynamic> attendance,
+    List<dynamic> teamMembers,
+    String clubId,
+    String eventId,
+    String currentUserId, {
+    int pendingCount = 0,
+  }) {
     int present = attendance.values.where((v) => v == 'present').length;
     int absent = attendance.values.where((v) => v == 'absent').length;
-    int total = attendance.length;
-    int noResponse = total - (present + absent);
+    int total = teamMembers.isEmpty
+        ? attendance.length
+        : teamMembers.length;
+    total += pendingCount;
+    int noResponse = (total - (present + absent)).clamp(0, total);
 
+    final String currentStatus =
+        (attendance[currentUserId] as String?) ?? 'none';
+
+    if (currentUserId.isEmpty) {
+      return _summaryRow(
+        present: present,
+        absent: absent,
+        noResponse: noResponse,
+        currentStatus: currentStatus,
+        isPlayer: false,
+        context: context,
+        clubId: clubId,
+        eventId: eventId,
+      );
+    }
+
+    return FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      future: appFirestore
+          .collection(FirebaseCollections.users)
+          .doc(currentUserId)
+          .get(),
+      builder: (context, userSnap) {
+        final bool isPlayer;
+        if (userSnap.hasData && userSnap.data?.data() != null) {
+          final role = getUserRoleInClub(
+            userSnap.data!.data()!,
+            clubId,
+          );
+          isPlayer = role == 'player';
+        } else {
+          isPlayer = false;
+        }
+
+        return _summaryRow(
+          present: present,
+          absent: absent,
+          noResponse: noResponse,
+          currentStatus: currentStatus,
+          isPlayer: isPlayer,
+          context: context,
+          clubId: clubId,
+          eventId: eventId,
+        );
+      },
+    );
+  }
+
+  Widget _summaryRow({
+    required int present,
+    required int absent,
+    required int noResponse,
+    required String currentStatus,
+    required bool isPlayer,
+    required BuildContext context,
+    required String clubId,
+    required String eventId,
+  }) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
         children: [
-          _statBadge("PRÉSENTS", present, ViroColors.primary),
+          _statBadge(
+            "PRÉSENTS",
+            present,
+            ViroColors.primary,
+            isSelected: isPlayer && currentStatus == 'present',
+            isPlayer: isPlayer,
+            onTap: isPlayer
+                ? () => _toggleAttendance(context, clubId, eventId, 'present')
+                : null,
+          ),
           const SizedBox(width: 10),
-          _statBadge("ABSENTS", absent, Colors.redAccent),
+          _statBadge(
+            "ABSENTS",
+            absent,
+            Colors.redAccent,
+            isSelected: isPlayer && currentStatus == 'absent',
+            isPlayer: isPlayer,
+            onTap: isPlayer
+                ? () => _toggleAttendance(context, clubId, eventId, 'absent')
+                : null,
+          ),
           const SizedBox(width: 10),
-          _statBadge("SANS RÉPONSE", noResponse, Colors.orange),
+          _statBadge(
+            "SANS RÉPONSE",
+            noResponse,
+            Colors.orange,
+            isSelected: isPlayer && currentStatus == 'none',
+            isPlayer: isPlayer,
+            onTap: isPlayer
+                ? () => _toggleAttendance(context, clubId, eventId, null)
+                : null,
+          ),
         ],
       ),
     );
   }
 
-  Widget _statBadge(String label, int count, Color color) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withValues(alpha: 0.3)),
+  Widget _statBadge(
+    String label,
+    int count,
+    Color color, {
+    required bool isSelected,
+    required bool isPlayer,
+    VoidCallback? onTap,
+  }) {
+    final child = AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      transform: Matrix4.identity()..scale(isSelected && isPlayer ? 1.03 : 1.0),
+      transformAlignment: Alignment.center,
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isSelected && isPlayer
+              ? color
+              : color.withValues(alpha: 0.3),
+          width: isSelected && isPlayer ? 2.0 : 1.0,
         ),
-        child: Column(
-          children: [
-            Text(
-              count.toString(),
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: color,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 9,
-                    fontWeight: FontWeight.w900,
-                    color: color,
-                  ),
+        boxShadow: isSelected && isPlayer
+            ? [
+                BoxShadow(
+                  color: color.withValues(alpha: 0.25),
+                  blurRadius: 8,
+                  spreadRadius: 0,
                 ),
-              ],
-            ),
+              ]
+            : null,
+      ),
+      child: Column(
+        children: [
+          if (isSelected && isPlayer) ...[
+            Icon(Icons.check_circle_rounded, color: color, size: 20),
+            const SizedBox(height: 4),
           ],
-        ),
+          Text(
+            count.toString(),
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 9,
+              fontWeight: FontWeight.w900,
+              color: color,
+            ),
+          ),
+        ],
       ),
     );
+
+    if (onTap != null) {
+      return Expanded(
+        child: GestureDetector(
+          onTap: onTap,
+          behavior: HitTestBehavior.opaque,
+          child: child,
+        ),
+      );
+    }
+
+    return Expanded(child: child);
   }
 
   Widget _buildAttendanceTabs(
     BuildContext context,
     Map<String, dynamic> attendance,
     List<dynamic> teamMembers,
+    String clubId,
+    String eventId,
+    List<String> pendingPlayerIds,
   ) {
     // 1. Préparation de la liste complète (id -> statut)
     final Map<String, dynamic> fullList = Map.from(attendance);
@@ -328,6 +513,8 @@ class PlayerEventDetailsPage extends StatelessWidget {
     });
 
     final userIds = sortedEntries.map((e) => e.key.toString()).toList();
+    final hasUsers = sortedEntries.isNotEmpty;
+    final hasPending = pendingPlayerIds.isNotEmpty;
 
     return Padding(
       padding: const EdgeInsets.all(16),
@@ -343,38 +530,163 @@ class PlayerEventDetailsPage extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          if (sortedEntries.isEmpty)
+          if (!hasUsers && !hasPending)
             const Center(child: Text("Aucun joueur convoqué"))
           else
-            FutureBuilder<List<DocumentSnapshot<Map<String, dynamic>>>>(
-              future: fetchUsersBatch(userIds),
-              builder: (context, snap) {
-                if (!snap.hasData) {
-                  return const Center(child: ViroLoader(size: 40));
-                }
-                final docs = snap.data!;
-                final userMap = {
-                  for (final doc in docs)
-                    doc.id: doc.data() as Map<String, dynamic>,
-                };
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (hasUsers)
+                  FutureBuilder<List<DocumentSnapshot<Map<String, dynamic>>>>(
+                    future: fetchUsersBatch(userIds),
+                    builder: (context, snap) {
+                      if (!snap.hasData) {
+                        return const Center(child: ViroLoader(size: 40));
+                      }
+                      final docs = snap.data!;
+                      final userMap = {
+                        for (final doc in docs)
+                          doc.id: doc.data() as Map<String, dynamic>,
+                      };
 
-                return Column(
-                  children: sortedEntries.map((entry) {
-                    final userId = entry.key.toString();
-                    final user = userMap[userId] ?? <String, dynamic>{};
-                    if (user.isEmpty) return const SizedBox.shrink();
-                    return _buildPlayerTile(
-                      context,
-                      userId,
-                      user,
-                      entry.value,
+                      return Column(
+                        children: sortedEntries.map((entry) {
+                          final userId = entry.key.toString();
+                          final user = userMap[userId] ?? <String, dynamic>{};
+                          if (user.isEmpty) return const SizedBox.shrink();
+                          return _buildPlayerTile(
+                            context,
+                            userId,
+                            user,
+                            entry.value,
+                            clubId,
+                            eventId,
+                          );
+                        }).toList(),
+                      );
+                    },
+                  ),
+                if (hasPending) ...[
+                  if (hasUsers) const SizedBox(height: 12),
+                  FutureBuilder<
+                      List<DocumentSnapshot<Map<String, dynamic>>>>(
+                    future: _fetchPendingMembersBatch(
                       clubId,
-                      eventId,
-                    );
-                  }).toList(),
-                );
-              },
+                      pendingPlayerIds,
+                    ),
+                    builder: (context, pendingSnap) {
+                      if (!pendingSnap.hasData) {
+                        return const SizedBox.shrink();
+                      }
+                      final pendingDocs = pendingSnap.data!;
+                      return Column(
+                        children: pendingDocs.asMap().entries.map((e) {
+                          final id = pendingPlayerIds[e.key];
+                          final doc = e.value;
+                          final data = doc.data() ?? {};
+                          if (data.isEmpty) return const SizedBox.shrink();
+                          return _buildPendingPlayerTile(id, data);
+                        }).toList(),
+                      );
+                    },
+                  ),
+                ],
+              ],
             ),
+        ],
+      ),
+    );
+  }
+
+  static Future<List<DocumentSnapshot<Map<String, dynamic>>>>
+      _fetchPendingMembersBatch(
+    String clubId,
+    List<String> docIds,
+  ) async {
+    if (docIds.isEmpty) return [];
+    final refs = docIds
+        .map(
+          (id) => appFirestore
+              .collection(FirebaseCollections.clubs)
+              .doc(clubId)
+              .collection(FirebaseCollections.pendingMembers)
+              .doc(id),
+        )
+        .toList();
+    final snaps = await Future.wait(refs.map((r) => r.get()));
+    return snaps.cast<DocumentSnapshot<Map<String, dynamic>>>().toList();
+  }
+
+  Widget _buildPendingPlayerTile(
+    String pendingId,
+    Map<String, dynamic> data,
+  ) {
+    final firstName = data['firstName'] as String? ?? '';
+    final lastName = data['lastName'] as String? ?? '';
+    final email = data['email'] as String? ?? '';
+    final displayName = '$firstName $lastName'.trim().isEmpty
+        ? email
+        : '$firstName $lastName'.trim();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: ViroColors.borderColor),
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 20,
+            backgroundColor: ViroColors.primary.withValues(alpha: 0.1),
+            child: Icon(
+              Icons.person_outline,
+              color: ViroColors.primary,
+              size: 22,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  displayName,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
+                ),
+                if (email.isNotEmpty)
+                  Text(
+                    email,
+                    style: const TextStyle(
+                      color: Colors.grey,
+                      fontSize: 12,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.grey.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: const Text(
+              "Compte en attente",
+              style: TextStyle(
+                color: Colors.grey,
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
         ],
       ),
     );
