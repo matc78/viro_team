@@ -1,8 +1,13 @@
+import 'dart:convert';
+import 'dart:math';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:viro_team/utils/club_emoji_utils.dart';
 import 'package:viro_team/utils/firestore_instance.dart';
-import 'package:flutter/material.dart';
 import '../../constants/firebase_collections.dart';
 import '../../theme/viro_theme.dart';
 import '../../utils/app_logger.dart';
@@ -53,6 +58,9 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
     final bool canEdit =
         widget.currentViewerRole == 'admin' ||
         widget.currentViewerRole == 'admin_fondateur';
+    final bool canSendInviteLink =
+        canEdit ||
+        widget.currentViewerRole == 'coach';
 
     return Scaffold(
       appBar: AppBar(
@@ -245,7 +253,7 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(12, 16, 12, 24),
-                    child: _buildBottomCardContent(canEdit),
+                    child: _buildBottomCardContent(canEdit: canEdit, canSendInviteLink: canSendInviteLink),
                   ),
                 ),
               SliverToBoxAdapter(
@@ -468,7 +476,7 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
   }
 
   /// Contenu de la carte "En attente" (sans Positioned, pour le scroll).
-  Widget _buildBottomCardContent(bool canEdit) {
+  Widget _buildBottomCardContent({required bool canEdit, required bool canSendInviteLink}) {
     return Card(
       margin: EdgeInsets.zero,
       child: Padding(
@@ -499,32 +507,14 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
               ],
             ),
             const SizedBox(height: 8),
-            _buildPendingMembersSection(canEdit),
-            if (canEdit) ...[
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: _isRemoving
-                      ? null
-                      : () {
-                          // TODO: envoyer lien de connexion
-                        },
-                  icon: const Icon(Icons.link, size: 20),
-                  label: const Text("Envoyer lien de connexion"),
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
-                ),
-              ),
-            ],
+            _buildPendingMembersSection(canEdit: canEdit, canSendInviteLink: canSendInviteLink),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildPendingMembersSection(bool canEdit) {
+  Widget _buildPendingMembersSection({required bool canEdit, required bool canSendInviteLink}) {
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
       stream: appFirestore
           .collection(FirebaseCollections.clubs)
@@ -620,32 +610,47 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
                   email,
                   style: const TextStyle(color: Colors.grey, fontSize: 12),
                 ),
-                trailing: canEdit
+                trailing: (canEdit || canSendInviteLink)
                     ? Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          IconButton(
-                            onPressed: () => _showEditPendingMemberDialog(
-                              context,
-                              doc.reference,
-                              firstName,
-                              lastName,
-                              email,
+                          if (canSendInviteLink)
+                            IconButton(
+                              onPressed: () => _sendInviteLink(
+                                context,
+                                doc.id,
+                                firstName,
+                                lastName,
+                                email,
+                              ),
+                              icon: const Icon(Icons.link),
+                              color: ViroColors.primary,
+                              tooltip: "Envoyer lien de connexion",
                             ),
-                            icon: const Icon(Icons.edit_outlined),
-                            color: ViroColors.accent,
-                            tooltip: "Éditer",
-                          ),
-                          IconButton(
-                            onPressed: () => _confirmRemovePendingMember(
-                              context,
-                              doc.reference,
-                              '$firstName $lastName'.trim(),
+                          if (canEdit)
+                            IconButton(
+                              onPressed: () => _showEditPendingMemberDialog(
+                                context,
+                                doc.reference,
+                                firstName,
+                                lastName,
+                                email,
+                              ),
+                              icon: const Icon(Icons.edit_outlined),
+                              color: ViroColors.accent,
+                              tooltip: "Éditer",
                             ),
-                            icon: const Icon(Icons.delete_outline),
-                            color: Colors.red,
-                            tooltip: "Supprimer",
-                          ),
+                          if (canEdit)
+                            IconButton(
+                              onPressed: () => _confirmRemovePendingMember(
+                                context,
+                                doc.reference,
+                                '$firstName $lastName'.trim(),
+                              ),
+                              icon: const Icon(Icons.delete_outline),
+                              color: Colors.red,
+                              tooltip: "Supprimer",
+                            ),
                         ],
                       )
                     : null,
@@ -779,6 +784,117 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
         'Erreur mise à jour membre en attente',
         error: e,
         context: {'clubId': widget.clubId},
+      );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(FirebaseErrorHandler.getErrorMessage(e))),
+        );
+      }
+    }
+  }
+
+  /// Génère un token unique et URL-safe pour un lien d'invite (utilisé comme ID de document).
+  String _generateInviteToken() {
+    final bytes = List<int>.generate(18, (_) => Random.secure().nextInt(256));
+    return base64UrlEncode(bytes).replaceAll('=', '').replaceAll('+', '-').replaceAll('/', '_');
+  }
+
+  Future<void> _sendInviteLink(
+    BuildContext context,
+    String pendingMemberId,
+    String firstName,
+    String lastName,
+    String email,
+  ) async {
+    if (email.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Email manquant pour ce membre.")),
+      );
+      return;
+    }
+    try {
+      final clubId = widget.clubId;
+      final teamsSnap = await appFirestore
+          .collection(FirebaseCollections.clubs)
+          .doc(clubId)
+          .collection(FirebaseCollections.teams)
+          .get();
+      final List<Map<String, dynamic>> teams = [];
+      for (final teamDoc in teamsSnap.docs) {
+        final data = teamDoc.data();
+        final pendingIds = List<String>.from(data['pendingPlayerIds'] ?? []);
+        if (pendingIds.contains(pendingMemberId)) {
+          teams.add({
+            'teamId': teamDoc.id,
+            'teamName': data['name'] as String? ?? '',
+            'category': data['category'] as String? ?? '',
+          });
+        }
+      }
+      final token = _generateInviteToken();
+      final expiresAt = DateTime.now().add(const Duration(days: 7));
+      await appFirestore
+          .collection(FirebaseCollections.clubs)
+          .doc(clubId)
+          .collection(FirebaseCollections.inviteLinks)
+          .doc(token)
+          .set({
+        'token': token,
+        'pendingMemberId': pendingMemberId,
+        'email': email.trim().toLowerCase(),
+        'firstName': firstName.trim(),
+        'lastName': lastName.trim(),
+        'expiresAt': Timestamp.fromDate(expiresAt),
+        'teams': teams,
+      });
+      final inviteUrl = 'viroteam://invite?t=$token&c=$clubId';
+      final toAddress = email.trim().toLowerCase();
+      final subject = 'Invitation ViroTeam - Créer votre compte';
+      final bodyLong =
+        'Bonjour $firstName,\n\n'
+        'Votre club vous invite à rejoindre ViroTeam. Téléchargez l\'application puis ouvrez ce lien pour créer votre compte :\n\n'
+        '$inviteUrl\n\n'
+        'Ce lien est valide 7 jours.';
+      await Clipboard.setData(ClipboardData(text: bodyLong));
+      // Corps court dans l'URI pour limiter la longueur (destinataire + corps pré-remplis)
+      final bodyShort =
+        'Bonjour $firstName,\n\n'
+        'Ouvrez ce lien pour créer votre compte ViroTeam (valide 7 jours) :\n\n$inviteUrl';
+      final subjectEnc = Uri.encodeComponent(subject);
+      final bodyEnc = Uri.encodeComponent(bodyShort);
+      final mailtoString = 'mailto:$toAddress?subject=$subjectEnc&body=$bodyEnc';
+      final mailto = Uri.parse(mailtoString);
+      bool mailOpened = false;
+      try {
+        if (await canLaunchUrl(mailto)) {
+          mailOpened = await launchUrl(mailto, mode: LaunchMode.externalApplication);
+        }
+        if (!mailOpened) {
+          mailOpened = await launchUrl(mailto, mode: LaunchMode.platformDefault);
+        }
+      } catch (_) {
+        mailOpened = false;
+      }
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              mailOpened
+                  ? "Lien copié. Le client mail s'ouvre avec le message."
+                  : "Lien copié. Collez le message depuis le presse-papier si besoin.",
+            ),
+          ),
+        );
+      }
+      AppLogger.instance.info(
+        'Lien d\'invite créé',
+        {'clubId': clubId, 'pendingMemberId': pendingMemberId},
+      );
+    } catch (e) {
+      AppLogger.instance.error(
+        'Erreur création lien d\'invite',
+        error: e,
+        context: {'clubId': widget.clubId, 'pendingMemberId': pendingMemberId},
       );
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

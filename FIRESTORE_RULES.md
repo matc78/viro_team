@@ -43,7 +43,8 @@ Ce document décrit les règles Firestore pour l’application et la stratégie 
 
 - **Lecture** : tout utilisateur connecté (recherche de club, accès au club actif).
 - **Création** : tout utilisateur connecté.
-- **Mise à jour / suppression** : uniquement si l’utilisateur est admin du club (`adminId` ou présent dans `admins[]`).
+- **Mise à jour** : si l’utilisateur est admin du club **ou** s’il ne fait que se retirer lui-même des champs `members`/`coaches` (cas de la suppression de compte depuis `player_profil_page`). La règle `isSelfRemovalFromClub` garantit qu’aucune autre modification n’est autorisée.
+- **Suppression** : uniquement si l’utilisateur est admin du club (`adminId` ou présent dans `admins[]`).
 
 ### Sous-collections d’un club (members, teams, events, equipment, equipment_loans, pending_members, …)
 
@@ -65,7 +66,8 @@ L’app maintient déjà ce tableau : lors de l’acceptation d’une demande d�
 
 ## Suppression de compte
 
-Lorsqu’un utilisateur supprime son compte (`admin_profil_page._deleteAccount`), l’app met à jour les équipes de tous les clubs pour retirer son `uid` des champs `playerIds`/`coachIds`. L’écriture sur `clubs/{clubId}/teams/{teamId}` est autorisée uniquement si l’utilisateur est **admin ou coach** du club (`canWriteClub(clubId)`). Si l’utilisateur a déjà **transféré** le club à quelqu’un d’autre, il n’est plus admin ni coach ; les mises à jour sur les équipes de ce club peuvent alors être refusées. En pratique : ne pas transférer le club avant de supprimer son compte, ou effectuer le nettoyage des équipes avant le transfert. Une alternative est de déléguer ce nettoyage à une Cloud Function déclenchée par la suppression du compte.
+- **Depuis la page joueur** (`player_profil_page`) : l’app met à jour le document club pour retirer l’utilisateur de `members` ou `coaches` via `arrayRemove`. Les règles autorisent cette mise à jour grâce à `isSelfRemovalFromClub` (un utilisateur peut se retirer lui-même, sans pouvoir modifier d’autres champs).
+- **Depuis la page admin/coach** (`admin_profil_page._deleteAccount`) : l’app met à jour les équipes de tous les clubs pour retirer son `uid` des champs `playerIds`/`coachIds`. L’écriture sur `clubs/{clubId}/teams/{teamId}` est autorisée uniquement si l’utilisateur est **admin ou coach** du club (`canWriteClub(clubId)`). Si l’utilisateur a déjà **transféré** le club à quelqu’un d’autre, il n’est plus admin ni coach ; les mises à jour sur les équipes de ce club peuvent alors être refusées. En pratique : ne pas transférer le club avant de supprimer son compte, ou effectuer le nettoyage des équipes avant le transfert. Une alternative est de déléguer ce nettoyage à une Cloud Function déclenchée par la suppression du compte.
 
 ## Déploiement
 

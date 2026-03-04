@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -17,6 +18,8 @@ import 'pages/admin_coach_pages/admin_home_page.dart';
 import 'pages/admin_coach_pages/admin_loans_page.dart';
 import 'pages/auth_page.dart';
 import 'pages/complete_profile_page.dart';
+import 'package:viro_team/pages/invite_apply_page.dart';
+import 'pages/invite_signup_page.dart';
 import 'pages/no_internet_page.dart';
 import 'pages/player_pages/player_home_page.dart';
 import 'pages/player_pages/player_event_details_page.dart';
@@ -351,6 +354,38 @@ class _AuthGate extends StatefulWidget {
 class _AuthGateState extends State<_AuthGate> {
   Timer? _retryTimer;
   int _userDocRetryCount = 0;
+  String? _inviteToken;
+  String? _inviteClubId;
+  final AppLinks _appLinks = AppLinks();
+
+  @override
+  void initState() {
+    super.initState();
+    _initAppLinks();
+  }
+
+  Future<void> _initAppLinks() async {
+    try {
+      final uri = await _appLinks.getInitialLink();
+      if (uri != null) _parseInviteUri(uri);
+      _appLinks.uriLinkStream.listen((Uri uri) {
+        if (mounted) _parseInviteUri(uri);
+      });
+    } catch (_) {}
+  }
+
+  void _parseInviteUri(Uri uri) {
+    if (uri.host == 'invite' || uri.pathSegments.contains('invite')) {
+      final t = uri.queryParameters['t'];
+      final c = uri.queryParameters['c'];
+      if (t != null && t.isNotEmpty && c != null && c.isNotEmpty) {
+        setState(() {
+          _inviteToken = t;
+          _inviteClubId = c;
+        });
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -375,6 +410,18 @@ class _AuthGateState extends State<_AuthGate> {
               context.read<UserSession>().stopListening();
               widget.onSessionStopped();
             });
+          }
+          if (_inviteToken != null && _inviteClubId != null) {
+            return InviteSignUpPage(
+              token: _inviteToken!,
+              clubId: _inviteClubId!,
+              onSignUpSuccess: () {
+                setState(() {
+                  _inviteToken = null;
+                  _inviteClubId = null;
+                });
+              },
+            );
           }
           return const AuthPage();
         }
@@ -421,6 +468,46 @@ class _AuthGateState extends State<_AuthGate> {
                 } catch (_) {}
               });
               return const AuthPage();
+            }
+
+            // Utilisateur connecté qui ouvre un lien d'invitation : appliquer l'invite (club, équipes, suppression pending) puis continuer
+            final inviteToken = _inviteToken;
+            final inviteClubId = _inviteClubId;
+            if (inviteToken != null && inviteClubId != null) {
+              final email = currentUser.email ?? '';
+              if (email.isNotEmpty) {
+                final uid = user.uid;
+                return InviteApplyPage(
+                  token: inviteToken,
+                  clubId: inviteClubId,
+                  userId: uid,
+                  userEmail: email,
+                  onDone: () {
+                    WidgetsBinding.instance.addPostFrameCallback((_) async {
+                      if (!mounted) return;
+                      await context.read<UserSession>().loadUser(uid);
+                      if (!mounted) return;
+                      setState(() {
+                        _inviteToken = null;
+                        _inviteClubId = null;
+                      });
+                    });
+                  },
+                );
+              }
+              if (mounted) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted) {
+                    setState(() {
+                      _inviteToken = null;
+                      _inviteClubId = null;
+                    });
+                  }
+                });
+                return const Scaffold(
+                  body: Center(child: ViroLoader(size: 50)),
+                );
+              }
             }
 
             final activeContext = currentUser.activeContext;

@@ -59,23 +59,59 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if request.auth != null;
       allow create: if request.auth != null && request.auth.uid == userId;
-      allow update, delete: if request.auth != null
+      // Suppression de son propre document (évite tout souci request.resource sur delete)
+      allow delete: if request.auth != null && request.auth.uid == userId;
+      allow update: if request.auth != null
         && (request.auth.uid == userId
              || isClubAdminForUserWrite()
              || isClubAdminForRefusedRequest()
              || isClubAdminForAdminClubId());
     }
 
+    // True si l'utilisateur ne fait qu'ajouter son uid aux members du club (inscription via lien d'invite).
+    function isAddingSelfToMembers(clubId) {
+      let uid = request.auth.uid;
+      let changedKeys = request.resource.data.diff(resource.data).affectedKeys();
+      return request.auth != null
+        && changedKeys.hasOnly(['members'])
+        && (uid in request.resource.data.get('members', []))
+        && !(uid in resource.data.get('members', []));
+    }
+
+    // True si l'utilisateur ne fait que se retirer lui-même des membres/coaches du club
+    // (nécessaire pour la suppression de compte depuis player_profil_page).
+    function isSelfRemovalFromClub(clubId) {
+      let uid = request.auth.uid;
+      let oldData = resource.data;
+      let newData = request.resource.data;
+      let changedKeys = request.resource.data.diff(resource.data).affectedKeys();
+      let inMembers = uid in oldData.get('members', []);
+      let inCoaches = uid in oldData.get('coaches', []);
+      let onlyMembersOrCoachesChanged = changedKeys.hasOnly(['members'])
+        || changedKeys.hasOnly(['coaches'])
+        || changedKeys.hasOnly(['members', 'coaches']);
+      let membersOnlySelfRemoved = (!changedKeys.hasAny(['members']))
+        || (inMembers && !(uid in newData.get('members', [])));
+      let coachesOnlySelfRemoved = (!changedKeys.hasAny(['coaches']))
+        || (inCoaches && !(uid in newData.get('coaches', [])));
+      return request.auth != null
+        && (inMembers || inCoaches)
+        && onlyMembersOrCoachesChanged
+        && membersOnlySelfRemoved
+        && coachesOnlySelfRemoved;
+    }
+
     // -------------------------------------------------------------------------
     // clubs/{clubId}
     // Lecture : tout utilisateur connecté (recherche de club, accès au club actif).
     // Création : tout utilisateur connecté (création de club).
-    // Mise à jour / suppression : uniquement les admins du club.
+    // Mise à jour / suppression : uniquement les admins du club, ou retrait de soi (suppression de compte).
     // -------------------------------------------------------------------------
     match /clubs/{clubId} {
       allow read: if request.auth != null;
       allow create: if request.auth != null;
-      allow update, delete: if isClubAdmin(clubId);
+      allow update: if isClubAdmin(clubId) || isSelfRemovalFromClub(clubId) || isAddingSelfToMembers(clubId);
+      allow delete: if isClubAdmin(clubId);
 
       // Membres du club : lecture par tout connecté (liste membres), écriture par admin/coach
       match /members/{memberId} {
@@ -83,10 +119,15 @@ service cloud.firestore {
         allow write: if canWriteClub(clubId);
       }
 
-      // Équipes : lecture par tout connecté, écriture par admin/coach
+      // Équipes : lecture par tout connecté, écriture par admin/coach ou par un membre qui s'ajoute (lien d'invite)
       match /teams/{teamId} {
         allow read: if request.auth != null;
-        allow write: if canWriteClub(clubId);
+        allow create: if canWriteClub(clubId);
+        allow update: if canWriteClub(clubId)
+          || (request.auth != null
+              && request.auth.uid in get(/databases/$(database)/documents/clubs/$(clubId)).data.get('members', [])
+              && request.auth.uid in request.resource.data.get('playerIds', []));
+        allow delete: if canWriteClub(clubId);
       }
 
       // Événements
@@ -129,10 +170,24 @@ service cloud.firestore {
         allow write: if canWriteClub(clubId);
       }
 
-      // Membres en attente de création de compte (email, prénom, nom)
+      // Membres en attente : admin/coach ou suppression par l'utilisateur dont l'email correspond (après inscription via lien)
       match /pending_members/{docId} {
         allow read: if request.auth != null;
-        allow write: if canWriteClub(clubId);
+        allow create: if canWriteClub(clubId);
+        allow update: if canWriteClub(clubId);
+        allow delete: if canWriteClub(clubId)
+          || (request.auth != null
+              && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('email', '') == resource.data.get('email', ''));
+      }
+
+      // Liens d'invite (création de compte) : lecture par quiconque possède le lien (docId = token)
+      // Création par admin/coach ; mise à jour (usedAt) par tout utilisateur connecté si pas encore utilisé
+      match /invite_links/{inviteId} {
+        allow read: if true;
+        allow create: if canWriteClub(clubId);
+        allow update: if canWriteClub(clubId)
+          || (request.auth != null && resource.data.get('usedAt', null) == null);
+        allow delete: if canWriteClub(clubId);
       }
 
       // Annonces

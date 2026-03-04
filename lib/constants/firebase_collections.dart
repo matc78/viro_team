@@ -27,4 +27,7 @@ class FirebaseCollections {
 
   /// Sous-collection des membres en attente de création de compte (email, prénom, nom)
   static const String pendingMembers = 'pending_members';
+
+  /// Sous-collection des liens d'invite pour création de compte (token, pendingMemberId, email, etc.)
+  static const String inviteLinks = 'invite_links';
 }

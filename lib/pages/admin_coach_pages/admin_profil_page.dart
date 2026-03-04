@@ -1523,6 +1523,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
       builder: (_) => const Center(child: CircularProgressIndicator()),
     );
 
+    bool accountDeleted = false;
     try {
       final joinReq = await _firestore
           .collection(FirebaseCollections.joinRequests)
@@ -1566,50 +1567,79 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
     } catch (_) {}
 
     try {
-      await _firestore.collection(FirebaseCollections.users).doc(uid).delete();
-    } catch (_) {}
+      // Annuler l'écoute sans effacer currentUser pour éviter redirection prématurée et PERMISSION_DENIED
+      UserSession().cancelListeningOnly();
 
-    try {
-      await user.delete();
-    } on FirebaseAuthException catch (e) {
-      if (mounted) {
-        Navigator.of(context).pop();
-        if (e.code == 'requires-recent-login') {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                "Cette action requiert une reconnexion récente. "
-                "Déconnectez-vous puis reconnectez-vous, puis réessayez.",
+      // Retirer le token FCM puis supprimer le document utilisateur
+      try {
+        await _firestore
+            .collection(FirebaseCollections.users)
+            .doc(uid)
+            .update({'fcmToken': FieldValue.delete()});
+      } catch (e) {
+        AppLogger.instance.error(
+          'Suppression fcmToken utilisateur',
+          error: e,
+          context: {'uid': uid},
+        );
+      }
+      try {
+        await _firestore.collection(FirebaseCollections.users).doc(uid).delete();
+      } catch (e) {
+        AppLogger.instance.error(
+          'Suppression document utilisateur Firestore',
+          error: e,
+          context: {'uid': uid},
+        );
+      }
+
+      try {
+        await user.delete();
+      } on FirebaseAuthException catch (e) {
+        if (mounted) {
+          Navigator.of(context).pop();
+          if (e.code == 'requires-recent-login') {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  "Cette action requiert une reconnexion récente. "
+                  "Déconnectez-vous puis reconnectez-vous, puis réessayez.",
+                ),
               ),
-            ),
-          );
-        } else {
+            );
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(FirebaseErrorHandler.getErrorMessage(e))),
+            );
+          }
+        }
+        return;
+      } catch (e) {
+        if (mounted) {
+          Navigator.of(context).pop();
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(FirebaseErrorHandler.getErrorMessage(e))),
           );
         }
+        return;
       }
-      return;
-    } catch (e) {
-      if (mounted) {
-        Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(FirebaseErrorHandler.getErrorMessage(e))),
+
+      accountDeleted = true;
+      try {
+        await signOutCompletely();
+      } catch (_) {}
+    } finally {
+      if (!mounted) return;
+      Navigator.of(context).pop(); // fermer le dialog de chargement
+      await Future.delayed(const Duration(seconds: 1));
+      if (!mounted) return;
+      if (accountDeleted) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const AuthPage()),
+          (route) => false,
         );
       }
-      return;
     }
-
-    try {
-      await signOutCompletely();
-    } catch (_) {}
-
-    if (!mounted) return;
-    Navigator.of(context).pop();
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const AuthPage()),
-      (route) => false,
-    );
   }
 
   Future<void> _pickClubLogo(String clubId) async {

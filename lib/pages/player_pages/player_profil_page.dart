@@ -9,6 +9,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../constants/app_urls.dart';
@@ -24,6 +25,7 @@ import '../add_profile_page.dart';
 import '../notification_settings_page.dart';
 import '../../services/notification_preferences_service.dart';
 import '../onboarding_page.dart';
+import '../../services/user_session.dart';
 import 'player_home_page.dart';
 
 class PlayerProfilPage extends StatefulWidget {
@@ -840,27 +842,36 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
     );
   }
 
-  void _showDeleteDialog(BuildContext context) {
+  void _showDeleteDialog(BuildContext pageContext) {
     showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
+      context: pageContext,
+      builder: (dialogContext) => AlertDialog(
         title: const Text("Suppression du compte"),
         content: const Text(
           "Cette action est définitive. Es-tu sûr de vouloir supprimer ton compte ?",
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text("ANNULER"),
           ),
           ElevatedButton(
             onPressed: () async {
-              Navigator.pop(context); // close dialog before action
+              Navigator.pop(dialogContext); // fermer le dialog
+              // Utiliser pageContext pour tout le flux async (reste monté après fermeture du dialog)
+              if (!pageContext.mounted) return;
+              showDialog(
+                context: pageContext,
+                barrierDismissible: false,
+                builder: (_) => const Center(child: CircularProgressIndicator()),
+              );
+              bool accountDeleted = false;
               try {
                 final user = FirebaseAuth.instance.currentUser;
                 if (user == null) {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
+                  if (pageContext.mounted) {
+                    Navigator.of(pageContext).pop();
+                    ScaffoldMessenger.of(pageContext).showSnackBar(
                       const SnackBar(content: Text("Utilisateur introuvable.")),
                     );
                   }
@@ -890,63 +901,112 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
                 final finalRole = role ?? legacyRole;
 
                 // Retirer l'utilisateur des membres / coaches du club
-                // Note: Avec la nouvelle structure, il faudrait retirer de tous les clubs
-                // Pour l'instant, on retire seulement du club actif
                 if (finalClubId != null) {
-                  final field =
-                      (finalRole == 'admin' ||
-                          finalRole == 'admin_fondateur' ||
-                          finalRole == 'coach')
-                      ? 'coaches'
-                      : 'members';
+                  try {
+                    final field =
+                        (finalRole == 'admin' ||
+                                finalRole == 'admin_fondateur' ||
+                                finalRole == 'coach')
+                            ? 'coaches'
+                            : 'members';
+                    await firestore
+                        .collection(FirebaseCollections.clubs)
+                        .doc(finalClubId)
+                        .update({
+                          field: FieldValue.arrayRemove([uid]),
+                        });
+                  } catch (_) {}
+                }
+
+                // Supprimer les demandes d'adhésion associées (meilleur effort)
+                try {
+                  final requests = await firestore
+                      .collection(FirebaseCollections.joinRequests)
+                      .where('userId', isEqualTo: uid)
+                      .get();
+                  for (final doc in requests.docs) {
+                    await doc.reference.delete();
+                  }
+                } catch (_) {}
+
+                // Annuler l'écoute sans effacer currentUser pour éviter redirection prématurée et PERMISSION_DENIED
+                if (pageContext.mounted) {
+                  pageContext.read<UserSession>().cancelListeningOnly();
+                }
+
+                // Supprimer le document utilisateur Firestore (toujours avant user.delete() pour rester authentifié)
+                try {
                   await firestore
-                      .collection(FirebaseCollections.clubs)
-                      .doc(finalClubId)
-                      .update({
-                        field: FieldValue.arrayRemove([uid]),
-                      });
+                      .collection(FirebaseCollections.users)
+                      .doc(uid)
+                      .update({'fcmToken': FieldValue.delete()});
+                } catch (e) {
+                  AppLogger.instance.error(
+                    'Suppression fcmToken utilisateur',
+                    error: e,
+                    context: {'uid': uid},
+                  );
                 }
-
-                // TODO: Retirer aussi de tous les autres clubs dans roles.coach et roles.admin
-
-                // Supprimer les demandes d'adhésion associées
-                final requests = await firestore
-                    .collection(FirebaseCollections.joinRequests)
-                    .where('userId', isEqualTo: uid)
-                    .get();
-                for (final doc in requests.docs) {
-                  await doc.reference.delete();
+                try {
+                  await firestore
+                      .collection(FirebaseCollections.users)
+                      .doc(uid)
+                      .delete();
+                } catch (e) {
+                  AppLogger.instance.error(
+                    'Suppression document utilisateur Firestore',
+                    error: e,
+                    context: {'uid': uid},
+                  );
                 }
-
-                // Supprimer le document utilisateur
-                await firestore
-                    .collection(FirebaseCollections.users)
-                    .doc(uid)
-                    .delete();
 
                 // Supprimer le compte Firebase Auth
-                await user.delete();
-                await signOutCompletely();
-
-                if (context.mounted) _goToAuth(context);
-              } on FirebaseAuthException catch (e) {
-                if (!context.mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      e.code == 'requires-recent-login'
-                          ? "Merci de te reconnecter puis de réessayer."
-                          : FirebaseErrorHandler.getErrorMessage(e),
+                try {
+                  await user.delete();
+                } on FirebaseAuthException catch (e) {
+                  if (!pageContext.mounted) return;
+                  Navigator.of(pageContext).pop();
+                  ScaffoldMessenger.of(pageContext).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        e.code == 'requires-recent-login'
+                            ? "Merci de te reconnecter puis de réessayer."
+                            : FirebaseErrorHandler.getErrorMessage(e),
+                      ),
                     ),
-                  ),
-                );
+                  );
+                  return;
+                } catch (e) {
+                  if (!pageContext.mounted) return;
+                  Navigator.of(pageContext).pop();
+                  ScaffoldMessenger.of(pageContext).showSnackBar(
+                    SnackBar(
+                        content: Text(FirebaseErrorHandler.getErrorMessage(e)),
+                    ),
+                  );
+                  return;
+                }
+
+                accountDeleted = true;
+                try {
+                  await signOutCompletely();
+                } catch (_) {}
               } catch (e) {
-                if (!context.mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
+                if (!pageContext.mounted) return;
+                Navigator.of(pageContext).pop();
+                ScaffoldMessenger.of(pageContext).showSnackBar(
                   SnackBar(
                     content: Text(FirebaseErrorHandler.getErrorMessage(e)),
                   ),
                 );
+              } finally {
+                if (pageContext.mounted) {
+                  Navigator.of(pageContext).pop(); // fermer le dialog de chargement
+                }
+                await Future.delayed(const Duration(seconds: 1));
+                if (accountDeleted && pageContext.mounted) {
+                  _goToAuth(pageContext);
+                }
               }
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),

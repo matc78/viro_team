@@ -304,6 +304,13 @@ class _PlayerTeamsPageState extends State<PlayerTeamsPage> {
         .cast<String>();
     final List<String> coachIds = ((teamData['coachIds'] ?? []) as List)
         .cast<String>();
+    final List<String> pendingPlayerIds =
+        ((teamData['pendingPlayerIds'] ?? []) as List).cast<String>();
+    final String? teamCategory = teamData['category'] as String?;
+    final String categoryLabel =
+        (teamCategory != null && teamCategory.isNotEmpty)
+            ? teamCategory
+            : "Sans catégorie";
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -345,6 +352,32 @@ class _PlayerTeamsPageState extends State<PlayerTeamsPage> {
                   fontSize: 12,
                   color: clubColor,
                   fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: (teamCategory != null && teamCategory.isNotEmpty)
+                    ? clubColor.withValues(alpha: 0.2)
+                    : Colors.grey.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(12),
+                border: (teamCategory != null && teamCategory.isNotEmpty)
+                    ? Border.all(
+                        color: clubColor.withValues(alpha: 0.5),
+                        width: 1,
+                      )
+                    : null,
+              ),
+              child: Text(
+                categoryLabel,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: (teamCategory != null && teamCategory.isNotEmpty)
+                      ? clubColor
+                      : Colors.grey.shade600,
                 ),
               ),
             ),
@@ -415,9 +448,76 @@ class _PlayerTeamsPageState extends State<PlayerTeamsPage> {
               );
             },
           ),
+          if (pendingPlayerIds.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            FutureBuilder<List<DocumentSnapshot<Map<String, dynamic>>>>(
+              future: _fetchPendingMembersBatch(clubId, pendingPlayerIds),
+              builder: (context, pendingSnap) {
+                if (!pendingSnap.hasData) {
+                  return const Center(
+                    child: SizedBox(
+                      height: 40,
+                      width: 40,
+                      child: CircularProgressIndicator(),
+                    ),
+                  );
+                }
+                final pendingDocs = pendingSnap.data!;
+                return _buildPendingMembersSection(context, pendingDocs);
+              },
+            ),
+          ],
           const SizedBox(height: 8),
         ],
       ),
+    );
+  }
+
+  static Future<List<DocumentSnapshot<Map<String, dynamic>>>>
+      _fetchPendingMembersBatch(String clubId, List<String> docIds) async {
+    if (docIds.isEmpty) return [];
+    final refs = docIds
+        .map(
+          (id) => appFirestore
+              .collection(FirebaseCollections.clubs)
+              .doc(clubId)
+              .collection(FirebaseCollections.pendingMembers)
+              .doc(id),
+        )
+        .toList();
+    final snaps = await Future.wait(refs.map((r) => r.get()));
+    return snaps.cast<DocumentSnapshot<Map<String, dynamic>>>().toList();
+  }
+
+  Widget _buildPendingMembersSection(
+    BuildContext context,
+    List<DocumentSnapshot<Map<String, dynamic>>> pendingDocs,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Text(
+            "EN ATTENTE",
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w900,
+              color: Colors.grey.shade600,
+              letterSpacing: 1.1,
+            ),
+          ),
+        ),
+        ...pendingDocs.map((doc) {
+          final data = doc.data() ?? <String, dynamic>{};
+          final firstName = data['firstName'] as String? ?? '';
+          final lastName = data['lastName'] as String? ?? '';
+          return _PendingMemberTile(
+            firstName: firstName,
+            lastName: lastName,
+          );
+        }),
+      ],
     );
   }
 
@@ -483,6 +583,31 @@ class _MemberTile extends StatelessWidget {
           MaterialPageRoute(builder: (_) => ProfilDisplayPage(userId: userId)),
         );
       },
+    );
+  }
+}
+
+/// Tuile pour un membre en attente (pas encore de compte) : prénom et nom uniquement.
+class _PendingMemberTile extends StatelessWidget {
+  final String firstName;
+  final String lastName;
+
+  const _PendingMemberTile({
+    required this.firstName,
+    required this.lastName,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final displayName = '$firstName $lastName'.trim();
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      dense: true,
+      leading: Icon(Icons.person_outline, size: 20, color: Colors.grey.shade500),
+      title: Text(
+        displayName.isEmpty ? "—" : displayName,
+        style: const TextStyle(fontSize: 13),
+      ),
     );
   }
 }

@@ -120,6 +120,14 @@ class UserSession extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Annule uniquement l'abonnement Firestore sans effacer [currentUser].
+  /// À utiliser pendant la suppression de compte pour éviter PERMISSION_DENIED
+  /// et pour ne pas déclencher la redirection AuthPage via currentUser == null.
+  void cancelListeningOnly() {
+    _subscription?.cancel();
+    _subscription = null;
+  }
+
   /// Restaure activeContext si celui-ci est manquant, invalide, ou obsolète
   /// (l'utilisateur n'a plus le rôle/club indiqué).
   /// Priorité : admin_fondateur > admin > coach > player.

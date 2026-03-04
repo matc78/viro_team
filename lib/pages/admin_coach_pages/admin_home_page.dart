@@ -16,6 +16,7 @@ import 'admin_profil_page.dart';
 import 'package:intl/intl.dart';
 import '../../constants/firebase_collections.dart';
 import '../../services/notification_service.dart';
+import '../../services/pending_member_merge_service.dart';
 import '../../theme/viro_theme.dart';
 import '../../utils/firebase_helpers.dart';
 import '../../utils/firebase_error_handler.dart';
@@ -926,6 +927,13 @@ class _AdminHomePageState extends State<AdminHomePage> {
               .update({
                 field: FieldValue.arrayUnion([userId]),
               });
+        }
+        // Fusionner les pending_members (même email) : club, équipes, events, puis supprimer les pending
+        final userEmail = userData['email'] as String? ?? '';
+        if (userEmail.isNotEmpty) {
+          try {
+            await PendingMemberMergeService.instance.mergePendingMembersForUser(userId, userEmail);
+          } catch (_) {}
         }
       } else {
         await requestRef.update({
