@@ -52,10 +52,12 @@ class _PlayerInfosPageState extends State<PlayerInfosPage> {
         }
       }
     }
-    if (mounted) setState(() {
-      _clubNamesCache = names;
-      _clubSportsCache = sports;
-    });
+    if (mounted) {
+      setState(() {
+        _clubNamesCache = names;
+        _clubSportsCache = sports;
+      });
+    }
   }
 
   void _ensureInitialized(List<String> allClubIds) {
@@ -210,7 +212,10 @@ class _PlayerInfosPageState extends State<PlayerInfosPage> {
               (id) => DropdownMenuItem(
                 value: id,
                 child: Text(
-                  formatClubNameWithEmoji(_clubNamesCache[id] ?? id, _clubSportsCache[id]),
+                  formatClubNameWithEmoji(
+                    _clubNamesCache[id] ?? id,
+                    _clubSportsCache[id],
+                  ),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
@@ -273,14 +278,22 @@ class _ClubDetailsPage extends StatelessWidget {
     final db = appFirestore;
 
     // 1. Infos du club (source de vérité pour admins/coachs)
-    final clubDoc = await db.collection(FirebaseCollections.clubs).doc(clubId).get();
+    final clubDoc = await db
+        .collection(FirebaseCollections.clubs)
+        .doc(clubId)
+        .get();
     final clubData = clubDoc.data();
 
     // 2. Compteurs : admins et coachs depuis le document club (adminId, admins, coaches)
     final adminId = clubData?['adminId'] as String?;
-    final adminsList = (clubData?['admins'] as List?)?.whereType<String>().toList() ?? [];
-    final coachesList = (clubData?['coaches'] as List?)?.whereType<String>().toList() ?? [];
-    final adminsCount = {...{if (adminId != null) adminId}, ...adminsList}.length;
+    final adminsList =
+        (clubData?['admins'] as List?)?.whereType<String>().toList() ?? [];
+    final coachesList =
+        (clubData?['coaches'] as List?)?.whereType<String>().toList() ?? [];
+    final adminsCount = {
+      ...{if (adminId != null) adminId},
+      ...adminsList,
+    }.length;
     final coachsCount = coachesList.length;
 
     final usersQuery = await db.collection(FirebaseCollections.users).get();
@@ -333,7 +346,8 @@ class _ClubDetailsPage extends StatelessWidget {
             founderDoc = u;
             break;
           }
-          if (founderDoc == null && (role == 'admin' || role == 'admin_fondateur')) {
+          if (founderDoc == null &&
+              (role == 'admin' || role == 'admin_fondateur')) {
             founderDoc = u;
           }
         }
@@ -406,7 +420,10 @@ class _ClubDetailsPage extends StatelessWidget {
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  formatClubNameWithEmoji(clubData?['name'] ?? "Club Inconnu", clubData?['sport'] as String?),
+                  formatClubNameWithEmoji(
+                    clubData?['name'] ?? "Club Inconnu",
+                    clubData?['sport'] as String?,
+                  ),
                   style: const TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
@@ -688,9 +705,8 @@ class _ClubAnnouncementsList extends StatelessWidget {
                 (club['teamIds'] as List?)?.whereType<String>().toList() ?? [];
 
             // Catégories : source unifiée roles.player.clubs, sinon fetch depuis équipes
-            List<String> categories = (club['categories'] as List?)
-                    ?.whereType<String>()
-                    .toList() ??
+            List<String> categories =
+                (club['categories'] as List?)?.whereType<String>().toList() ??
                 [];
             if (categories.isEmpty && teamIds.isNotEmpty) {
               final teamsSnapshot = await appFirestore
@@ -814,7 +830,10 @@ class _ClubAnnouncementsList extends StatelessWidget {
                 ),
                 const SizedBox(width: 6),
                 Text(
-                  formatClubNameWithEmoji(clubNames?[cid] ?? cid, clubSports?[cid]),
+                  formatClubNameWithEmoji(
+                    clubNames?[cid] ?? cid,
+                    clubSports?[cid],
+                  ),
                   style: TextStyle(
                     fontSize: 12,
                     color: Colors.grey[700],
@@ -1059,8 +1078,9 @@ class _ClubAnnouncementsList extends StatelessWidget {
     });
 
     if (hasMultipleClubs && validAnnouncements.isNotEmpty) {
-      final clubIdsInAnnouncements =
-          validAnnouncements.map((a) => a.clubId).toList();
+      final clubIdsInAnnouncements = validAnnouncements
+          .map((a) => a.clubId)
+          .toList();
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1140,8 +1160,9 @@ class _ClubAnnouncementsList extends StatelessWidget {
     }
 
     if (hasMultipleClubs && validAnnouncements.isNotEmpty) {
-      final clubIdsInAnnouncements =
-          validAnnouncements.map((a) => a.clubId).toList();
+      final clubIdsInAnnouncements = validAnnouncements
+          .map((a) => a.clubId)
+          .toList();
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

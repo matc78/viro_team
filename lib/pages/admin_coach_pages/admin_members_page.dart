@@ -56,7 +56,9 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text("Membres • ${formatClubNameWithEmoji(widget.clubName, widget.clubSport)}"),
+        title: Text(
+          "Membres • ${formatClubNameWithEmoji(widget.clubName, widget.clubSport)}",
+        ),
         centerTitle: true,
         actions: [
           if (canEdit)
@@ -72,466 +74,965 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
             ),
         ],
       ),
-      body: Stack(
-        children: [
-          Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(12.0),
-                child: TextField(
-                  controller: _searchController,
-                  decoration: const InputDecoration(
-                    prefixIcon: Icon(Icons.search),
-                    hintText: "Rechercher par nom ou email",
-                    border: OutlineInputBorder(),
-                  ),
-                  onChanged: (val) =>
-                      setState(() => _search = val.trim().toLowerCase()),
-                ),
-              ),
-              StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                stream: appFirestore
-                    .collection(FirebaseCollections.clubs)
-                    .doc(widget.clubId)
-                    .collection(FirebaseCollections.teams)
-                    .snapshots(),
-                builder: (context, snapshot) {
-                  final categories = <String>{};
-                  final teams = <String>{};
-                  if (snapshot.hasData) {
-                    for (final doc in snapshot.data!.docs) {
-                      final data = doc.data();
-                      final cat = data['category'] as String?;
-                      final team = data['name'] as String?;
-                      if (cat != null && cat.isNotEmpty) categories.add(cat);
-                      if (team != null && team.isNotEmpty) teams.add(team);
-                    }
-                  }
-                  final catList = categories.toList()..sort();
-                  final teamList = teams.toList()..sort();
-                  if (_selectedCategory != null &&
-                      !catList.contains(_selectedCategory)) {
-                    _selectedCategory = null;
-                  }
-                  if (_selectedTeam != null &&
-                      !teamList.contains(_selectedTeam)) {
-                    _selectedTeam = null;
-                  }
-
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 4,
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: DropdownButtonFormField<String>(
-                            initialValue: _selectedCategory,
-                            decoration: const InputDecoration(
-                              labelText: "Catégorie",
-                              border: OutlineInputBorder(),
-                              contentPadding: EdgeInsets.symmetric(
-                                horizontal: 12,
-                              ),
-                            ),
-                            hint: const Text("Catégorie"),
-                            items:
-                                catList
-                                    .map(
-                                      (c) => DropdownMenuItem(
-                                        value: c,
-                                        child: Text(c),
-                                      ),
-                                    )
-                                    .toList()
-                                  ..insert(
-                                    0,
-                                    const DropdownMenuItem(
-                                      value: null,
-                                      child: Text("Catégorie"),
-                                    ),
-                                  ),
-                            onChanged: (val) =>
-                                setState(() => _selectedCategory = val),
-                          ),
+      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+        stream: appFirestore.collection(FirebaseCollections.users).snapshots(),
+        builder: (context, snapshot) {
+          return CustomScrollView(
+            slivers: [
+              SliverToBoxAdapter(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.all(12.0),
+                      child: TextField(
+                        controller: _searchController,
+                        decoration: const InputDecoration(
+                          prefixIcon: Icon(Icons.search),
+                          hintText: "Rechercher par nom ou email",
+                          border: OutlineInputBorder(),
                         ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: DropdownButtonFormField<String>(
-                            initialValue: _selectedTeam,
-                            decoration: const InputDecoration(
-                              labelText: "Équipe",
-                              border: OutlineInputBorder(),
-                              contentPadding: EdgeInsets.symmetric(
-                                horizontal: 12,
-                              ),
-                            ),
-                            hint: const Text("Équipe"),
-                            items:
-                                teamList
-                                    .map(
-                                      (t) => DropdownMenuItem(
-                                        value: t,
-                                        child: Text(t),
-                                      ),
-                                    )
-                                    .toList()
-                                  ..insert(
-                                    0,
-                                    const DropdownMenuItem(
-                                      value: null,
-                                      child: Text("Équipe"),
-                                    ),
-                                  ),
-                            onChanged: (val) =>
-                                setState(() => _selectedTeam = val),
-                          ),
-                        ),
-                      ],
+                        onChanged: (val) =>
+                            setState(() => _search = val.trim().toLowerCase()),
+                      ),
                     ),
-                  );
-                },
-              ),
-              Expanded(
-                child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                  // Récupérer tous les utilisateurs et filtrer côté client
-                  // car la nouvelle structure utilise roles/activeContext
-                  stream: appFirestore
-                      .collection(FirebaseCollections.users)
-                      .snapshots(),
-                  builder: (context, snapshot) {
-                    if (snapshot.hasError) {
-                      return const Center(
-                        child: Text("Erreur de chargement des membres."),
-                      );
-                    }
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-
-                    final allDocs = snapshot.data?.docs ?? [];
-                    // Filtrer les utilisateurs qui appartiennent au club
-                    final clubMembers = filterUsersByClub(
-                      allDocs,
-                      widget.clubId,
-                    );
-
-                    // Créer une liste d'entrées avec doc et role pour gérer les utilisateurs multi-rôles
-                    final entries = <Map<String, dynamic>>[];
-
-                    for (final doc in clubMembers) {
-                      final data = doc.data();
-                      if (data == null) continue;
-
-                      // Obtenir tous les rôles de cet utilisateur dans ce club
-                      final roles = getAllUserRolesInClub(data, widget.clubId);
-
-                      // Si l'utilisateur est joueur ET admin/coach, créer deux entrées
-                      // Sinon, créer une entrée par rôle
-                      for (final role in roles) {
-                        entries.add({'doc': doc, 'role': role});
-                      }
-                    }
-
-                    // Filtrer les entrées selon les critères de recherche
-                    final filtered =
-                        entries.where((entry) {
-                          final doc = entry['doc'] as DocumentSnapshot;
-                          final role = entry['role'] as String;
-                          final data = doc.data() as Map<String, dynamic>?;
-                          if (data == null) return false;
-
-                          final first = (data['firstName'] as String? ?? "")
-                              .toLowerCase();
-                          final last = (data['lastName'] as String? ?? "")
-                              .toLowerCase();
-                          final email = (data['email'] as String? ?? "")
-                              .toLowerCase();
-                          // Source unifiée : roles.player.clubs
-                          final userCats = getUserCategories(data);
-                          final userTeams = getUserTeamNames(data);
-
-                          // Pour les filtres de catégorie et équipe, on ne filtre que les joueurs
-                          // Les admins/coachs ne sont pas filtrés par catégorie/équipe
-                          final isPlayer = role == 'player';
-                          final catOk =
-                              !isPlayer ||
-                              _selectedCategory == null ||
-                              userCats.any(
-                                (c) =>
-                                    _normalize(c) ==
-                                    _normalize(_selectedCategory!),
-                              );
-                          final teamOk =
-                              !isPlayer ||
-                              _selectedTeam == null ||
-                              userTeams.any(
-                                (t) =>
-                                    _normalize(t) == _normalize(_selectedTeam!),
-                              );
-
-                          final matchesSearch =
-                              _search.isEmpty ||
-                              first.contains(_search) ||
-                              last.contains(_search) ||
-                              email.contains(_search);
-                          return matchesSearch && catOk && teamOk;
-                        }).toList()..sort((a, b) {
-                          final aDoc = a['doc'] as DocumentSnapshot;
-                          final bDoc = b['doc'] as DocumentSnapshot;
-                          final aRole = a['role'] as String;
-                          final bRole = b['role'] as String;
-                          final aData = aDoc.data() as Map<String, dynamic>?;
-                          final bData = bDoc.data() as Map<String, dynamic>?;
-
-                          // Déterminer si ce sont des staff (admin/coach) ou des players (licenciés)
-                          final aIsStaff =
-                              aRole == 'admin_fondateur' ||
-                              aRole == 'coach' ||
-                              aRole == 'admin';
-                          final bIsStaff =
-                              bRole == 'admin_fondateur' ||
-                              bRole == 'coach' ||
-                              bRole == 'admin';
-
-                          // D'abord, séparer les staff (en haut) des players (en bas)
-                          if (aIsStaff && !bIsStaff) {
-                            return -1; // a est staff, b est player -> a en premier
-                          }
-                          if (!aIsStaff && bIsStaff) {
-                            return 1; // a est player, b est staff -> b en premier
-                          }
-
-                          // Si même type (tous les deux staff ou tous les deux players), trier par prénom
-                          final aFirst = (aData?['firstName'] as String? ?? "")
-                              .toLowerCase();
-                          final bFirst = (bData?['firstName'] as String? ?? "")
-                              .toLowerCase();
-                          return aFirst.compareTo(bFirst);
-                        });
-
-                    if (filtered.isEmpty) {
-                      return const Center(child: Text("Aucun membre trouvé."));
-                    }
-
-                    return ListView.separated(
-                      padding: const EdgeInsets.only(bottom: 140),
-                      itemCount: filtered.length,
-                      separatorBuilder: (context, index) {
-                        // Afficher un séparateur uniquement à la transition entre staff et players
-                        if (index < filtered.length - 1) {
-                          final currentEntry = filtered[index];
-                          final nextEntry = filtered[index + 1];
-                          final currentRole = currentEntry['role'] as String;
-                          final nextRole = nextEntry['role'] as String;
-
-                          final currentIsStaff =
-                              currentRole == 'admin_fondateur' ||
-                              currentRole == 'coach' ||
-                              currentRole == 'admin';
-                          final nextIsPlayer = nextRole == 'player';
-
-                          // Si l'élément actuel est staff et le suivant est player, afficher le séparateur
-                          if (currentIsStaff && nextIsPlayer) {
-                            return const Divider(
-                              height: 1,
-                              color: Colors.black,
-                            );
+                    StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                      stream: appFirestore
+                          .collection(FirebaseCollections.clubs)
+                          .doc(widget.clubId)
+                          .collection(FirebaseCollections.teams)
+                          .snapshots(),
+                      builder: (context, teamsSnapshot) {
+                        final categories = <String>{};
+                        final teams = <String>{};
+                        if (teamsSnapshot.hasData) {
+                          for (final doc in teamsSnapshot.data!.docs) {
+                            final data = doc.data();
+                            final cat = data['category'] as String?;
+                            final team = data['name'] as String?;
+                            if (cat != null && cat.isNotEmpty)
+                              categories.add(cat);
+                            if (team != null && team.isNotEmpty)
+                              teams.add(team);
                           }
                         }
-                        return const SizedBox.shrink();
-                      },
-                      itemBuilder: (context, index) {
-                        final entry = filtered[index];
-                        final doc = entry['doc'] as DocumentSnapshot;
-                        final role = entry['role'] as String;
-                        final rawData = doc.data();
-                        final data = rawData as Map<String, dynamic>?;
-                        if (data == null) return const SizedBox.shrink();
-
-                        final userId = doc.id;
-                        final firstName = data['firstName'] as String? ?? "";
-                        final lastName = data['lastName'] as String? ?? "";
-                        final avatarUrl = effectiveAvatarUrl(data);
-
-                        // Pour les joueurs, afficher la catégorie
-                        // Pour les admins/coachs, ne pas afficher de catégorie
-                        final isPlayer = role == 'player';
-                        final categories =
-                            (data['categories'] as List?)
-                                ?.whereType<String>()
-                                .toList() ??
-                            [];
-                        final category = isPlayer
-                            ? (categories.isNotEmpty
-                                  ? categories.join(", ")
-                                  : (data['category'] as String? ?? ""))
-                            : "";
-
-                        // Déterminer le label du rôle à afficher
-                        final isStaff =
-                            role == 'admin_fondateur' ||
-                            role == 'coach' ||
-                            role == 'admin';
-                        final roleLabel = role
-                            .replaceAll('_', ' ')
-                            .split(' ')
-                            .map((word) {
-                              if (word.isEmpty) return word;
-                              return word[0].toUpperCase() + word.substring(1);
-                            })
-                            .join(' ');
-
-                        final bool showDelete =
-                            canEdit &&
-                            _editMode &&
-                            role != 'admin_fondateur' &&
-                            (widget.currentViewerRole == 'admin_fondateur' ||
-                                (widget.currentViewerRole == 'admin' &&
-                                    (role == 'player' || role == 'coach')));
-                        final bool showPasserAdmin =
-                            canEdit &&
-                            _editMode &&
-                            widget.currentViewerRole == 'admin_fondateur' &&
-                            role == 'coach';
-                        final bool showPasserCoach =
-                            canEdit &&
-                            _editMode &&
-                            widget.currentViewerRole == 'admin_fondateur' &&
-                            role == 'admin';
-
-                        return ListTile(
-                          leading: null,
-                          title: UserDisplayTile(
-                            userId: userId,
-                            firstName: firstName,
-                            lastName: lastName,
-                            avatarUrl: avatarUrl,
-                            navigateOnTap: false,
-                            textStyle: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w500,
-                            ),
+                        final catList = categories.toList()..sort();
+                        final teamList = teams.toList()..sort();
+                        if (_selectedCategory != null &&
+                            !catList.contains(_selectedCategory)) {
+                          _selectedCategory = null;
+                        }
+                        if (_selectedTeam != null &&
+                            !teamList.contains(_selectedTeam)) {
+                          _selectedTeam = null;
+                        }
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 4,
                           ),
-                          subtitle: isPlayer
-                              ? Text(
-                                  category.isNotEmpty
-                                      ? category
-                                      : "Sans catégorie",
-                                  style: const TextStyle(color: Colors.grey),
-                                )
-                              : null,
-                          trailing:
-                              _editMode &&
-                                  (showDelete ||
-                                      showPasserAdmin ||
-                                      showPasserCoach)
-                              ? _buildEditTrailing(
-                                  roleLabel: roleLabel,
-                                  isPlayer: isPlayer,
-                                  data: data,
-                                  showDelete: showDelete,
-                                  showPasserAdmin: showPasserAdmin,
-                                  showPasserCoach: showPasserCoach,
-                                  userId: userId,
-                                  role: role,
-                                  firstName: firstName,
-                                  lastName: lastName,
-                                )
-                              : (isStaff
-                                    ? Text(
-                                        roleLabel,
-                                        style: const TextStyle(
-                                          color: Colors.grey,
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: DropdownButtonFormField<String>(
+                                  initialValue: _selectedCategory,
+                                  decoration: const InputDecoration(
+                                    labelText: "Catégorie",
+                                    border: OutlineInputBorder(),
+                                    contentPadding: EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                    ),
+                                  ),
+                                  hint: const Text("Catégorie"),
+                                  items:
+                                      catList
+                                          .map(
+                                            (c) => DropdownMenuItem(
+                                              value: c,
+                                              child: Text(c),
+                                            ),
+                                          )
+                                          .toList()
+                                        ..insert(
+                                          0,
+                                          const DropdownMenuItem(
+                                            value: null,
+                                            child: Text("Catégorie"),
+                                          ),
                                         ),
-                                      )
-                                    : Text(
-                                        playerHasLicense(data, widget.clubId)
-                                            ? "Licencié"
-                                            : "Non Licencié",
-                                        style: const TextStyle(
-                                          color: Colors.grey,
-                                        ),
-                                      )),
-                          onTap: () {
-                            if (!_editMode) {
-                              Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (_) =>
-                                      ProfilDisplayPage(userId: userId),
-                                ),
-                              );
-                            }
-                          },
-                        );
-                      },
-                    );
-                  },
-                ),
-              ),
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 150),
-                child: hasFilters
-                    ? SafeArea(
-                        top: false,
-                        child: Padding(
-                          padding: const EdgeInsets.all(12.0),
-                          child: SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.grey.shade200,
-                                foregroundColor: Colors.black87,
-                                side: const BorderSide(
-                                  color: ViroColors.primary,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 12,
+                                  onChanged: (val) =>
+                                      setState(() => _selectedCategory = val),
                                 ),
                               ),
-                              onPressed: () => setState(() {
-                                _selectedCategory = null;
-                                _selectedTeam = null;
-                                _search = "";
-                                _searchController.clear();
-                              }),
-                              child: const Text("Enlever les filtres"),
-                            ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: DropdownButtonFormField<String>(
+                                  initialValue: _selectedTeam,
+                                  decoration: const InputDecoration(
+                                    labelText: "Équipe",
+                                    border: OutlineInputBorder(),
+                                    contentPadding: EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                    ),
+                                  ),
+                                  hint: const Text("Équipe"),
+                                  items:
+                                      teamList
+                                          .map(
+                                            (t) => DropdownMenuItem(
+                                              value: t,
+                                              child: Text(t),
+                                            ),
+                                          )
+                                          .toList()
+                                        ..insert(
+                                          0,
+                                          const DropdownMenuItem(
+                                            value: null,
+                                            child: Text("Équipe"),
+                                          ),
+                                        ),
+                                  onChanged: (val) =>
+                                      setState(() => _selectedTeam = val),
+                                ),
+                              ),
+                            ],
                           ),
+                        );
+                      },
+                    ),
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 150),
+                      child: hasFilters
+                          ? SafeArea(
+                              top: false,
+                              child: Padding(
+                                padding: const EdgeInsets.all(12.0),
+                                child: SizedBox(
+                                  width: double.infinity,
+                                  child: ElevatedButton(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.grey.shade200,
+                                      foregroundColor: Colors.black87,
+                                      side: const BorderSide(
+                                        color: ViroColors.primary,
+                                      ),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 12,
+                                      ),
+                                    ),
+                                    onPressed: () => setState(() {
+                                      _selectedCategory = null;
+                                      _selectedTeam = null;
+                                      _search = "";
+                                      _searchController.clear();
+                                    }),
+                                    child: const Text("Enlever les filtres"),
+                                  ),
+                                ),
+                              ),
+                            )
+                          : const SizedBox.shrink(),
+                    ),
+                  ],
+                ),
+              ),
+              _buildMembersSliver(snapshot),
+              if (canEdit)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 16, 12, 24),
+                    child: _buildBottomCardContent(canEdit),
+                  ),
+                ),
+              SliverToBoxAdapter(
+                child: SafeArea(
+                  top: false,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    child: Center(
+                      child: Opacity(
+                        opacity: 0.12,
+                        child: Image.asset(
+                          'assets/logo/logo_long.png',
+                          height: 100,
+                          fit: BoxFit.contain,
                         ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  /// Sliver pour la liste des membres (loading, vide ou liste avec séparateurs).
+  Widget _buildMembersSliver(
+    AsyncSnapshot<QuerySnapshot<Map<String, dynamic>>> snapshot,
+  ) {
+    if (snapshot.hasError) {
+      return SliverToBoxAdapter(
+        child: const SizedBox(
+          height: 200,
+          child: Center(child: Text("Erreur de chargement des membres.")),
+        ),
+      );
+    }
+    if (snapshot.connectionState == ConnectionState.waiting) {
+      return const SliverToBoxAdapter(
+        child: SizedBox(
+          height: 200,
+          child: Center(child: CircularProgressIndicator()),
+        ),
+      );
+    }
+    final allDocs = snapshot.data?.docs ?? [];
+    final clubMembers = filterUsersByClub(allDocs, widget.clubId);
+    final entries = <Map<String, dynamic>>[];
+    for (final doc in clubMembers) {
+      final data = doc.data();
+      if (data == null) continue;
+      final roles = getAllUserRolesInClub(data, widget.clubId);
+      for (final role in roles) {
+        entries.add({'doc': doc, 'role': role});
+      }
+    }
+    final filtered =
+        entries.where((entry) {
+          final doc = entry['doc'] as DocumentSnapshot;
+          final role = entry['role'] as String;
+          final data = doc.data() as Map<String, dynamic>?;
+          if (data == null) return false;
+          final first = (data['firstName'] as String? ?? "").toLowerCase();
+          final last = (data['lastName'] as String? ?? "").toLowerCase();
+          final email = (data['email'] as String? ?? "").toLowerCase();
+          final userCats = getUserCategories(data);
+          final userTeams = getUserTeamNames(data);
+          final isPlayer = role == 'player';
+          final catOk =
+              !isPlayer ||
+              _selectedCategory == null ||
+              userCats.any(
+                (c) => _normalize(c) == _normalize(_selectedCategory!),
+              );
+          final teamOk =
+              !isPlayer ||
+              _selectedTeam == null ||
+              userTeams.any((t) => _normalize(t) == _normalize(_selectedTeam!));
+          final matchesSearch =
+              _search.isEmpty ||
+              first.contains(_search) ||
+              last.contains(_search) ||
+              email.contains(_search);
+          return matchesSearch && catOk && teamOk;
+        }).toList()..sort((a, b) {
+          final aDoc = a['doc'] as DocumentSnapshot;
+          final bDoc = b['doc'] as DocumentSnapshot;
+          final aRole = a['role'] as String;
+          final bRole = b['role'] as String;
+          final aData = aDoc.data() as Map<String, dynamic>?;
+          final bData = bDoc.data() as Map<String, dynamic>?;
+          final aIsStaff =
+              aRole == 'admin_fondateur' ||
+              aRole == 'coach' ||
+              aRole == 'admin';
+          final bIsStaff =
+              bRole == 'admin_fondateur' ||
+              bRole == 'coach' ||
+              bRole == 'admin';
+          if (aIsStaff && !bIsStaff) return -1;
+          if (!aIsStaff && bIsStaff) return 1;
+          final aFirst = (aData?['firstName'] as String? ?? "").toLowerCase();
+          final bFirst = (bData?['firstName'] as String? ?? "").toLowerCase();
+          return aFirst.compareTo(bFirst);
+        });
+    if (filtered.isEmpty) {
+      return SliverToBoxAdapter(
+        child: const SizedBox(
+          height: 120,
+          child: Center(child: Text("Aucun membre trouvé.")),
+        ),
+      );
+    }
+    final bool canEdit =
+        widget.currentViewerRole == 'admin' ||
+        widget.currentViewerRole == 'admin_fondateur';
+    final List<int> slots = [];
+    for (int i = 0; i < filtered.length; i++) {
+      if (i > 0) {
+        final prevRole = filtered[i - 1]['role'] as String;
+        final currRole = filtered[i]['role'] as String;
+        final prevStaff =
+            prevRole == 'admin_fondateur' ||
+            prevRole == 'coach' ||
+            prevRole == 'admin';
+        final currPlayer = currRole == 'player';
+        if (prevStaff && currPlayer) slots.add(-1);
+      }
+      slots.add(i);
+    }
+    return SliverList(
+      delegate: SliverChildBuilderDelegate((context, index) {
+        if (slots[index] == -1) {
+          return const Divider(height: 1, color: Colors.black);
+        }
+        final entryIndex = slots[index];
+        final entry = filtered[entryIndex];
+        final doc = entry['doc'] as DocumentSnapshot;
+        final role = entry['role'] as String;
+        final rawData = doc.data();
+        final data = rawData as Map<String, dynamic>?;
+        if (data == null) return const SizedBox.shrink();
+        final userId = doc.id;
+        final firstName = data['firstName'] as String? ?? "";
+        final lastName = data['lastName'] as String? ?? "";
+        final avatarUrl = effectiveAvatarUrl(data);
+        final isPlayer = role == 'player';
+        final userCategories = getUserCategories(data);
+        final category = isPlayer
+            ? (userCategories.isNotEmpty ? userCategories.join(", ") : "")
+            : "";
+        final isStaff =
+            role == 'admin_fondateur' || role == 'coach' || role == 'admin';
+        final roleLabel = role
+            .replaceAll('_', ' ')
+            .split(' ')
+            .map((word) {
+              if (word.isEmpty) return word;
+              return word[0].toUpperCase() + word.substring(1);
+            })
+            .join(' ');
+        final bool showDelete =
+            canEdit &&
+            _editMode &&
+            role != 'admin_fondateur' &&
+            (widget.currentViewerRole == 'admin_fondateur' ||
+                (widget.currentViewerRole == 'admin' &&
+                    (role == 'player' || role == 'coach')));
+        final bool showPasserAdmin =
+            canEdit &&
+            _editMode &&
+            widget.currentViewerRole == 'admin_fondateur' &&
+            role == 'coach';
+        final bool showPasserCoach =
+            canEdit &&
+            _editMode &&
+            widget.currentViewerRole == 'admin_fondateur' &&
+            role == 'admin';
+        final trailing =
+            _editMode && (showDelete || showPasserAdmin || showPasserCoach)
+            ? _buildEditTrailing(
+                roleLabel: roleLabel,
+                isPlayer: isPlayer,
+                data: data,
+                showDelete: showDelete,
+                showPasserAdmin: showPasserAdmin,
+                showPasserCoach: showPasserCoach,
+                userId: userId,
+                role: role,
+                firstName: firstName,
+                lastName: lastName,
+              )
+            : const SizedBox.shrink();
+        return _MemberTile(
+          userId: userId,
+          firstName: firstName,
+          lastName: lastName,
+          avatarUrl: avatarUrl,
+          roleLabel: roleLabel,
+          isPlayer: isPlayer,
+          isStaff: isStaff,
+          category: category,
+          teamNames: getUserTeamNames(data),
+          hasLicense: playerHasLicense(data, widget.clubId),
+          trailing: trailing,
+          onTap: () {
+            if (!_editMode) {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => ProfilDisplayPage(userId: userId),
+                ),
+              );
+            }
+          },
+        );
+      }, childCount: slots.length),
+    );
+  }
+
+  /// Contenu de la carte "En attente" (sans Positioned, pour le scroll).
+  Widget _buildBottomCardContent(bool canEdit) {
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(12.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Text(
+                  "En attente de création de compte",
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    color: Colors.black,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const Spacer(),
+                if (canEdit)
+                  IconButton(
+                    onPressed: _isRemoving
+                        ? null
+                        : () => _showAddMemberEmailDialog(context),
+                    icon: const Icon(Icons.person_add),
+                    color: ViroColors.accent,
+                    tooltip: "Ajouter joueur",
+                  ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            _buildPendingMembersSection(canEdit),
+            if (canEdit) ...[
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: _isRemoving
+                      ? null
+                      : () {
+                          // TODO: envoyer lien de connexion
+                        },
+                  icon: const Icon(Icons.link, size: 20),
+                  label: const Text("Envoyer lien de connexion"),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPendingMembersSection(bool canEdit) {
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: appFirestore
+          .collection(FirebaseCollections.clubs)
+          .doc(widget.clubId)
+          .collection(FirebaseCollections.pendingMembers)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError || !snapshot.hasData) {
+          return const SizedBox.shrink();
+        }
+        final docs = snapshot.data!.docs;
+        if (docs.isEmpty) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8.0),
+            child: Text(
+              "Aucun membre en attente.",
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: Colors.grey),
+            ),
+          );
+        }
+
+        final list = docs.map((doc) {
+          final d = doc.data();
+          return {'doc': doc, 'data': d};
+        }).toList();
+
+        list.sort((a, b) {
+          final aLast = ((a['data'] as Map)['lastName'] as String? ?? '')
+              .toLowerCase();
+          final bLast = ((b['data'] as Map)['lastName'] as String? ?? '')
+              .toLowerCase();
+          final cmp = aLast.compareTo(bLast);
+          if (cmp != 0) return cmp;
+          final aFirst = ((a['data'] as Map)['firstName'] as String? ?? '')
+              .toLowerCase();
+          final bFirst = ((b['data'] as Map)['firstName'] as String? ?? '')
+              .toLowerCase();
+          return aFirst.compareTo(bFirst);
+        });
+
+        final filtered = _search.isEmpty
+            ? list
+            : list.where((e) {
+                final data = e['data'] as Map<String, dynamic>;
+                final first = (data['firstName'] as String? ?? '')
+                    .toLowerCase();
+                final last = (data['lastName'] as String? ?? '').toLowerCase();
+                final email = (data['email'] as String? ?? '').toLowerCase();
+                return first.contains(_search) ||
+                    last.contains(_search) ||
+                    email.contains(_search);
+              }).toList();
+
+        if (filtered.isEmpty) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8.0),
+            child: Text(
+              "Aucun membre en attente.",
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: Colors.grey),
+            ),
+          );
+        }
+
+        return ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 400),
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: filtered.length,
+            itemBuilder: (context, index) {
+              final e = filtered[index];
+              final doc = e['doc'] as DocumentSnapshot<Map<String, dynamic>>;
+              final data = e['data'] as Map<String, dynamic>;
+              final firstName = data['firstName'] as String? ?? '';
+              final lastName = data['lastName'] as String? ?? '';
+              final email = data['email'] as String? ?? '';
+              return ListTile(
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                title: Text(
+                  '$firstName $lastName'.trim().isEmpty
+                      ? email
+                      : '$firstName $lastName'.trim(),
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                subtitle: Text(
+                  email,
+                  style: const TextStyle(color: Colors.grey, fontSize: 12),
+                ),
+                trailing: canEdit
+                    ? Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            onPressed: () => _showEditPendingMemberDialog(
+                              context,
+                              doc.reference,
+                              firstName,
+                              lastName,
+                              email,
+                            ),
+                            icon: const Icon(Icons.edit_outlined),
+                            color: ViroColors.accent,
+                            tooltip: "Éditer",
+                          ),
+                          IconButton(
+                            onPressed: () => _confirmRemovePendingMember(
+                              context,
+                              doc.reference,
+                              '$firstName $lastName'.trim(),
+                            ),
+                            icon: const Icon(Icons.delete_outline),
+                            color: Colors.red,
+                            tooltip: "Supprimer",
+                          ),
+                        ],
                       )
-                    : const SizedBox.shrink(),
+                    : null,
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _showEditPendingMemberDialog(
+    BuildContext context,
+    DocumentReference<Map<String, dynamic>> docRef,
+    String currentFirstName,
+    String currentLastName,
+    String currentEmail,
+  ) async {
+    final firstNameController =
+        TextEditingController(text: currentFirstName);
+    final lastNameController = TextEditingController(text: currentLastName);
+    final emailController = TextEditingController(text: currentEmail);
+    final formKey = GlobalKey<FormState>();
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text("Modifier le membre en attente"),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: firstNameController,
+                decoration: const InputDecoration(
+                  labelText: "Prénom",
+                  border: OutlineInputBorder(),
+                ),
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) {
+                    return "Saisissez le prénom.";
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: lastNameController,
+                decoration: const InputDecoration(
+                  labelText: "Nom",
+                  border: OutlineInputBorder(),
+                ),
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) {
+                    return "Saisissez le nom.";
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: emailController,
+                keyboardType: TextInputType.emailAddress,
+                decoration: const InputDecoration(
+                  labelText: "Email",
+                  border: OutlineInputBorder(),
+                ),
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) {
+                    return "Saisissez un email.";
+                  }
+                  return null;
+                },
               ),
             ],
           ),
-          // Logo en footer
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                child: Center(
-                  child: Opacity(
-                    opacity: 0.12,
-                    child: Image.asset(
-                      'assets/logo/logo_long.png',
-                      height: 100,
-                      fit: BoxFit.contain,
-                    ),
-                  ),
-                ),
-              ),
-            ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text("Annuler"),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              if (formKey.currentState?.validate() != true) return;
+              final firstName = firstNameController.text.trim();
+              final lastName = lastNameController.text.trim();
+              final email = emailController.text.trim().toLowerCase();
+              Navigator.pop(dialogContext);
+              await _updatePendingMember(
+                context,
+                docRef,
+                firstName: firstName,
+                lastName: lastName,
+                email: email,
+              );
+            },
+            child: const Text("Enregistrer"),
           ),
         ],
       ),
     );
+    firstNameController.dispose();
+    lastNameController.dispose();
+    emailController.dispose();
+  }
+
+  Future<void> _updatePendingMember(
+    BuildContext context,
+    DocumentReference<Map<String, dynamic>> docRef, {
+    required String firstName,
+    required String lastName,
+    required String email,
+  }) async {
+    try {
+      await docRef.update({
+        'firstName': firstName,
+        'lastName': lastName,
+        'email': email,
+      });
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Membre en attente mis à jour."),
+          ),
+        );
+      }
+    } catch (e) {
+      AppLogger.instance.error(
+        'Erreur mise à jour membre en attente',
+        error: e,
+        context: {'clubId': widget.clubId},
+      );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(FirebaseErrorHandler.getErrorMessage(e))),
+        );
+      }
+    }
+  }
+
+  Future<void> _showAddMemberEmailDialog(BuildContext context) async {
+    final emailController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text("Ajouter un membre"),
+        content: Form(
+          key: formKey,
+          child: TextFormField(
+            controller: emailController,
+            keyboardType: TextInputType.emailAddress,
+            decoration: const InputDecoration(
+              labelText: "Email",
+              border: OutlineInputBorder(),
+            ),
+            validator: (v) {
+              if (v == null || v.trim().isEmpty) return "Saisissez un email.";
+              return null;
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text("Annuler"),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              if (formKey.currentState?.validate() != true) return;
+              final email = emailController.text.trim();
+              Navigator.pop(dialogContext);
+              await _checkEmailAndProceed(context, email);
+            },
+            child: const Text("Valider"),
+          ),
+        ],
+      ),
+    );
+    // Différer le dispose pour éviter "used after being disposed" pendant la fermeture du dialogue
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        emailController.dispose();
+      });
+    });
+  }
+
+  Future<void> _checkEmailAndProceed(
+    BuildContext pageContext,
+    String email,
+  ) async {
+    final emailNorm = email.trim().toLowerCase();
+    if (emailNorm.isEmpty) return;
+
+    final userSnap = await appFirestore
+        .collection(FirebaseCollections.users)
+        .where('email', isEqualTo: emailNorm)
+        .limit(1)
+        .get();
+
+    if (userSnap.docs.isNotEmpty && pageContext.mounted) {
+      ScaffoldMessenger.of(pageContext).showSnackBar(
+        const SnackBar(content: Text("Un compte existe déjà pour cet email.")),
+      );
+      return;
+    }
+
+    final pendingSnap = await appFirestore
+        .collection(FirebaseCollections.clubs)
+        .doc(widget.clubId)
+        .collection(FirebaseCollections.pendingMembers)
+        .where('email', isEqualTo: emailNorm)
+        .limit(1)
+        .get();
+
+    if (pendingSnap.docs.isNotEmpty && pageContext.mounted) {
+      ScaffoldMessenger.of(pageContext).showSnackBar(
+        const SnackBar(
+          content: Text("Cet email est déjà en attente de création de compte."),
+        ),
+      );
+      return;
+    }
+
+    if (!pageContext.mounted) return;
+    _showAddMemberNameDialog(pageContext, emailNorm);
+  }
+
+  Future<void> _showAddMemberNameDialog(
+    BuildContext context,
+    String emailNorm,
+  ) async {
+    final firstNameController = TextEditingController();
+    final lastNameController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text("Nom et prénom"),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: firstNameController,
+                decoration: const InputDecoration(
+                  labelText: "Prénom",
+                  border: OutlineInputBorder(),
+                ),
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty)
+                    return "Saisissez le prénom.";
+                  return null;
+                },
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: lastNameController,
+                decoration: const InputDecoration(
+                  labelText: "Nom",
+                  border: OutlineInputBorder(),
+                ),
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) return "Saisissez le nom.";
+                  return null;
+                },
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text("Annuler"),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              if (formKey.currentState?.validate() != true) return;
+              final firstName = firstNameController.text.trim();
+              final lastName = lastNameController.text.trim();
+              Navigator.pop(dialogContext);
+              await _addPendingMember(context, emailNorm, firstName, lastName);
+            },
+            child: const Text("Ajouter"),
+          ),
+        ],
+      ),
+    );
+    // Différer le dispose pour éviter "used after being disposed" pendant la fermeture du dialogue
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        firstNameController.dispose();
+        lastNameController.dispose();
+      });
+    });
+  }
+
+  Future<void> _addPendingMember(
+    BuildContext context,
+    String emailNorm,
+    String firstName,
+    String lastName,
+  ) async {
+    try {
+      final adminId = FirebaseAuth.instance.currentUser?.uid;
+      await appFirestore
+          .collection(FirebaseCollections.clubs)
+          .doc(widget.clubId)
+          .collection(FirebaseCollections.pendingMembers)
+          .add({
+            'email': emailNorm,
+            'firstName': firstName,
+            'lastName': lastName,
+            'addedAt': FieldValue.serverTimestamp(),
+            if (adminId != null) 'addedBy': adminId,
+          });
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Membre ajouté en attente de création de compte."),
+          ),
+        );
+      }
+    } catch (e) {
+      AppLogger.instance.error(
+        'Erreur ajout membre en attente',
+        error: e,
+        context: {'clubId': widget.clubId, 'email': emailNorm},
+      );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(FirebaseErrorHandler.getErrorMessage(e))),
+        );
+      }
+    }
+  }
+
+  Future<void> _confirmRemovePendingMember(
+    BuildContext context,
+    DocumentReference<Map<String, dynamic>> ref,
+    String displayName,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Retirer de la liste"),
+        content: Text(
+          "Retirer $displayName de la liste des membres en attente ?",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text("Annuler"),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text("Retirer"),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && context.mounted) {
+      try {
+        await ref.delete();
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Membre retiré de la liste.")),
+          );
+        }
+      } catch (e) {
+        AppLogger.instance.error(
+          'Erreur suppression membre en attente',
+          error: e,
+          context: {'clubId': widget.clubId},
+        );
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(FirebaseErrorHandler.getErrorMessage(e))),
+          );
+        }
+      }
+    }
   }
 
   Widget _buildEditTrailing({
@@ -782,9 +1283,9 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
         context: {'clubId': widget.clubId, 'userId': userId, 'role': role},
       );
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(FirebaseErrorHandler.getErrorMessage(e))));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(FirebaseErrorHandler.getErrorMessage(e))),
+        );
       }
     } finally {
       if (mounted) setState(() => _isRemoving = false);
@@ -1164,5 +1665,190 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
         .replaceAll(RegExp('[ûü]'), 'u')
         .replaceAll(RegExp('[ç]'), 'c')
         .trim();
+  }
+}
+
+/// Tuile par membre : carte lisible avec avatar, nom, rôle, et infos joueur (catégorie, équipe, licence).
+class _MemberTile extends StatelessWidget {
+  final String userId;
+  final String firstName;
+  final String lastName;
+  final String? avatarUrl;
+  final String roleLabel;
+  final bool isPlayer;
+  final bool isStaff;
+  final String category;
+  final List<String> teamNames;
+  final bool hasLicense;
+  final Widget trailing;
+  final VoidCallback onTap;
+
+  const _MemberTile({
+    required this.userId,
+    required this.firstName,
+    required this.lastName,
+    this.avatarUrl,
+    required this.roleLabel,
+    required this.isPlayer,
+    required this.isStaff,
+    required this.category,
+    required this.teamNames,
+    required this.hasLicense,
+    required this.trailing,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      child: Material(
+        color: Colors.white,
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: const BorderSide(color: ViroColors.borderColor, width: 1),
+        ),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                UserDisplayTile(
+                  userId: userId,
+                  firstName: firstName,
+                  lastName: lastName,
+                  avatarUrl: avatarUrl,
+                  navigateOnTap: false,
+                  textStyle: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: const [],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: isStaff
+                                    ? ViroColors.primary.withValues(alpha: 0.12)
+                                    : ViroColors.secondary.withValues(
+                                        alpha: 0.5,
+                                      ),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                isStaff
+                                    ? roleLabel
+                                    : (category.isNotEmpty
+                                          ? category
+                                          : "Sans catégorie"),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: isStaff
+                                      ? ViroColors.primary
+                                      : Colors.grey[800],
+                                ),
+                              ),
+                            ),
+                            if (isPlayer) ...[
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: hasLicense
+                                      ? ViroColors.success.withValues(
+                                          alpha: 0.15,
+                                        )
+                                      : Colors.orange.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  hasLicense ? "Licencié" : "Non licencié",
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w500,
+                                    color: hasLicense
+                                        ? ViroColors.success
+                                        : Colors.orange[800],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                        const SizedBox(width: 8),
+                        trailing,
+                      ],
+                    ),
+                    if (isPlayer && teamNames.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        mainAxisSize: MainAxisSize.min,
+                        children: teamNames
+                            .map(
+                              (name) => Padding(
+                                padding: const EdgeInsets.only(top: 2),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.groups_outlined,
+                                      size: 12,
+                                      color: Colors.grey[600],
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      name,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey[700],
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            )
+                            .toList(),
+                      ),
+                    ],
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

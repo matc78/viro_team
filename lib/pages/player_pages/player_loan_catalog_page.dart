@@ -94,10 +94,12 @@ class _PlayerLoanCatalogPageState extends State<PlayerLoanCatalogPage>
         }
       }
     }
-    if (mounted) setState(() {
-      _clubNamesCache = names;
-      _clubSportsCache = sports;
-    });
+    if (mounted) {
+      setState(() {
+        _clubNamesCache = names;
+        _clubSportsCache = sports;
+      });
+    }
   }
 
   static const _keyLastClubId = 'player_loan_catalog_last_club_id';
@@ -165,7 +167,10 @@ class _PlayerLoanCatalogPageState extends State<PlayerLoanCatalogPage>
               (id) => DropdownMenuItem(
                 value: id,
                 child: Text(
-                  formatClubNameWithEmoji(_clubNamesCache[id] ?? id, _clubSportsCache[id]),
+                  formatClubNameWithEmoji(
+                    _clubNamesCache[id] ?? id,
+                    _clubSportsCache[id],
+                  ),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
@@ -523,7 +528,9 @@ class _LoanRecapCard extends StatelessWidget {
                           _getPaymentMethodLabel(method.toString()),
                           style: const TextStyle(fontSize: 11),
                         ),
-                        backgroundColor: ViroColors.primary.withValues(alpha: 0.15),
+                        backgroundColor: ViroColors.primary.withValues(
+                          alpha: 0.15,
+                        ),
                         padding: const EdgeInsets.symmetric(
                           horizontal: 8,
                           vertical: 4,
@@ -751,7 +758,9 @@ class _EquipmentCard extends StatelessWidget {
                                 "Indisponible",
                                 style: TextStyle(fontSize: 12),
                               ),
-                              backgroundColor: ViroColors.error.withValues(alpha: 0.15),
+                              backgroundColor: ViroColors.error.withValues(
+                                alpha: 0.15,
+                              ),
                             )
                           else
                             Chip(
@@ -759,7 +768,9 @@ class _EquipmentCard extends StatelessWidget {
                                 "$maxQuantity disponible(s)",
                                 style: const TextStyle(fontSize: 12),
                               ),
-                              backgroundColor: ViroColors.success.withValues(alpha: 0.15),
+                              backgroundColor: ViroColors.success.withValues(
+                                alpha: 0.15,
+                              ),
                             ),
                         ],
                       ),
@@ -836,7 +847,9 @@ class _EquipmentCard extends StatelessWidget {
                             _getPaymentMethodLabel(method.toString()),
                             style: const TextStyle(fontSize: 11),
                           ),
-                          backgroundColor: ViroColors.primary.withValues(alpha: 0.1),
+                          backgroundColor: ViroColors.primary.withValues(
+                            alpha: 0.1,
+                          ),
                           padding: const EdgeInsets.symmetric(horizontal: 8),
                         );
                       }),
@@ -2411,10 +2424,7 @@ class _MyLoansSection extends StatelessWidget {
                 Chip(
                   label: Text(
                     "${loans.length}",
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Colors.white,
-                    ),
+                    style: const TextStyle(fontSize: 12, color: Colors.white),
                   ),
                   backgroundColor: iconColor,
                 ),
@@ -2422,32 +2432,34 @@ class _MyLoansSection extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             ...loans.map((doc) {
-          final data = doc.data();
-          final loanId = doc.id;
-          final loanData = <String, dynamic>{'id': loanId, ...data};
-          final hasPendingRequest = pendingLoanIds.contains(loanId);
-          if (isActiveCard) {
-            return _ActiveLoanCard(
-              clubId: clubId,
-              loanData: loanData,
-              currentUserId: currentUserId,
-              hasPendingRequest: hasPendingRequest,
-              onRequestCancellation: () => _showLoanCancellationRequestDialog(
-                context,
-                clubId,
-                loanData,
-                currentUserId,
-              ),
-              onRequestModification: () => _showLoanModificationRequestDialog(
-                context,
-                clubId,
-                loanData,
-                currentUserId,
-              ),
-            );
-          }
-          return _ReturnedLoanCard(clubId: clubId, loanData: loanData);
-        }),
+              final data = doc.data();
+              final loanId = doc.id;
+              final loanData = <String, dynamic>{'id': loanId, ...data};
+              final hasPendingRequest = pendingLoanIds.contains(loanId);
+              if (isActiveCard) {
+                return _ActiveLoanCard(
+                  clubId: clubId,
+                  loanData: loanData,
+                  currentUserId: currentUserId,
+                  hasPendingRequest: hasPendingRequest,
+                  onRequestCancellation: () =>
+                      _showLoanCancellationRequestDialog(
+                        context,
+                        clubId,
+                        loanData,
+                        currentUserId,
+                      ),
+                  onRequestModification: () =>
+                      _showLoanModificationRequestDialog(
+                        context,
+                        clubId,
+                        loanData,
+                        currentUserId,
+                      ),
+                );
+              }
+              return _ReturnedLoanCard(clubId: clubId, loanData: loanData);
+            }),
           ],
         ),
       ),

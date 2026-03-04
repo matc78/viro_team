@@ -109,7 +109,8 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
         final List<String> clubIds = clubIdsSet.toList();
         final avatarUrl = effectiveAvatarUrl(data);
         final email = data?['email'] as String? ?? user.email ?? "";
-        if (avatarUrl != null && avatarUrl.isNotEmpty) _lastAvatarUrl = avatarUrl;
+        if (avatarUrl != null && avatarUrl.isNotEmpty)
+          _lastAvatarUrl = avatarUrl;
 
         _showAvatarModerationRejectedIfNeeded(context, user.uid, data);
         _clearStaleAvatarModerationPendingIfNeeded(context, user.uid, data);
@@ -168,7 +169,8 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
                 _buildMenuCard(
                   icon: Icons.phone_outlined,
                   title: "Changer mon téléphone",
-                  subtitle: (data?['phone'] as String?)?.trim().isNotEmpty == true
+                  subtitle:
+                      (data?['phone'] as String?)?.trim().isNotEmpty == true
                       ? (data?['phone'] as String?)
                       : "Non renseigné",
                   onTap: () => _changePhone(data?['phone'] as String? ?? ""),
@@ -191,7 +193,8 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
                 _buildMenuCard(
                   icon: Icons.add_circle_outline,
                   title: "Ajouter un profil",
-                  subtitle: "Création d'un compte joueur/coach ou d'un nouveau club",
+                  subtitle:
+                      "Création d'un compte joueur/coach ou d'un nouveau club",
                   onTap: () => Navigator.push(
                     context,
                     MaterialPageRoute(builder: (_) => const AddProfilePage()),
@@ -201,7 +204,8 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
                   icon: Icons.exit_to_app,
                   title: "Quitter un club",
                   subtitle: "Choisir un club à quitter",
-                  onTap: () => _showLeaveClubDialog(context, data ?? {}, user.uid),
+                  onTap: () =>
+                      _showLeaveClubDialog(context, data ?? {}, user.uid),
                 ),
                 const SizedBox(height: 30),
 
@@ -236,14 +240,16 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
                       if (!launched && context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                              content: Text("Impossible d'ouvrir le lien")),
+                            content: Text("Impossible d'ouvrir le lien"),
+                          ),
                         );
                       }
                     } catch (_) {
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                              content: Text("Impossible d'ouvrir le lien")),
+                            content: Text("Impossible d'ouvrir le lien"),
+                          ),
                         );
                       }
                     }
@@ -257,21 +263,24 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
                     final uri = Uri(
                       scheme: 'mailto',
                       path: AppUrls.signalementContenuEmail,
-                      query: 'subject=${Uri.encodeComponent(AppUrls.signalementContenuSubject)}',
+                      query:
+                          'subject=${Uri.encodeComponent(AppUrls.signalementContenuSubject)}',
                     );
                     try {
                       final launched = await launchUrl(uri);
                       if (!launched && context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                              content: Text("Impossible d'ouvrir le client mail")),
+                            content: Text("Impossible d'ouvrir le client mail"),
+                          ),
                         );
                       }
                     } catch (_) {
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                              content: Text("Impossible d'ouvrir le client mail")),
+                            content: Text("Impossible d'ouvrir le client mail"),
+                          ),
                         );
                       }
                     }
@@ -612,9 +621,7 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
                   "Email mis à jour (vérifie ta boîte mail pour confirmer si nécessaire)",
                 );
               } on FirebaseAuthException catch (e) {
-                _showSnack(
-                  FirebaseErrorHandler.getErrorMessage(e),
-                );
+                _showSnack(FirebaseErrorHandler.getErrorMessage(e));
               } finally {
                 if (mounted) setState(() => _isSaving = false);
               }
@@ -750,9 +757,7 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
                   error: e,
                   context: {'userId': user.uid, 'errorCode': e.code},
                 );
-                _showSnack(
-                  FirebaseErrorHandler.getErrorMessage(e),
-                );
+                _showSnack(FirebaseErrorHandler.getErrorMessage(e));
               } finally {
                 if (mounted) setState(() => _isSaving = false);
               }
@@ -894,9 +899,12 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
                           finalRole == 'coach')
                       ? 'coaches'
                       : 'members';
-                  await firestore.collection(FirebaseCollections.clubs).doc(finalClubId).update({
-                    field: FieldValue.arrayRemove([uid]),
-                  });
+                  await firestore
+                      .collection(FirebaseCollections.clubs)
+                      .doc(finalClubId)
+                      .update({
+                        field: FieldValue.arrayRemove([uid]),
+                      });
                 }
 
                 // TODO: Retirer aussi de tous les autres clubs dans roles.coach et roles.admin
@@ -911,7 +919,10 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
                 }
 
                 // Supprimer le document utilisateur
-                await firestore.collection(FirebaseCollections.users).doc(uid).delete();
+                await firestore
+                    .collection(FirebaseCollections.users)
+                    .doc(uid)
+                    .delete();
 
                 // Supprimer le compte Firebase Auth
                 await user.delete();
@@ -932,7 +943,9 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
               } catch (e) {
                 if (!context.mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(FirebaseErrorHandler.getErrorMessage(e))),
+                  SnackBar(
+                    content: Text(FirebaseErrorHandler.getErrorMessage(e)),
+                  ),
                 );
               }
             },
@@ -980,7 +993,10 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
                   children: [
                     Expanded(
                       child: Text(
-                        formatClubNameWithEmoji(clubName, clubInfo['clubSport'] as String?),
+                        formatClubNameWithEmoji(
+                          clubName,
+                          clubInfo['clubSport'] as String?,
+                        ),
                         style: const TextStyle(
                           fontWeight: FontWeight.w600,
                           fontSize: 14,
@@ -1010,7 +1026,9 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
                                 context: context,
                                 builder: (ctx) => AlertDialog(
                                   title: const Text("Quitter le club"),
-                                  content: Text("Quitter le club ${formatClubNameWithEmoji(clubName, clubInfo['clubSport'] as String?)} ?"),
+                                  content: Text(
+                                    "Quitter le club ${formatClubNameWithEmoji(clubName, clubInfo['clubSport'] as String?)} ?",
+                                  ),
                                   actions: [
                                     TextButton(
                                       onPressed: () =>
@@ -1619,9 +1637,10 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
         _isUploadingAvatar = true;
       });
 
-      await appFirestore.collection(FirebaseCollections.users).doc(user.uid).set({
-        'avatarModerationPending': true,
-      }, SetOptions(merge: true));
+      await appFirestore
+          .collection(FirebaseCollections.users)
+          .doc(user.uid)
+          .set({'avatarModerationPending': true}, SetOptions(merge: true));
 
       final storageRef = FirebaseStorage.instance
           .ref()
@@ -1637,9 +1656,10 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(FirebaseErrorHandler.getErrorMessage(e))),
       );
-      await appFirestore.collection(FirebaseCollections.users).doc(user.uid).set({
-        'avatarModerationPending': false,
-      }, SetOptions(merge: true));
+      await appFirestore
+          .collection(FirebaseCollections.users)
+          .doc(user.uid)
+          .set({'avatarModerationPending': false}, SetOptions(merge: true));
     } finally {
       if (mounted) {
         setState(() {
@@ -1677,7 +1697,9 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
     Map<String, dynamic>? userData,
   ) {
     if (userData?['avatarModerationRejected'] != true ||
-        _hasShownAvatarRejectedThisSession) return;
+        _hasShownAvatarRejectedThisSession) {
+      return;
+    }
     _hasShownAvatarRejectedThisSession = true;
     // Invalider le cache pour l'URL rejetée afin que l'avatar n'affiche plus l'image
     if (_lastAvatarUrl != null) {
@@ -1686,11 +1708,12 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      final message = userData?['avatarModerationReason'] as String? ??
+      final message =
+          userData?['avatarModerationReason'] as String? ??
           "Votre photo de profil n'a pas été acceptée. Veuillez choisir une photo appropriée.";
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
       _clearAvatarModerationRejected(uid);
     });
   }

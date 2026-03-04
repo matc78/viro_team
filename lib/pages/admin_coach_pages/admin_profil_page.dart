@@ -53,7 +53,10 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
     }
 
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-      stream: _firestore.collection(FirebaseCollections.users).doc(user.uid).snapshots(),
+      stream: _firestore
+          .collection(FirebaseCollections.users)
+          .doc(user.uid)
+          .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           return const Scaffold(
@@ -76,7 +79,8 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
         // Extraire tous les clubIds depuis roles
         final List<String> clubIds = _extractAllClubIds(userData);
         final avatarUrl = effectiveAvatarUrl(userData);
-        if (avatarUrl != null && avatarUrl.isNotEmpty) _lastAvatarUrl = avatarUrl;
+        if (avatarUrl != null && avatarUrl.isNotEmpty)
+          _lastAvatarUrl = avatarUrl;
 
         _showAvatarModerationRejectedIfNeeded(context, user.uid, userData);
         _clearStaleAvatarModerationPendingIfNeeded(context, user.uid, userData);
@@ -184,9 +188,12 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
                       .snapshots(),
                   builder: (context, clubSnap) {
                     final clubData = clubSnap.data?.data();
-                    final paymentMethods = clubData?['paymentMethods'] as List<dynamic>? ?? [];
-                    final paymentMethodsList = paymentMethods.map((e) => e.toString()).toList();
-                    
+                    final paymentMethods =
+                        clubData?['paymentMethods'] as List<dynamic>? ?? [];
+                    final paymentMethodsList = paymentMethods
+                        .map((e) => e.toString())
+                        .toList();
+
                     String paymentMethodsSubtitle;
                     if (paymentMethodsList.isEmpty) {
                       paymentMethodsSubtitle = "Aucun moyen sélectionné";
@@ -205,12 +212,13 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
                       }).toList();
                       paymentMethodsSubtitle = labels.join(', ');
                     }
-                    
+
                     return _buildMenuCard(
                       icon: Icons.payment_outlined,
                       title: "Moyens de paiement acceptés",
                       subtitle: paymentMethodsSubtitle,
-                      onTap: () => _showPaymentMethodsDialog(clubId, paymentMethodsList),
+                      onTap: () =>
+                          _showPaymentMethodsDialog(clubId, paymentMethodsList),
                     );
                   },
                 ),
@@ -316,14 +324,16 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
                       if (!launched && context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                              content: Text("Impossible d'ouvrir le lien")),
+                            content: Text("Impossible d'ouvrir le lien"),
+                          ),
                         );
                       }
                     } catch (_) {
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                              content: Text("Impossible d'ouvrir le lien")),
+                            content: Text("Impossible d'ouvrir le lien"),
+                          ),
                         );
                       }
                     }
@@ -337,21 +347,24 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
                     final uri = Uri(
                       scheme: 'mailto',
                       path: AppUrls.signalementContenuEmail,
-                      query: 'subject=${Uri.encodeComponent(AppUrls.signalementContenuSubject)}',
+                      query:
+                          'subject=${Uri.encodeComponent(AppUrls.signalementContenuSubject)}',
                     );
                     try {
                       final launched = await launchUrl(uri);
                       if (!launched && context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                              content: Text("Impossible d'ouvrir le client mail")),
+                            content: Text("Impossible d'ouvrir le client mail"),
+                          ),
                         );
                       }
                     } catch (_) {
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                              content: Text("Impossible d'ouvrir le client mail")),
+                            content: Text("Impossible d'ouvrir le client mail"),
+                          ),
                         );
                       }
                     }
@@ -625,7 +638,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
 
   void _showPaymentMethodsDialog(String clubId, List<String> currentMethods) {
     final Set<String> selectedMethods = Set<String>.from(currentMethods);
-    
+
     showDialog<void>(
       context: context,
       builder: (context) => StatefulBuilder(
@@ -689,20 +702,23 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
             ElevatedButton(
               onPressed: () async {
                 try {
-                  await _firestore.collection(FirebaseCollections.clubs).doc(clubId).update({
-                    'paymentMethods': selectedMethods.toList(),
-                  });
-                  
+                  await _firestore
+                      .collection(FirebaseCollections.clubs)
+                      .doc(clubId)
+                      .update({'paymentMethods': selectedMethods.toList()});
+
                   AppLogger.instance.info('Moyens de paiement mis à jour', {
                     'clubId': clubId,
                     'paymentMethods': selectedMethods.toList(),
                   });
-                  
+
                   if (mounted) {
                     Navigator.of(context).pop();
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
-                        content: Text("Moyens de paiement mis à jour avec succès !"),
+                        content: Text(
+                          "Moyens de paiement mis à jour avec succès !",
+                        ),
                       ),
                     );
                   }
@@ -833,9 +849,10 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
 
               // Si tout est bon, on met à jour
               try {
-                await _firestore.collection(FirebaseCollections.clubs).doc(clubId).update({
-                  'name': newNameInput,
-                });
+                await _firestore
+                    .collection(FirebaseCollections.clubs)
+                    .doc(clubId)
+                    .update({'name': newNameInput});
                 await _firestore
                     .collection(FirebaseCollections.users)
                     .doc(_auth.currentUser?.uid)
@@ -865,9 +882,11 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
                     'newName': newNameInput,
                   },
                 );
-                ScaffoldMessenger.of(
-                  context,
-                ).showSnackBar(SnackBar(content: Text(FirebaseErrorHandler.getErrorMessage(e))));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(FirebaseErrorHandler.getErrorMessage(e)),
+                  ),
+                );
               }
             },
             child: const Text("Enregistrer"),
@@ -1076,7 +1095,9 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
     );
 
     try {
-      final usersSnap = await _firestore.collection(FirebaseCollections.users).get();
+      final usersSnap = await _firestore
+          .collection(FirebaseCollections.users)
+          .get();
       final affected = usersSnap.docs.where((d) {
         final data = d.data();
         return userBelongsToClub(data, clubId);
@@ -1182,7 +1203,10 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
       }
       if (annSnap.docs.isNotEmpty) await aBatch.commit();
 
-      await _firestore.collection(FirebaseCollections.clubs).doc(clubId).delete();
+      await _firestore
+          .collection(FirebaseCollections.clubs)
+          .doc(clubId)
+          .delete();
 
       try {
         final storageRef = FirebaseStorage.instance
@@ -1249,7 +1273,9 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
     final userId = _auth.currentUser?.uid;
     if (userId == null) return;
 
-    final usersSnap = await _firestore.collection(FirebaseCollections.users).get();
+    final usersSnap = await _firestore
+        .collection(FirebaseCollections.users)
+        .get();
     final allDocs = usersSnap.docs;
     final inClub = filterUsersByClub(allDocs, clubId);
     final candidates = <DocumentSnapshot<Map<String, dynamic>>>[];
@@ -1381,7 +1407,9 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
     );
 
     try {
-      final clubRef = _firestore.collection(FirebaseCollections.clubs).doc(clubId);
+      final clubRef = _firestore
+          .collection(FirebaseCollections.clubs)
+          .doc(clubId);
       final clubSnap = await clubRef.get();
       final clubData = clubSnap.data();
       if (clubData == null) throw Exception("Club introuvable");
@@ -1394,7 +1422,9 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
 
       await clubRef.update({'adminId': newOwnerId, 'admins': admins});
 
-      final newOwnerRef = _firestore.collection(FirebaseCollections.users).doc(newOwnerId);
+      final newOwnerRef = _firestore
+          .collection(FirebaseCollections.users)
+          .doc(newOwnerId);
       final newOwnerSnap = await newOwnerRef.get();
       final newOwnerData = newOwnerSnap.data() ?? {};
       final roles = Map<String, dynamic>.from(
@@ -1410,7 +1440,9 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
         '_adminClubId': clubId,
       }, SetOptions(merge: true));
 
-      final currentUserRef = _firestore.collection(FirebaseCollections.users).doc(userId);
+      final currentUserRef = _firestore
+          .collection(FirebaseCollections.users)
+          .doc(userId);
       final currentSnap = await currentUserRef.get();
       final currentData = currentSnap.data() ?? {};
       final updatedRoles = _buildRolesAfterRemoveClub(
@@ -1504,7 +1536,9 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
     } catch (_) {}
 
     try {
-      final clubsSnap = await _firestore.collection(FirebaseCollections.clubs).get();
+      final clubsSnap = await _firestore
+          .collection(FirebaseCollections.clubs)
+          .get();
       for (final clubDoc in clubsSnap.docs) {
         final teamsSnap = await _firestore
             .collection(FirebaseCollections.clubs)
@@ -1855,9 +1889,9 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
           context: {'clubId': clubId, 'userId': _auth.currentUser?.uid},
         );
         if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text(FirebaseErrorHandler.getErrorMessage(e))));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(FirebaseErrorHandler.getErrorMessage(e))),
+          );
         }
       }
     }
@@ -1946,7 +1980,9 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
         'avatarModerationPending': true,
       }, SetOptions(merge: true));
       final file = File(picked.path);
-      final avatarPath = kReleaseMode ? 'avatars/$uid.jpg' : 'avatars_test/$uid.jpg';
+      final avatarPath = kReleaseMode
+          ? 'avatars/$uid.jpg'
+          : 'avatars_test/$uid.jpg';
       final ref = FirebaseStorage.instance.ref().child(avatarPath);
       await ref.putFile(file);
       // avatarUrl est mis à jour par la Cloud Function après modération (OK ou rejet)
@@ -1993,7 +2029,9 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
     Map<String, dynamic>? userData,
   ) {
     if (userData?['avatarModerationRejected'] != true ||
-        _hasShownAvatarRejectedThisSession) return;
+        _hasShownAvatarRejectedThisSession) {
+      return;
+    }
     _hasShownAvatarRejectedThisSession = true;
     // Invalider le cache pour l'URL rejetée afin que l'avatar n'affiche plus l'image
     if (_lastAvatarUrl != null) {
@@ -2002,11 +2040,12 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      final message = userData?['avatarModerationReason'] as String? ??
+      final message =
+          userData?['avatarModerationReason'] as String? ??
           "Votre photo de profil n'a pas été acceptée. Veuillez choisir une photo appropriée.";
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
       _clearAvatarModerationRejected(uid);
     });
   }
@@ -2064,10 +2103,13 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
               final last = lastController.text.trim();
               setState(() => _isSaving = true);
               try {
-                await _firestore.collection(FirebaseCollections.users).doc(user.uid).set({
-                  'firstName': first,
-                  'lastName': last,
-                }, SetOptions(merge: true));
+                await _firestore
+                    .collection(FirebaseCollections.users)
+                    .doc(user.uid)
+                    .set({
+                      'firstName': first,
+                      'lastName': last,
+                    }, SetOptions(merge: true));
                 if (mounted) Navigator.pop(context);
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -2117,9 +2159,10 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
               try {
                 // verifyBeforeUpdateEmail envoie un email de validation puis change l'email
                 await user.verifyBeforeUpdateEmail(newEmail);
-                await _firestore.collection(FirebaseCollections.users).doc(user.uid).set({
-                  'email': newEmail,
-                }, SetOptions(merge: true));
+                await _firestore
+                    .collection(FirebaseCollections.users)
+                    .doc(user.uid)
+                    .set({'email': newEmail}, SetOptions(merge: true));
                 if (mounted) Navigator.pop(context);
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -2172,9 +2215,10 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
               final newPhone = controller.text.trim();
               setState(() => _isSaving = true);
               try {
-                await _firestore.collection(FirebaseCollections.users).doc(user.uid).set({
-                  'phone': newPhone,
-                }, SetOptions(merge: true));
+                await _firestore
+                    .collection(FirebaseCollections.users)
+                    .doc(user.uid)
+                    .set({'phone': newPhone}, SetOptions(merge: true));
                 if (mounted) Navigator.pop(context);
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -2539,7 +2583,9 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
                   _formatRoleNameForInfo(role),
                   style: const TextStyle(fontSize: 11),
                 ),
-                backgroundColor: _getRoleColorForInfo(role).withValues(alpha: 0.1),
+                backgroundColor: _getRoleColorForInfo(
+                  role,
+                ).withValues(alpha: 0.1),
                 labelStyle: TextStyle(
                   color: _getRoleColorForInfo(role),
                   fontWeight: FontWeight.bold,

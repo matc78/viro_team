@@ -24,4 +24,7 @@ class FirebaseCollections {
 
   /// Sous-collection des retraits par un admin (quota 1 coach/player par jour)
   static const String memberRemovals = 'member_removals';
+
+  /// Sous-collection des membres en attente de création de compte (email, prénom, nom)
+  static const String pendingMembers = 'pending_members';
 }

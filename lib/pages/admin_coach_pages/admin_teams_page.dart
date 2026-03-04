@@ -102,6 +102,7 @@ class _AdminTeamsPageState extends State<AdminTeamsPage> {
                       'category': category,
                       'playerIds': [],
                       'coachIds': [],
+                      'pendingPlayerIds': [],
                       'createdAt': FieldValue.serverTimestamp(),
                     },
                   );

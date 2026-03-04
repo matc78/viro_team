@@ -129,6 +129,12 @@ service cloud.firestore {
         allow write: if canWriteClub(clubId);
       }
 
+      // Membres en attente de création de compte (email, prénom, nom)
+      match /pending_members/{docId} {
+        allow read: if request.auth != null;
+        allow write: if canWriteClub(clubId);
+      }
+
       // Annonces
       match /announcements/{docId} {
         allow read: if request.auth != null;

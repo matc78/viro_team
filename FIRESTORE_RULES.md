@@ -22,6 +22,7 @@ Ce document décrit les règles Firestore pour l’application et la stratégie 
 | `clubs/{clubId}/equipment`, `equipmentCatalog` | Matériel et catalogue. |
 | `clubs/{clubId}/equipment_loans`, `equipment_loan_requests`, `equipment_loan_change_requests` | Prêts et demandes. |
 | `clubs/{clubId}/member_leaves`, `member_removals` | Départs et retraits. |
+| `clubs/{clubId}/pending_members` | Membres en attente de création de compte (email, firstName, lastName, addedAt, addedBy). |
 | `clubs/{clubId}/announcements` | Annonces. |
 | `join_requests/{requestId}` | Demandes d’adhésion (clubId, userId, status, roleRequested, message, createdAt, …). |
 
@@ -44,10 +45,12 @@ Ce document décrit les règles Firestore pour l’application et la stratégie 
 - **Création** : tout utilisateur connecté.
 - **Mise à jour / suppression** : uniquement si l’utilisateur est admin du club (`adminId` ou présent dans `admins[]`).
 
-### Sous-collections d’un club (members, teams, events, equipment, equipment_loans, …)
+### Sous-collections d’un club (members, teams, events, equipment, equipment_loans, pending_members, …)
 
 - **Lecture** : tout utilisateur connecté (l’app n’affiche que les clubs auxquels l’utilisateur appartient).
 - **Écriture** : uniquement si l’utilisateur peut écrire dans le club, c’est-à-dire s’il est **admin** (`adminId` ou `admins[]`) ou **coach** (présent dans `club.coaches[]`).
+
+La sous-collection **`pending_members`** stocke les membres ajoutés par un admin (email, prénom, nom) en attente de création de compte ; lecture et écriture suivent les mêmes règles que les autres sous-collections du club (`canWriteClub(clubId)`).
 
 ### join_requests
 

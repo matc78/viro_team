@@ -35,6 +35,7 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
     String teamCategory,
     List coachIds,
     List playerIds,
+    List<String> pendingPlayerIds,
   ) {
     showModalBottomSheet(
       context: context,
@@ -50,7 +51,6 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
           final existingIds = role == 'coach' ? coachIds : playerIds;
 
           // Filtrer les utilisateurs du club avec le bon rôle
-          // Pour la section Coachs : coach, admin et admin_fondateur peuvent être assignés à une équipe
           final allDocs = snapshot.data!.docs
               .map((doc) => doc as DocumentSnapshot<Map<String, dynamic>>)
               .toList();
@@ -74,140 +74,294 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
               .where((doc) => !existingIds.contains(doc.id))
               .toList();
 
-          if (users.isEmpty) {
-            return const Center(
-              child: Padding(
-                padding: EdgeInsets.all(20.0),
-                child: Text("Aucun membre trouvé avec ce rôle dans le club."),
-              ),
+          if (role == 'coach') {
+            if (users.isEmpty) {
+              return const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(20.0),
+                  child: Text(
+                    "Aucun membre trouvé avec ce rôle dans le club.",
+                  ),
+                ),
+              );
+            }
+            return _buildAddMemberSheetContent(
+              ctx: ctx,
+              role: role,
+              teamName: teamName,
+              teamCategory: teamCategory,
+              users: users,
+              pendingList: null,
             );
           }
 
-          return Column(
+          // Rôle player : charger aussi les pending_members
+          return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+            stream: appFirestore
+                .collection(FirebaseCollections.clubs)
+                .doc(widget.clubId)
+                .collection(FirebaseCollections.pendingMembers)
+                .snapshots(),
+            builder: (context, pendingSnap) {
+              List<DocumentSnapshot<Map<String, dynamic>>> pendingDocs = [];
+              if (pendingSnap.hasData) {
+                pendingDocs = pendingSnap.data!.docs
+                    .where((d) => !pendingPlayerIds.contains(d.id))
+                    .toList();
+              }
+              if (users.isEmpty && pendingDocs.isEmpty) {
+                return const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(20.0),
+                    child: Text(
+                      "Aucun joueur ou membre en attente à ajouter.",
+                    ),
+                  ),
+                );
+              }
+              return _buildAddMemberSheetContent(
+                ctx: ctx,
+                role: role,
+                teamName: teamName,
+                teamCategory: teamCategory,
+                users: users,
+                pendingList: pendingDocs,
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildAddMemberSheetContent({
+    required BuildContext ctx,
+    required String role,
+    required String teamName,
+    required String teamCategory,
+    required List<DocumentSnapshot<Map<String, dynamic>>> users,
+    required List<DocumentSnapshot<Map<String, dynamic>>>? pendingList,
+  }) {
+    final hasPending = pendingList != null && pendingList.isNotEmpty;
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Text(
+            role == 'player'
+                ? "Ajouter un membre"
+                : "Ajouter un Coach / Admin",
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 18,
+            ),
+          ),
+        ),
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             children: [
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Text(
-                  role == 'player'
-                      ? "Ajouter un Membre"
-                      : "Ajouter un Coach / Admin",
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 18,
+              if (users.isNotEmpty) ...[
+                if (hasPending)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(
+                      "Joueurs du club",
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey[700],
+                      ),
+                    ),
+                  ),
+                ...users.map((doc) {
+                  final user = doc.data() as Map<String, dynamic>;
+                  final userId = doc.id;
+                  return _buildAddUserTile(
+                    ctx: ctx,
+                    userId: userId,
+                    userData: user,
+                    role: role,
+                    teamName: teamName,
+                    teamCategory: teamCategory,
+                    isPending: false,
+                  );
+                }),
+              ],
+              if (hasPending) ...[
+                const SizedBox(height: 16),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(
+                    "En attente de création de compte",
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey[700],
+                    ),
                   ),
                 ),
-              ),
-              Expanded(
-                child: ListView.builder(
-                  itemCount: users.length,
-                  itemBuilder: (context, i) {
-                    if (_isProcessing) {
-                      return const ListTile(
-                        title: Text("ça l'ajoute..."),
-                        trailing: SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                      );
-                    }
-                    final user = users[i].data() as Map<String, dynamic>;
-                    final userId = users[i].id;
-                    return ListTile(
-                      leading: null,
-                      title: UserDisplayTile(
-                        userId: userId,
-                        firstName: user['firstName'] as String?,
-                        lastName: user['lastName'] as String?,
-                        avatarUrl: effectiveAvatarUrl(user),
-                        navigateOnTap: false,
-                        textStyle: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      trailing: const Icon(
-                        Icons.add_circle_outline,
-                        color: ViroColors.primary,
-                      ),
-                      onTap: () async {
-                        if (_isProcessing) return;
-                        setState(() => _isProcessing = true);
-                        try {
-                          String field = (role == 'player')
-                              ? 'playerIds'
-                              : 'coachIds';
-                          await widget.teamDoc.reference.update({
-                            field: FieldValue.arrayUnion([userId]),
-                          });
-                          if (role == 'player') {
-                            await updatePlayerClubsForTeam(
-                              appFirestore,
-                              userId,
-                              widget.clubId,
-                              add: true,
-                              teamId: widget.teamDoc.id,
-                              teamName: teamName,
-                              teamCategory: teamCategory,
-                            );
-                          } else {
-                            final userUpdate = <String, dynamic>{
-                              'coachedTeams': FieldValue.arrayUnion([
-                                {
-                                  'teamId': widget.teamDoc.id,
-                                  'teamName': teamName,
-                                },
-                              ]),
-                              '_adminClubId': widget.clubId,
-                            };
-                            await appFirestore
-                                .collection(FirebaseCollections.users)
-                                .doc(userId)
-                                .set(userUpdate, SetOptions(merge: true));
-                          }
-                          if (role == 'player') {
-                            await _updateEventsAttendanceForPlayer(
-                              userId,
-                              teamName,
-                              add: true,
-                            );
-                          }
-                          AppLogger.instance.info('Membre ajouté à l\'équipe', {
-                            'userId': userId,
-                            'teamId': widget.teamDoc.id,
-                            'teamName': teamName,
-                            'role': role,
-                            'clubId': widget.clubId,
-                          });
-                          if (mounted) Navigator.pop(ctx);
-                        } catch (e) {
-                          AppLogger.instance.error(
-                            'Erreur lors de l\'ajout d\'un membre à l\'équipe',
-                            error: e,
-                            context: {
-                              'userId': userId,
-                              'teamId': widget.teamDoc.id,
-                              'role': role,
-                              'clubId': widget.clubId,
-                            },
-                          );
-                          if (mounted) {
-                            ScaffoldMessenger.of(ctx).showSnackBar(
-                              SnackBar(
-                                content: Text(FirebaseErrorHandler.getErrorMessage(e)),
-                              ),
-                            );
-                          }
-                        } finally {
-                          if (mounted) setState(() => _isProcessing = false);
-                        }
-                      },
-                    );
-                  },
+                ...pendingList.map((doc) {
+                  final data = doc.data() ?? {};
+                  return _buildAddUserTile(
+                    ctx: ctx,
+                    userId: doc.id,
+                    userData: data,
+                    role: role,
+                    teamName: teamName,
+                    teamCategory: teamCategory,
+                    isPending: true,
+                  );
+                }),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAddUserTile({
+    required BuildContext ctx,
+    required String userId,
+    required Map<String, dynamic> userData,
+    required String role,
+    required String teamName,
+    required String teamCategory,
+    required bool isPending,
+  }) {
+    final firstName = userData['firstName'] as String? ?? '';
+    final lastName = userData['lastName'] as String? ?? '';
+    final email = userData['email'] as String? ?? '';
+    final displayName =
+        '$firstName $lastName'.trim().isEmpty ? email : '$firstName $lastName'.trim();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: ViroColors.borderColor.withValues(alpha: 0.5),
+        ),
+      ),
+      child: ListTile(
+        leading: isPending
+            ? CircleAvatar(
+                radius: 20,
+                backgroundColor: ViroColors.primary.withValues(alpha: 0.1),
+                child: Icon(Icons.person_outline, color: ViroColors.primary),
+              )
+            : null,
+        title: isPending
+            ? Text(
+                displayName,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                ),
+              )
+            : UserDisplayTile(
+                userId: userId,
+                firstName: userData['firstName'] as String?,
+                lastName: userData['lastName'] as String?,
+                avatarUrl: effectiveAvatarUrl(userData),
+                navigateOnTap: false,
+                textStyle: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
-            ],
-          );
+        subtitle: isPending && email.isNotEmpty
+            ? Text(email, style: const TextStyle(color: Colors.grey, fontSize: 12))
+            : null,
+        trailing: const Icon(
+          Icons.add_circle_outline,
+          color: ViroColors.primary,
+        ),
+        onTap: () async {
+          if (_isProcessing) return;
+          setState(() => _isProcessing = true);
+          try {
+            if (isPending) {
+              await widget.teamDoc.reference.update({
+                'pendingPlayerIds': FieldValue.arrayUnion([userId]),
+              });
+              AppLogger.instance.info(
+                'Joueur en attente ajouté à l\'équipe',
+                {
+                  'pendingId': userId,
+                  'teamId': widget.teamDoc.id,
+                  'clubId': widget.clubId,
+                },
+              );
+            } else {
+              String field = (role == 'player') ? 'playerIds' : 'coachIds';
+              await widget.teamDoc.reference.update({
+                field: FieldValue.arrayUnion([userId]),
+              });
+              if (role == 'player') {
+                await updatePlayerClubsForTeam(
+                  appFirestore,
+                  userId,
+                  widget.clubId,
+                  add: true,
+                  teamId: widget.teamDoc.id,
+                  teamName: teamName,
+                  teamCategory: teamCategory,
+                );
+              } else {
+                final userUpdate = <String, dynamic>{
+                  'coachedTeams': FieldValue.arrayUnion([
+                    {
+                      'teamId': widget.teamDoc.id,
+                      'teamName': teamName,
+                    },
+                  ]),
+                  '_adminClubId': widget.clubId,
+                };
+                await appFirestore
+                    .collection(FirebaseCollections.users)
+                    .doc(userId)
+                    .set(userUpdate, SetOptions(merge: true));
+              }
+              if (role == 'player') {
+                await _updateEventsAttendanceForPlayer(
+                  userId,
+                  teamName,
+                  add: true,
+                );
+              }
+              AppLogger.instance.info('Membre ajouté à l\'équipe', {
+                'userId': userId,
+                'teamId': widget.teamDoc.id,
+                'teamName': teamName,
+                'role': role,
+                'clubId': widget.clubId,
+              });
+            }
+            if (mounted) Navigator.pop(ctx);
+          } catch (e) {
+            AppLogger.instance.error(
+              'Erreur lors de l\'ajout d\'un membre à l\'équipe',
+              error: e,
+              context: {
+                'userId': userId,
+                'teamId': widget.teamDoc.id,
+                'role': role,
+                'clubId': widget.clubId,
+              },
+            );
+            if (mounted) {
+              ScaffoldMessenger.of(ctx).showSnackBar(
+                SnackBar(
+                  content: Text(FirebaseErrorHandler.getErrorMessage(e)),
+                ),
+              );
+            }
+          } finally {
+            if (mounted) setState(() => _isProcessing = false);
+          }
         },
       ),
     );
@@ -226,6 +380,8 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
         final teamData = snapshot.data!.data() as Map<String, dynamic>;
         final List coachIds = List<String>.from(teamData['coachIds'] ?? []);
         final List playerIds = teamData['playerIds'] ?? [];
+        final List<String> pendingPlayerIds =
+            List<String>.from(teamData['pendingPlayerIds'] ?? []);
         final String teamName = teamData['name'] ?? "";
         final String teamCategory = teamData['category'] ?? "";
 
@@ -294,6 +450,7 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
                           canEdit: canEdit,
                           showAddWithoutEditMode: isAdmin || isCoachOfThisTeam,
                           canRemoveInSection: isAdmin || isCoachOfThisTeam,
+                          pendingPlayerIds: pendingPlayerIds,
                         ),
                       ],
                     ),
@@ -329,10 +486,14 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
     bool canEdit = true,
     bool showAddWithoutEditMode = false,
     bool canRemoveInSection = true,
+    List<String>? pendingPlayerIds,
   }) {
     final isCoach = role == 'coach';
     final showAdd = canEdit &&
         (role != 'coach' || showAddWithoutEditMode);
+    final pendingIds = role == 'player' ? (pendingPlayerIds ?? []) : <String>[];
+    final hasPending = pendingIds.isNotEmpty;
+
     final header = Padding(
       padding: const EdgeInsets.fromLTRB(20, 16, 10, 8),
       child: Row(
@@ -359,132 +520,29 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
                 teamCategory,
                 coachIds,
                 playerIds,
+                pendingIds,
               ),
             ),
         ],
       ),
     );
 
-    final listWidget = ids.isEmpty
+    final isEmpty = ids.isEmpty && !hasPending;
+    final listWidget = isEmpty
         ? const Center(
             child: Text(
               "Aucun membre dans cette section",
               style: TextStyle(color: Colors.grey, fontSize: 13),
             ),
           )
-        : FutureBuilder<List<DocumentSnapshot<Map<String, dynamic>>>>(
-            future: fetchUsersBatch(ids.cast<String>()),
-            builder: (ctx, snap) {
-              if (!snap.hasData) {
-                return const Center(child: ViroLoader(size: 40));
-              }
-              final userDocs = snap.data!;
-              final userMap = {
-                for (var doc in userDocs)
-                  doc.id: doc.data() as Map<String, dynamic>,
-              };
-
-              return ListView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                itemCount: ids.length,
-                itemBuilder: (ctx, i) {
-                  final userId = ids[i] as String;
-                  final userData = userMap[userId];
-                  if (userData == null) return const SizedBox();
-
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: ViroColors.borderColor.withValues(alpha: 0.5),
-                      ),
-                    ),
-                    child: ListTile(
-                      visualDensity: VisualDensity.compact,
-                      leading: null,
-                      title: UserDisplayTile(
-                        userId: userId,
-                        firstName: userData['firstName'] as String?,
-                        lastName: userData['lastName'] as String?,
-                        avatarUrl: effectiveAvatarUrl(userData),
-                        navigateOnTap: false,
-                        textStyle: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      trailing: canEdit && canRemoveInSection
-                          ? IconButton(
-                              icon: const Icon(
-                                Icons.remove_circle_outline,
-                                size: 20,
-                                color: Colors.redAccent,
-                              ),
-                              onPressed: () async {
-                                String field = (role == 'player')
-                                    ? 'playerIds'
-                                    : 'coachIds';
-                                await widget.teamDoc.reference.update({
-                                  field: FieldValue.arrayRemove([userId]),
-                                });
-                                if (role == 'player') {
-                                  await updatePlayerClubsForTeam(
-                                    appFirestore,
-                                    userId,
-                                    widget.clubId,
-                                    add: false,
-                                    teamId: widget.teamDoc.id,
-                                    teamName: teamName,
-                                    teamCategory: teamCategory,
-                                  );
-                                } else {
-                                  final userUpdate = <String, dynamic>{
-                                    'coachedTeams':
-                                        FieldValue.arrayRemove([
-                                          {
-                                            'teamId': widget.teamDoc.id,
-                                            'teamName': teamName,
-                                          },
-                                        ]),
-                                    '_adminClubId': widget.clubId,
-                                  };
-                                  await appFirestore
-                                      .collection(FirebaseCollections.users)
-                                      .doc(userId)
-                                      .set(userUpdate, SetOptions(merge: true));
-                                }
-                                if (role == 'player') {
-                                  await _updateEventsAttendanceForPlayer(
-                                    userId,
-                                    teamName,
-                                    add: false,
-                                  );
-                                }
-                                AppLogger.instance
-                                    .info('Membre retiré de l\'équipe', {
-                                      'userId': userId,
-                                      'teamId': widget.teamDoc.id,
-                                      'teamName': teamName,
-                                      'role': role,
-                                      'clubId': widget.clubId,
-                                    });
-                              },
-                            )
-                          : null,
-                      onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => ProfilDisplayPage(userId: userId),
-                          ),
-                        );
-                      },
-                    ),
-                  );
-                },
-              );
-            },
+        : _buildPlayerSectionContent(
+            role: role,
+            ids: ids,
+            teamName: teamName,
+            teamCategory: teamCategory,
+            pendingIds: pendingIds,
+            canEdit: canEdit,
+            canRemoveInSection: canRemoveInSection,
           );
 
     if (isCoach) {
@@ -510,6 +568,276 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
           header,
           Expanded(child: listWidget),
         ],
+      ),
+    );
+  }
+
+  Future<List<DocumentSnapshot<Map<String, dynamic>>>> _fetchPendingBatch(
+    List<String> docIds,
+  ) async {
+    if (docIds.isEmpty) return [];
+    final refs = docIds
+        .map(
+          (id) => appFirestore
+              .collection(FirebaseCollections.clubs)
+              .doc(widget.clubId)
+              .collection(FirebaseCollections.pendingMembers)
+              .doc(id),
+        )
+        .toList();
+    final snaps = await Future.wait(refs.map((r) => r.get()));
+    return snaps.cast<DocumentSnapshot<Map<String, dynamic>>>().toList();
+  }
+
+  Widget _buildPlayerSectionContent({
+    required String role,
+    required List ids,
+    required String teamName,
+    required String teamCategory,
+    required List<String> pendingIds,
+    required bool canEdit,
+    required bool canRemoveInSection,
+  }) {
+    final isPlayer = role == 'player';
+    final hasPending = isPlayer && pendingIds.isNotEmpty;
+
+    if (!hasPending) {
+      return FutureBuilder<List<DocumentSnapshot<Map<String, dynamic>>>>(
+        future: fetchUsersBatch(ids.cast<String>()),
+        builder: (ctx, snap) {
+          if (!snap.hasData) {
+            return const Center(child: ViroLoader(size: 40));
+          }
+          final userDocs = snap.data!;
+          final userMap = {
+            for (var doc in userDocs)
+              doc.id: doc.data() as Map<String, dynamic>,
+          };
+          return ListView.builder(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            itemCount: ids.length,
+            itemBuilder: (ctx, i) => _buildUserTile(
+              userId: ids[i] as String,
+              userData: userMap[ids[i] as String],
+              role: role,
+              teamName: teamName,
+              teamCategory: teamCategory,
+              canEdit: canEdit,
+              canRemoveInSection: canRemoveInSection,
+            ),
+          );
+        },
+      );
+    }
+
+    return FutureBuilder<
+        (List<DocumentSnapshot<Map<String, dynamic>>>, List<DocumentSnapshot<Map<String, dynamic>>>)>(
+      future: Future.wait([
+        fetchUsersBatch(ids.cast<String>()),
+        _fetchPendingBatch(pendingIds),
+      ]).then((list) => (list[0], list[1])),
+      builder: (ctx, snap) {
+        if (!snap.hasData) {
+          return const Center(child: ViroLoader(size: 40));
+        }
+        final userDocs = snap.data!.$1;
+        final pendingDocs = snap.data!.$2;
+        final userMap = {
+          for (var doc in userDocs)
+            doc.id: doc.data() as Map<String, dynamic>,
+        };
+        final pendingMap = <String, Map<String, dynamic>>{};
+        for (var i = 0; i < pendingIds.length && i < pendingDocs.length; i++) {
+          final data = pendingDocs[i].data();
+          if (data != null) pendingMap[pendingIds[i]] = data;
+        }
+        final totalCount = ids.length + pendingIds.length;
+        return ListView.builder(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          itemCount: totalCount,
+          itemBuilder: (ctx, i) {
+            if (i < ids.length) {
+              final userId = ids[i] as String;
+              return _buildUserTile(
+                userId: userId,
+                userData: userMap[userId],
+                role: role,
+                teamName: teamName,
+                teamCategory: teamCategory,
+                canEdit: canEdit,
+                canRemoveInSection: canRemoveInSection,
+              );
+            }
+            final pendingId = pendingIds[i - ids.length];
+            final data = pendingMap[pendingId];
+            if (data == null) return const SizedBox.shrink();
+            final firstName = data['firstName'] as String? ?? '';
+            final lastName = data['lastName'] as String? ?? '';
+            final email = data['email'] as String? ?? '';
+            return Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: ViroColors.borderColor.withValues(alpha: 0.5),
+                ),
+              ),
+              child: ListTile(
+                visualDensity: VisualDensity.compact,
+                leading: CircleAvatar(
+                  radius: 18,
+                  backgroundColor: ViroColors.primary.withValues(alpha: 0.1),
+                  child: Icon(
+                    Icons.person_outline,
+                    color: ViroColors.primary,
+                    size: 20,
+                  ),
+                ),
+                title: Text(
+                  '$firstName $lastName'.trim().isEmpty
+                      ? email
+                      : '$firstName $lastName'.trim(),
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                subtitle: email.isNotEmpty
+                    ? Text(
+                        email,
+                        style: const TextStyle(
+                          color: Colors.grey,
+                          fontSize: 12,
+                        ),
+                      )
+                    : null,
+                trailing: canEdit && canRemoveInSection
+                    ? IconButton(
+                        icon: const Icon(
+                          Icons.remove_circle_outline,
+                          size: 20,
+                          color: Colors.redAccent,
+                        ),
+                        onPressed: () async {
+                          await widget.teamDoc.reference.update({
+                            'pendingPlayerIds':
+                                FieldValue.arrayRemove([pendingId]),
+                          });
+                          AppLogger.instance.info(
+                            'Joueur en attente retiré de l\'équipe',
+                            {
+                              'pendingId': pendingId,
+                              'teamId': widget.teamDoc.id,
+                              'clubId': widget.clubId,
+                            },
+                          );
+                        },
+                      )
+                    : null,
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildUserTile({
+    required String userId,
+    required Map<String, dynamic>? userData,
+    required String role,
+    required String teamName,
+    required String teamCategory,
+    required bool canEdit,
+    required bool canRemoveInSection,
+  }) {
+    if (userData == null) return const SizedBox.shrink();
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: ViroColors.borderColor.withValues(alpha: 0.5),
+        ),
+      ),
+      child: ListTile(
+        visualDensity: VisualDensity.compact,
+        leading: null,
+        title: UserDisplayTile(
+          userId: userId,
+          firstName: userData['firstName'] as String?,
+          lastName: userData['lastName'] as String?,
+          avatarUrl: effectiveAvatarUrl(userData),
+          navigateOnTap: false,
+          textStyle: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        trailing: canEdit && canRemoveInSection
+            ? IconButton(
+                icon: const Icon(
+                  Icons.remove_circle_outline,
+                  size: 20,
+                  color: Colors.redAccent,
+                ),
+                onPressed: () async {
+                  String field =
+                      (role == 'player') ? 'playerIds' : 'coachIds';
+                  await widget.teamDoc.reference.update({
+                    field: FieldValue.arrayRemove([userId]),
+                  });
+                  if (role == 'player') {
+                    await updatePlayerClubsForTeam(
+                      appFirestore,
+                      userId,
+                      widget.clubId,
+                      add: false,
+                      teamId: widget.teamDoc.id,
+                      teamName: teamName,
+                      teamCategory: teamCategory,
+                    );
+                  } else {
+                    final userUpdate = <String, dynamic>{
+                      'coachedTeams': FieldValue.arrayRemove([
+                        {
+                          'teamId': widget.teamDoc.id,
+                          'teamName': teamName,
+                        },
+                      ]),
+                      '_adminClubId': widget.clubId,
+                    };
+                    await appFirestore
+                        .collection(FirebaseCollections.users)
+                        .doc(userId)
+                        .set(userUpdate, SetOptions(merge: true));
+                  }
+                  if (role == 'player') {
+                    await _updateEventsAttendanceForPlayer(
+                      userId,
+                      teamName,
+                      add: false,
+                    );
+                  }
+                  AppLogger.instance.info('Membre retiré de l\'équipe', {
+                    'userId': userId,
+                    'teamId': widget.teamDoc.id,
+                    'teamName': teamName,
+                    'role': role,
+                    'clubId': widget.clubId,
+                  });
+                },
+              )
+            : null,
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => ProfilDisplayPage(userId: userId),
+            ),
+          );
+        },
       ),
     );
   }

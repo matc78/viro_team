@@ -472,45 +472,76 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
               return const Center(child: Text("Aucun événement prévu ce jour."));
             }
 
-            return ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: filteredDocs.length,
-              itemBuilder: (context, index) {
-                final data = filteredDocs[index].data() as Map<String, dynamic>;
-                final docId = filteredDocs[index].id;
-                
-                // Vérifier si l'événement est terminé (après la fin de saison)
-                bool isSeasonCompleted = false;
-                if (seasonEndDate != null && data['type'] == 'Entraînement') {
-                  final eventDate = (data['date'] as Timestamp?)?.toDate();
-                  if (eventDate != null && eventDate.isAfter(seasonEndDate)) {
-                    isSeasonCompleted = true;
-                  }
-                }
-                
-                return GestureDetector(
-                  onTap: () => _deleteMode ? _onEventTap(docId, data) : null,
-                  child: InkWell(
-                    onTap: () {
-                      if (_deleteMode) {
-                        _onEventTap(docId, data);
-                      } else {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => AdminEventDetailsPage(
-                              clubId: widget.clubId,
-                              eventId: docId,
-                            ),
-                          ),
-                        );
+            final teamNames = filteredDocs
+                .map((d) {
+                  final data = d.data() as Map<String, dynamic>;
+                  final name = data['teamName'] as String? ??
+                      (data['teamNames'] as List?)
+                          ?.whereType<String>()
+                          .firstOrNull;
+                  return name;
+                })
+                .whereType<String>()
+                .toSet()
+                .toList();
+
+            return FutureBuilder<Map<String, int>>(
+              future: _getPendingCountsForTeamNames(widget.clubId, teamNames),
+              builder: (context, pendingSnap) {
+                final pendingByTeam = pendingSnap.data ?? {};
+                return ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: filteredDocs.length,
+                  itemBuilder: (context, index) {
+                    final data =
+                        filteredDocs[index].data() as Map<String, dynamic>;
+                    final docId = filteredDocs[index].id;
+                    final teamName = data['teamName'] as String? ??
+                        (data['teamNames'] as List?)
+                            ?.whereType<String>()
+                            .firstOrNull ??
+                        '';
+                    final pendingCount = pendingByTeam[teamName] ?? 0;
+
+                    // Vérifier si l'événement est terminé (après la fin de saison)
+                    bool isSeasonCompleted = false;
+                    if (seasonEndDate != null &&
+                        data['type'] == 'Entraînement') {
+                      final eventDate =
+                          (data['date'] as Timestamp?)?.toDate();
+                      if (eventDate != null &&
+                          eventDate.isAfter(seasonEndDate)) {
+                        isSeasonCompleted = true;
                       }
-                    },
-                    child: _buildEventCard(
-                      data,
-                      editing: _deleteMode,
-                      isSeasonCompleted: isSeasonCompleted,
-                    ),
-                  ),
+                    }
+
+                    return GestureDetector(
+                      onTap: () =>
+                          _deleteMode ? _onEventTap(docId, data) : null,
+                      child: InkWell(
+                        onTap: () {
+                          if (_deleteMode) {
+                            _onEventTap(docId, data);
+                          } else {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => AdminEventDetailsPage(
+                                  clubId: widget.clubId,
+                                  eventId: docId,
+                                ),
+                              ),
+                            );
+                          }
+                        },
+                        child: _buildEventCard(
+                          data,
+                          editing: _deleteMode,
+                          isSeasonCompleted: isSeasonCompleted,
+                          pendingCount: pendingCount,
+                        ),
+                      ),
+                    );
+                  },
                 );
               },
             );
@@ -520,10 +551,35 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
     );
   }
 
+  /// Retourne pour chaque nom d'équipe le nombre de joueurs en attente (sans compte).
+  Future<Map<String, int>> _getPendingCountsForTeamNames(
+    String clubId,
+    List<String> teamNames,
+  ) async {
+    if (teamNames.isEmpty) return {};
+    final names = teamNames.toSet().toList();
+    final batch = names.length > 30 ? names.sublist(0, 30) : names;
+    final snap = await appFirestore
+        .collection(FirebaseCollections.clubs)
+        .doc(clubId)
+        .collection(FirebaseCollections.teams)
+        .where('name', whereIn: batch)
+        .get();
+    final map = <String, int>{};
+    for (final doc in snap.docs) {
+      final data = doc.data();
+      final name = data['name'] as String? ?? '';
+      final list = data['pendingPlayerIds'] as List?;
+      map[name] = list?.length ?? 0;
+    }
+    return map;
+  }
+
   Widget _buildEventCard(
     Map<String, dynamic> data, {
     bool editing = false,
     bool isSeasonCompleted = false,
+    int pendingCount = 0,
   }) {
     final bool canceled = data['canceled'] == true;
     final bool isMatch = data['type'] == 'Match';
@@ -539,9 +595,11 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
       absentCount = _countList(data['absentIds']);
     }
     final int totalResponded = presentCount + absentCount;
-    final int totalUnknown = _countList(data['teamMemberIds']) > 0
+    final int unknownFromMembers = _countList(data['teamMemberIds']) > 0
         ? (_countList(data['teamMemberIds']) - totalResponded).clamp(0, 9999)
         : 0;
+    // Sans réponse = membres sans réponse + joueurs en attente (sans compte)
+    final int totalUnknown = unknownFromMembers + pendingCount;
     final bool allDay = data['startTime'] == null && data['endTime'] == null;
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
