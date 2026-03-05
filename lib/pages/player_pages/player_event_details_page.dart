@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:viro_team/utils/club_emoji_utils.dart';
 import 'package:viro_team/utils/firestore_instance.dart';
@@ -8,9 +9,11 @@ import 'package:viro_team/services/event_service.dart';
 import 'package:intl/intl.dart';
 import '../../theme/viro_theme.dart';
 import '../../utils/app_logger.dart';
-import '../../utils/firebase_helpers.dart';
-import '../../utils/firebase_error_handler.dart';
 import '../../utils/avatar_moderation.dart';
+import '../../utils/firebase_error_handler.dart';
+import '../../utils/firebase_helpers.dart';
+import '../../utils/team_avatar_upload.dart';
+import '../../widget/full_screen_image_page.dart';
 import '../../widget/user_display_tile.dart';
 import '../../widget/viro_loader.dart';
 
@@ -42,6 +45,33 @@ class PlayerEventDetailsPage extends StatelessWidget {
     final data = snap.docs.first.data();
     final list = data['pendingPlayerIds'] as List?;
     return list?.whereType<String>().toList() ?? [];
+  }
+
+  static Future<String?> _getTeamAvatarUrl(String clubId, String teamName) async {
+    if (teamName.isEmpty) return null;
+    final snap = await appFirestore
+        .collection(FirebaseCollections.clubs)
+        .doc(clubId)
+        .collection(FirebaseCollections.teams)
+        .where('name', isEqualTo: teamName)
+        .limit(1)
+        .get();
+    if (snap.docs.isEmpty) return null;
+    final url = (snap.docs.first.data()['avatarUrl'] as String?)?.trim();
+    return (url != null && url.isNotEmpty) ? url : null;
+  }
+
+  static Future<String?> _getTeamIdByName(String clubId, String teamName) async {
+    if (teamName.isEmpty) return null;
+    final snap = await appFirestore
+        .collection(FirebaseCollections.clubs)
+        .doc(clubId)
+        .collection(FirebaseCollections.teams)
+        .where('name', isEqualTo: teamName)
+        .limit(1)
+        .get();
+    if (snap.docs.isEmpty) return null;
+    return snap.docs.first.id;
   }
 
   @override
@@ -90,7 +120,7 @@ class PlayerEventDetailsPage extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // --- HEADER INFO ---
-                    _buildEventHeader(date, event, team, categories),
+                    _buildEventHeader(context, clubId, date, event, team, categories),
 
                     // --- INFOS PRATIQUES ---
                     _buildInfoSection(location, event),
@@ -126,6 +156,8 @@ class PlayerEventDetailsPage extends StatelessWidget {
   }
 
   Widget _buildEventHeader(
+    BuildContext context,
+    String clubId,
     DateTime date,
     Map<String, dynamic> event,
     String team,
@@ -136,46 +168,80 @@ class PlayerEventDetailsPage extends StatelessWidget {
       width: double.infinity,
       color: Colors.white,
       padding: const EdgeInsets.all(24),
-      child: Column(
-        children: [
-          if (canceled) ...[
-            const Text(
-              "ANNULÉ",
-              style: TextStyle(
-                color: Colors.red,
-                fontWeight: FontWeight.w900,
-                fontSize: 40,
+      child: FutureBuilder<String?>(
+        future: _getTeamAvatarUrl(clubId, team),
+        builder: (context, avatarSnap) {
+          final teamAvatarUrl = avatarSnap.data;
+          final hasTeamAvatar =
+              teamAvatarUrl != null && teamAvatarUrl.isNotEmpty;
+          return Column(
+            children: [
+              if (canceled) ...[
+                const Text(
+                  "ANNULÉ",
+                  style: TextStyle(
+                    color: Colors.red,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 40,
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
+              if (hasTeamAvatar) ...[
+                GestureDetector(
+                  onTap: () => showFullScreenImage(
+                    context,
+                    teamAvatarUrl,
+                    onEditTap: (ctx) async {
+                      final teamId = await _getTeamIdByName(clubId, team);
+                      if (teamId == null || !ctx.mounted) return;
+                      await pickAndUploadTeamAvatar(
+                        ctx,
+                        clubId: clubId,
+                        teamId: teamId,
+                        teamName: team,
+                      );
+                    },
+                  ),
+                  child: CircleAvatar(
+                    radius: 28,
+                    backgroundColor:
+                        ViroColors.primary.withValues(alpha: 0.1),
+                    backgroundImage:
+                        CachedNetworkImageProvider(teamAvatarUrl),
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
+              Text(
+                DateFormat('EEEE d MMMM', 'fr_FR').format(date).toUpperCase(),
+                style: const TextStyle(
+                  color: ViroColors.primary,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 13,
+                ),
               ),
-            ),
-            const SizedBox(height: 8),
-          ],
-          Text(
-            DateFormat('EEEE d MMMM', 'fr_FR').format(date).toUpperCase(),
-            style: const TextStyle(
-              color: ViroColors.primary,
-              fontWeight: FontWeight.w900,
-              fontSize: 13,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            team,
-            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-          ),
-          if (event['title'] != null && event['title'].toString().isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(
-                event['title'],
-                style: const TextStyle(fontSize: 18, color: ViroColors.primary),
+              const SizedBox(height: 8),
+              Text(
+                team,
+                style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
               ),
-            ),
-          const SizedBox(height: 4),
-          Text(
-            "Catégorie : ${_formatCategories(categories, event['category'])}",
-            style: const TextStyle(color: Colors.grey),
-          ),
-        ],
+              if (event['title'] != null && event['title'].toString().isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    event['title'],
+                    style: const TextStyle(fontSize: 18, color: ViroColors.primary),
+                  ),
+                ),
+              const SizedBox(height: 4),
+              Text(
+                "Catégorie : ${_formatCategories(categories, event['category'])}",
+                style: const TextStyle(color: Colors.grey),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

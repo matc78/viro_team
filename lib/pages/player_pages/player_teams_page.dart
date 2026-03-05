@@ -6,8 +6,10 @@ import 'package:viro_team/utils/firestore_instance.dart';
 import 'package:flutter/material.dart';
 import 'package:viro_team/constants/firebase_collections.dart';
 import '../../theme/viro_theme.dart';
-import '../../utils/firebase_helpers.dart';
 import '../../utils/avatar_moderation.dart';
+import '../../utils/firebase_helpers.dart';
+import '../../utils/team_avatar_upload.dart';
+import '../../widget/full_screen_image_page.dart';
 import '../../widget/user_display_tile.dart';
 import '../../widget/viro_loader.dart';
 import '../profil_display_page.dart';
@@ -263,12 +265,14 @@ class _PlayerTeamsPageState extends State<PlayerTeamsPage> {
             final clubName = clubData?['name'] as String? ?? "Mon Club";
             final clubLogo = clubData?['logoUrl'] as String? ?? "";
             final sport = clubData?['sport'] as String?;
+            final teamId = teamInfo['teamId'] as String;
             return _buildTeamCard(
               context,
               teamData,
               formatClubNameWithEmoji(clubName, sport),
               clubLogo,
               clubId,
+              teamId,
             );
           },
         );
@@ -298,6 +302,7 @@ class _PlayerTeamsPageState extends State<PlayerTeamsPage> {
     String clubName,
     String clubLogo,
     String clubId,
+    String teamId,
   ) {
     final clubColor = _getClubColor(clubId);
     final List<String> playerIds = ((teamData['playerIds'] ?? []) as List)
@@ -311,6 +316,12 @@ class _PlayerTeamsPageState extends State<PlayerTeamsPage> {
         (teamCategory != null && teamCategory.isNotEmpty)
             ? teamCategory
             : "Sans catégorie";
+    final String? teamAvatarUrl =
+        (teamData['avatarUrl'] as String?)?.trim();
+    final bool hasTeamAvatar =
+        teamAvatarUrl != null && teamAvatarUrl.isNotEmpty;
+    final bool useClubLogo =
+        !hasTeamAvatar && clubLogo.isNotEmpty;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -321,14 +332,30 @@ class _PlayerTeamsPageState extends State<PlayerTeamsPage> {
       child: ExpansionTile(
         shape:
             const Border(), // Retire la bordure par défaut de l'ExpansionTile
-        leading: CircleAvatar(
-          backgroundColor: clubColor.withValues(alpha: 0.1),
-          backgroundImage: clubLogo.isNotEmpty
-              ? CachedNetworkImageProvider(clubLogo)
+        leading: GestureDetector(
+          onTap: hasTeamAvatar
+              ? () => showFullScreenImage(
+                    context,
+                    teamAvatarUrl,
+                    onEditTap: (ctx) => pickAndUploadTeamAvatar(
+                      ctx,
+                      clubId: clubId,
+                      teamId: teamId,
+                      teamName: teamData['name'] as String?,
+                    ),
+                  )
               : null,
-          child: clubLogo.isEmpty
-              ? Icon(Icons.shield_rounded, color: clubColor)
-              : null,
+          child: CircleAvatar(
+            backgroundColor: clubColor.withValues(alpha: 0.1),
+            backgroundImage: hasTeamAvatar
+                ? CachedNetworkImageProvider(teamAvatarUrl)
+                : useClubLogo
+                    ? CachedNetworkImageProvider(clubLogo)
+                    : null,
+            child: hasTeamAvatar || useClubLogo
+                ? null
+                : Icon(Icons.shield_rounded, color: clubColor),
+          ),
         ),
         title: Text(
           teamData['name'] ?? "Équipe sans nom",

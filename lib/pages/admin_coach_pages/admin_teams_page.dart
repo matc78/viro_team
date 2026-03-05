@@ -1,14 +1,19 @@
+import 'dart:io';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:viro_team/utils/firestore_instance.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:viro_team/constants/firebase_collections.dart';
 import 'package:viro_team/services/team_service.dart';
 import '../../theme/viro_theme.dart';
 import '../../utils/app_logger.dart';
 import '../../utils/firebase_error_handler.dart';
 import '../../utils/firebase_helpers.dart';
+import '../../utils/team_avatar_upload.dart';
 import '../../widget/viro_loader.dart';
 import 'admin_teams_detail_page.dart';
 
@@ -26,6 +31,7 @@ class _AdminTeamsPageState extends State<AdminTeamsPage> {
   String? _clubSport;
   String? _clubLogoUrl;
   String? _deletingTeamId;
+  String? _uploadingAvatarTeamId;
   bool _isEditing = false;
 
   @override
@@ -134,6 +140,128 @@ class _AdminTeamsPageState extends State<AdminTeamsPage> {
         ],
       ),
     );
+  }
+
+  Widget _buildTeamAvatar({
+    required String teamId,
+    required Map<String, dynamic> data,
+    required Color categoryColor,
+    required bool isEditing,
+    required bool isUploading,
+    VoidCallback? onTapPickImage,
+  }) {
+    final String? avatarUrl = (data['avatarUrl'] as String?)?.trim();
+    final bool hasCustomAvatar = avatarUrl != null && avatarUrl.isNotEmpty;
+    final bool useClubLogo =
+        !hasCustomAvatar && _clubLogoUrl != null && _clubLogoUrl!.isNotEmpty;
+
+    Widget avatar = CircleAvatar(
+      backgroundColor: categoryColor.withValues(alpha: 0.15),
+      backgroundImage: hasCustomAvatar
+          ? CachedNetworkImageProvider(avatarUrl)
+          : useClubLogo
+              ? CachedNetworkImageProvider(_clubLogoUrl!)
+              : null,
+      child: hasCustomAvatar || useClubLogo
+          ? null
+          : Icon(Icons.groups_rounded, color: categoryColor),
+    );
+
+    if (isUploading) {
+      avatar = Stack(
+        alignment: Alignment.center,
+        children: [
+          avatar,
+          Positioned.fill(
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.black26,
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: const Center(
+                child: SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    if (onTapPickImage != null) {
+      return GestureDetector(
+        onTap: isUploading ? null : onTapPickImage,
+        child: Stack(
+          alignment: Alignment.bottomRight,
+          children: [
+            avatar,
+            Container(
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: ViroColors.primary,
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 1),
+              ),
+              child: const Icon(Icons.photo_camera, size: 14, color: Colors.white),
+            ),
+          ],
+        ),
+      );
+    }
+    return avatar;
+  }
+
+  Future<void> _pickTeamAvatar(DocumentSnapshot teamDoc) async {
+    final teamId = teamDoc.id;
+    final data = teamDoc.data() as Map<String, dynamic>? ?? {};
+    final teamName = data['name'] as String? ?? 'Équipe';
+    try {
+      final picker = ImagePicker();
+      final XFile? file = await picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 80,
+      );
+      if (file == null || !mounted) return;
+
+      setState(() => _uploadingAvatarTeamId = teamId);
+      try {
+        final teamRef = _db
+            .collection(FirebaseCollections.clubs)
+            .doc(widget.clubId)
+            .collection(FirebaseCollections.teams)
+            .doc(teamId);
+        final currentAvatarUrl =
+            (data['avatarUrl'] as String?)?.trim();
+        if (currentAvatarUrl != null && currentAvatarUrl.isNotEmpty) {
+          await deleteStorageFileFromUrl(currentAvatarUrl);
+        }
+        final path = 'clubs/${widget.clubId}/teams/$teamId/avatar_${DateTime.now().millisecondsSinceEpoch}.png';
+        final ref = FirebaseStorage.instance.ref().child(path);
+        await ref.putFile(File(file.path));
+        final url = await ref.getDownloadURL();
+        await teamRef.set({'avatarUrl': url}, SetOptions(merge: true));
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("Photo de $teamName mise à jour")),
+          );
+        }
+      } finally {
+        if (mounted) setState(() => _uploadingAvatarTeamId = null);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _uploadingAvatarTeamId = null);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(FirebaseErrorHandler.getErrorMessage(e))),
+        );
+      }
+    }
   }
 
   Future<List<String>> _fetchCoachNames(List<String> coachIds) async {
@@ -396,17 +524,14 @@ class _AdminTeamsPageState extends State<AdminTeamsPage> {
                           horizontal: 16,
                           vertical: 8,
                         ),
-                        leading: CircleAvatar(
-                          backgroundColor: categoryColor.withValues(alpha: 0.15),
-                          backgroundImage:
-                              (_clubLogoUrl != null && _clubLogoUrl!.isNotEmpty)
-                              ? CachedNetworkImageProvider(_clubLogoUrl!)
-                              : null,
-                          child: (_clubLogoUrl == null || _clubLogoUrl!.isEmpty)
-                              ? Icon(
-                                  Icons.groups_rounded,
-                                  color: categoryColor,
-                                )
+                        leading: _buildTeamAvatar(
+                          teamId: team.id,
+                          data: data,
+                          categoryColor: categoryColor,
+                          isEditing: _isEditing,
+                          isUploading: _uploadingAvatarTeamId == team.id,
+                          onTapPickImage: _isEditing
+                              ? () => _pickTeamAvatar(team)
                               : null,
                         ),
                         title: Text(

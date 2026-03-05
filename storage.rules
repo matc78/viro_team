@@ -1,6 +1,12 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
+    // Clubs : dépôt uniquement (avatars équipes clubs/{clubId}/teams/{teamId}/avatar_*.png).
+    // L'autorisation réelle (qui peut définir l'avatar) est gérée par Firestore à l'update du document clubs/{clubId}/teams/{teamId}.
+    match /clubs/{clubId}/{allPaths=**} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
     // Admin : avatars/{uid}.jpg — seul l'utilisateur peut écrire le sien
     match /avatars/{fileName} {
       allow read: if request.auth != null;

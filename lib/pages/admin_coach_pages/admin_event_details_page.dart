@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:viro_team/services/event_service.dart';
@@ -376,7 +377,7 @@ class AdminEventDetailsPage extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // --- HEADER INFO ---
-                    _buildEventHeader(date, event, team, categories),
+                    _buildEventHeader(context, clubId, date, event, team, categories),
 
                     // --- INFOS PRATIQUES ---
                     _buildInfoSection(location, event),
@@ -408,7 +409,24 @@ class AdminEventDetailsPage extends StatelessWidget {
     );
   }
 
+  /// Récupère l'URL de l'avatar de l'équipe par nom (ou null).
+  static Future<String?> _getTeamAvatarUrl(String clubId, String teamName) async {
+    if (teamName.isEmpty) return null;
+    final snap = await appFirestore
+        .collection(FirebaseCollections.clubs)
+        .doc(clubId)
+        .collection(FirebaseCollections.teams)
+        .where('name', isEqualTo: teamName)
+        .limit(1)
+        .get();
+    if (snap.docs.isEmpty) return null;
+    final url = (snap.docs.first.data()['avatarUrl'] as String?)?.trim();
+    return (url != null && url.isNotEmpty) ? url : null;
+  }
+
   Widget _buildEventHeader(
+    BuildContext context,
+    String clubId,
     DateTime date,
     Map<String, dynamic> event,
     String team,
@@ -419,46 +437,62 @@ class AdminEventDetailsPage extends StatelessWidget {
       width: double.infinity,
       color: Colors.white,
       padding: const EdgeInsets.all(24),
-      child: Column(
-        children: [
-          if (canceled) ...[
-            const Text(
-              "ANNULÉ",
-              style: TextStyle(
-                color: Colors.red,
-                fontWeight: FontWeight.w900,
-                fontSize: 40,
+      child: FutureBuilder<String?>(
+        future: _getTeamAvatarUrl(clubId, team),
+        builder: (context, avatarSnap) {
+          final teamAvatarUrl = avatarSnap.data;
+          final hasTeamAvatar =
+              teamAvatarUrl != null && teamAvatarUrl.isNotEmpty;
+          return Column(
+            children: [
+              if (canceled) ...[
+                const Text(
+                  "ANNULÉ",
+                  style: TextStyle(
+                    color: Colors.red,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 40,
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
+              if (hasTeamAvatar) ...[
+                CircleAvatar(
+                  radius: 28,
+                  backgroundColor: ViroColors.primary.withValues(alpha: 0.1),
+                  backgroundImage: CachedNetworkImageProvider(teamAvatarUrl),
+                ),
+                const SizedBox(height: 8),
+              ],
+              Text(
+                DateFormat('EEEE d MMMM', 'fr_FR').format(date).toUpperCase(),
+                style: const TextStyle(
+                  color: ViroColors.primary,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 13,
+                ),
               ),
-            ),
-            const SizedBox(height: 8),
-          ],
-          Text(
-            DateFormat('EEEE d MMMM', 'fr_FR').format(date).toUpperCase(),
-            style: const TextStyle(
-              color: ViroColors.primary,
-              fontWeight: FontWeight.w900,
-              fontSize: 13,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            team,
-            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-          ),
-          if (event['title'] != null && event['title'].toString().isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(
-                event['title'],
-                style: const TextStyle(fontSize: 18, color: ViroColors.primary),
+              const SizedBox(height: 8),
+              Text(
+                team,
+                style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
               ),
-            ),
-          const SizedBox(height: 4),
-          Text(
-            "Catégorie : ${_formatCategories(categories, event['category'])}",
-            style: const TextStyle(color: Colors.grey),
-          ),
-        ],
+              if (event['title'] != null && event['title'].toString().isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    event['title'],
+                    style: const TextStyle(fontSize: 18, color: ViroColors.primary),
+                  ),
+                ),
+              const SizedBox(height: 4),
+              Text(
+                "Catégorie : ${_formatCategories(categories, event['category'])}",
+                style: const TextStyle(color: Colors.grey),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
