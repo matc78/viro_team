@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:table_calendar/table_calendar.dart';
 import '../../constants/firebase_collections.dart';
 import '../../theme/viro_theme.dart';
+import '../../utils/app_logger.dart';
 import '../../utils/firebase_error_handler.dart';
 import '../../widget/player_bottom_nav.dart';
 import '../../widget/viro_loader.dart';
@@ -88,7 +89,8 @@ class _PlayerLoanCatalogPageState extends State<PlayerLoanCatalogPage>
           final sport = data['sport'] as String?;
           if (sport != null && sport.isNotEmpty) sports[doc.id] = sport;
         }
-      } catch (_) {
+      } catch (e) {
+        AppLogger.instance.error('loadClubNames batch failed', error: e, context: {'batchSize': batch.length});
         for (var id in batch) {
           names[id] = id;
         }
@@ -109,7 +111,9 @@ class _PlayerLoanCatalogPageState extends State<PlayerLoanCatalogPage>
       final prefs = await SharedPreferences.getInstance();
       final cached = prefs.getString(_keyLastClubId);
       if (cached != null && allClubIds.contains(cached)) return cached;
-    } catch (_) {}
+    } catch (e) {
+      AppLogger.instance.error('SharedPreferences get failed', error: e);
+    }
     return allClubIds.contains(widget.clubId)
         ? widget.clubId
         : allClubIds.first;
@@ -119,7 +123,9 @@ class _PlayerLoanCatalogPageState extends State<PlayerLoanCatalogPage>
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_keyLastClubId, clubId);
-    } catch (_) {}
+    } catch (e) {
+      AppLogger.instance.error('SharedPreferences set failed', error: e);
+    }
   }
 
   void _ensureInitialized(List<String> allClubIds) {

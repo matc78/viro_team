@@ -7,6 +7,7 @@ import 'package:viro_team/utils/firestore_instance.dart';
 import 'package:flutter/material.dart';
 import 'package:viro_team/constants/firebase_collections.dart';
 import '../../theme/viro_theme.dart';
+import '../../utils/app_logger.dart';
 import '../../utils/firebase_helpers.dart';
 import '../../utils/avatar_moderation.dart';
 import '../../widget/player_bottom_nav.dart';
@@ -46,7 +47,8 @@ class _PlayerInfosPageState extends State<PlayerInfosPage> {
           final sport = data['sport'] as String?;
           if (sport != null && sport.isNotEmpty) sports[doc.id] = sport;
         }
-      } catch (_) {
+      } catch (e) {
+        AppLogger.instance.error('loadClubNames batch failed', error: e, context: {'batchSize': batch.length});
         for (var id in batch) {
           names[id] = id;
         }
@@ -360,7 +362,9 @@ class _ClubDetailsPage extends StatelessWidget {
             if (founderName.isEmpty) founderName = "Non défini";
           }
         }
-      } catch (_) {}
+      } catch (e) {
+        AppLogger.instance.error('_loadClubInfos failed', error: e, context: {'clubId': clubId});
+      }
     }
 
     return {

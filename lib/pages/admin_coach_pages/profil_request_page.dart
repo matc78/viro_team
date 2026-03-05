@@ -315,7 +315,9 @@ class _ProfilRequestPageState extends State<ProfilRequestPage> {
         if (userEmail.isNotEmpty) {
           try {
             await PendingMemberMergeService.instance.mergePendingMembersForUser(userId, userEmail);
-          } catch (_) {}
+          } catch (e) {
+            AppLogger.instance.error('mergePendingMembersForUser failed', error: e, context: {'userId': userId});
+          }
         }
       } else {
         await requestRef.update({

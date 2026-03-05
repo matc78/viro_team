@@ -14,8 +14,9 @@ import '../../utils/app_logger.dart';
 import '../../utils/firebase_helpers.dart';
 import '../../utils/firebase_error_handler.dart';
 import '../../utils/avatar_moderation.dart';
-import '../../widget/user_display_tile.dart';
 import '../profil_display_page.dart';
+import 'widgets/member_tile.dart';
+import 'widgets/pending_members_section.dart';
 
 class AdminMembersPage extends StatefulWidget {
   final String clubId;
@@ -566,7 +567,7 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
                 lastName: lastName,
               )
             : const SizedBox.shrink();
-        return _MemberTile(
+        return MemberTile(
           userId: userId,
           firstName: firstName,
           lastName: lastName,
@@ -627,164 +628,18 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
               ],
             ),
             const SizedBox(height: 8),
-            _buildPendingMembersSection(
+            PendingMembersSection(
+              clubId: widget.clubId,
+              search: _search,
               canEdit: canEdit,
               canSendInviteLink: canSendInviteLink,
+              onSendInviteLink: _sendInviteLink,
+              onEditPendingMember: _showEditPendingMemberDialog,
+              onRemovePendingMember: _confirmRemovePendingMember,
             ),
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildPendingMembersSection({
-    required bool canEdit,
-    required bool canSendInviteLink,
-  }) {
-    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: appFirestore
-          .collection(FirebaseCollections.clubs)
-          .doc(widget.clubId)
-          .collection(FirebaseCollections.pendingMembers)
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (snapshot.hasError || !snapshot.hasData) {
-          return const SizedBox.shrink();
-        }
-        final docs = snapshot.data!.docs;
-        if (docs.isEmpty) {
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8.0),
-            child: Text(
-              "Aucun membre en attente.",
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(color: Colors.grey),
-            ),
-          );
-        }
-
-        final list = docs.map((doc) {
-          final d = doc.data();
-          return {'doc': doc, 'data': d};
-        }).toList();
-
-        list.sort((a, b) {
-          final aLast = ((a['data'] as Map)['lastName'] as String? ?? '')
-              .toLowerCase();
-          final bLast = ((b['data'] as Map)['lastName'] as String? ?? '')
-              .toLowerCase();
-          final cmp = aLast.compareTo(bLast);
-          if (cmp != 0) return cmp;
-          final aFirst = ((a['data'] as Map)['firstName'] as String? ?? '')
-              .toLowerCase();
-          final bFirst = ((b['data'] as Map)['firstName'] as String? ?? '')
-              .toLowerCase();
-          return aFirst.compareTo(bFirst);
-        });
-
-        final filtered = _search.isEmpty
-            ? list
-            : list.where((e) {
-                final data = e['data'] as Map<String, dynamic>;
-                final first = (data['firstName'] as String? ?? '')
-                    .toLowerCase();
-                final last = (data['lastName'] as String? ?? '').toLowerCase();
-                final email = (data['email'] as String? ?? '').toLowerCase();
-                return first.contains(_search) ||
-                    last.contains(_search) ||
-                    email.contains(_search);
-              }).toList();
-
-        if (filtered.isEmpty) {
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8.0),
-            child: Text(
-              "Aucun membre en attente.",
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(color: Colors.grey),
-            ),
-          );
-        }
-
-        return ConstrainedBox(
-          constraints: const BoxConstraints(maxHeight: 400),
-          child: ListView.builder(
-            shrinkWrap: true,
-            itemCount: filtered.length,
-            itemBuilder: (context, index) {
-              final e = filtered[index];
-              final doc = e['doc'] as DocumentSnapshot<Map<String, dynamic>>;
-              final data = e['data'] as Map<String, dynamic>;
-              final firstName = data['firstName'] as String? ?? '';
-              final lastName = data['lastName'] as String? ?? '';
-              final email = data['email'] as String? ?? '';
-              return ListTile(
-                contentPadding: EdgeInsets.zero,
-                dense: true,
-                title: Text(
-                  '$firstName $lastName'.trim().isEmpty
-                      ? email
-                      : '$firstName $lastName'.trim(),
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                subtitle: Text(
-                  email,
-                  style: const TextStyle(color: Colors.grey, fontSize: 12),
-                ),
-                trailing: (canEdit || canSendInviteLink)
-                    ? Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (canSendInviteLink)
-                            IconButton(
-                              onPressed: () => _sendInviteLink(
-                                context,
-                                doc.id,
-                                firstName,
-                                lastName,
-                                email,
-                              ),
-                              icon: const Icon(Icons.link),
-                              color: ViroColors.primary,
-                              tooltip: "Envoyer lien de connexion",
-                            ),
-                          if (canEdit)
-                            IconButton(
-                              onPressed: () => _showEditPendingMemberDialog(
-                                context,
-                                doc.reference,
-                                firstName,
-                                lastName,
-                                email,
-                              ),
-                              icon: const Icon(Icons.edit_outlined),
-                              color: ViroColors.accent,
-                              tooltip: "Éditer",
-                            ),
-                          if (canEdit)
-                            IconButton(
-                              onPressed: () => _confirmRemovePendingMember(
-                                context,
-                                doc.reference,
-                                '$firstName $lastName'.trim(),
-                              ),
-                              icon: const Icon(Icons.delete_outline),
-                              color: Colors.red,
-                              tooltip: "Supprimer",
-                            ),
-                        ],
-                      )
-                    : null,
-              );
-            },
-          ),
-        );
-      },
     );
   }
 
@@ -1913,194 +1768,5 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
         .replaceAll(RegExp('[ûü]'), 'u')
         .replaceAll(RegExp('[ç]'), 'c')
         .trim();
-  }
-}
-
-/// Tuile par membre : carte lisible avec avatar, nom, rôle, et infos joueur (catégories, équipe, licence).
-class _MemberTile extends StatelessWidget {
-  final String userId;
-  final String firstName;
-  final String lastName;
-  final String? avatarUrl;
-  final String roleLabel;
-  final bool isPlayer;
-  final bool isStaff;
-  final List<String> categories;
-  final List<String> teamNames;
-  final bool hasLicense;
-  final Widget trailing;
-  final VoidCallback onTap;
-
-  const _MemberTile({
-    required this.userId,
-    required this.firstName,
-    required this.lastName,
-    this.avatarUrl,
-    required this.roleLabel,
-    required this.isPlayer,
-    required this.isStaff,
-    required this.categories,
-    required this.teamNames,
-    required this.hasLicense,
-    required this.trailing,
-    required this.onTap,
-  });
-
-  Widget _roleBadge(String label, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-          color: color,
-        ),
-      ),
-    );
-  }
-
-  Widget _categoryBadge(String label, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-          color: color,
-        ),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      child: Material(
-        color: Colors.white,
-        elevation: 0,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: const BorderSide(color: ViroColors.borderColor, width: 1),
-        ),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(12),
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                UserDisplayTile(
-                  userId: userId,
-                  firstName: firstName,
-                  lastName: lastName,
-                  avatarUrl: avatarUrl,
-                  navigateOnTap: false,
-                  textStyle: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const Spacer(),
-                Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        if (isStaff)
-                          _roleBadge(
-                            roleLabel,
-                            ViroColors.getMemberBadgeColor(roleLabel),
-                          )
-                        else
-                          Wrap(
-                            spacing: 6,
-                            runSpacing: 4,
-                            alignment: WrapAlignment.end,
-                            children: [
-                              if (categories.isEmpty)
-                                _categoryBadge(
-                                  "Sans catégorie",
-                                  ViroColors.getMemberBadgeColor(
-                                    "Sans catégorie",
-                                  ),
-                                )
-                              else
-                                ...categories.map(
-                                  (cat) => _categoryBadge(
-                                    cat,
-                                    ViroColors.getMemberBadgeColor(cat),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        if (isPlayer) ...[
-                          const SizedBox(width: 8),
-                          _categoryBadge(
-                            hasLicense ? "Licencié" : "Non licencié",
-                            ViroColors.getMemberBadgeColor(
-                              hasLicense ? "Licencié" : "Non licencié",
-                            ),
-                          ),
-                        ],
-                        const SizedBox(width: 8),
-                        trailing,
-                      ],
-                    ),
-                    if (isPlayer && teamNames.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        mainAxisSize: MainAxisSize.min,
-                        children: teamNames
-                            .map(
-                              (name) => Padding(
-                                padding: const EdgeInsets.only(top: 2),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      Icons.groups_outlined,
-                                      size: 12,
-                                      color: Colors.grey[600],
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      name,
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.grey[700],
-                                      ),
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            )
-                            .toList(),
-                      ),
-                    ],
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
   }
 }

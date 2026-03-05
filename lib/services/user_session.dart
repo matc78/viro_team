@@ -82,9 +82,9 @@ class UserSession extends ChangeNotifier {
               if (!doc.metadata.isFromCache) _hasServerSnapshot = true;
               if (doc.exists) {
                 _currentUser = UserModel.fromFirestore(doc);
-                final u = _currentUser!;
-                // Restaurer uniquement sur snapshot serveur pour éviter d'écraser avec des données cache obsolètes
-                if (!doc.metadata.isFromCache &&
+                final u = _currentUser;
+                if (u != null &&
+                    !doc.metadata.isFromCache &&
                     u.hasAnyRole &&
                     !u.isActiveContextCoherent) {
                   restoreActiveContextIfNeeded();
@@ -182,19 +182,20 @@ class UserSession extends ChangeNotifier {
   /// Change le contexte actif (role + clubId)
   /// Met à jour activeContext dans Firestore
   Future<bool> switchContext(String role, String clubId) async {
-    if (_currentUser == null) return false;
+    final u = _currentUser;
+    if (u == null) return false;
 
     try {
       await appFirestore
           .collection(FirebaseCollections.users)
-          .doc(_currentUser!.uid)
+          .doc(u.uid)
           .update({
             'activeContext': {'role': role, 'clubId': clubId},
           });
 
       // Le listener mettra à jour _currentUser automatiquement
       AppLogger.instance.info('Changement de contexte actif', {
-        'userId': _currentUser!.uid,
+        'userId': u.uid,
         'role': role,
         'clubId': clubId,
       });
@@ -203,7 +204,7 @@ class UserSession extends ChangeNotifier {
       AppLogger.instance.error(
         'Erreur lors du changement de contexte',
         error: e,
-        context: {'userId': _currentUser!.uid, 'role': role, 'clubId': clubId},
+        context: {'userId': u.uid, 'role': role, 'clubId': clubId},
       );
       return false;
     }
@@ -211,19 +212,22 @@ class UserSession extends ChangeNotifier {
 
   /// Vérifie si l'utilisateur peut changer vers un contexte spécifique
   bool canSwitchTo(String role, String clubId) {
-    if (_currentUser == null) return false;
-    return _currentUser!.hasRoleInClub(role, clubId);
+    final u = _currentUser;
+    if (u == null) return false;
+    return u.hasRoleInClub(role, clubId);
   }
 
   /// Retourne tous les profils disponibles pour le switcher
   List<ProfileOption> getAvailableProfiles() {
-    if (_currentUser == null) return [];
+    final u = _currentUser;
+    if (u == null) return [];
 
     final List<ProfileOption> profiles = [];
 
     // Profil Player (peut avoir plusieurs clubs)
-    if (_currentUser!.roles.player != null) {
-      for (var club in _currentUser!.roles.player!.clubs) {
+    final player = u.roles.player;
+    if (player != null) {
+      for (var club in player.clubs) {
         profiles.add(
           ProfileOption(
             role: 'player',
@@ -236,7 +240,7 @@ class UserSession extends ChangeNotifier {
     }
 
     // Profils Coach
-    for (var coach in _currentUser!.roles.coach) {
+    for (var coach in u.roles.coach) {
       profiles.add(
         ProfileOption(
           role: 'coach',
@@ -248,7 +252,7 @@ class UserSession extends ChangeNotifier {
     }
 
     // Profils Admin fondateur (priorité : afficher "Administrateur fondateur" pour les clubs fondés)
-    for (var clubId in _currentUser!.roles.adminFondateur) {
+    for (var clubId in u.roles.adminFondateur) {
       profiles.add(
         ProfileOption(
           role: 'admin_fondateur',
@@ -260,8 +264,8 @@ class UserSession extends ChangeNotifier {
     }
 
     // Profils Admin (uniquement les clubs où il n'est pas fondateur, pour éviter doublons)
-    final fondateurClubIds = _currentUser!.roles.adminFondateur.toSet();
-    for (var clubId in _currentUser!.roles.admin) {
+    final fondateurClubIds = u.roles.adminFondateur.toSet();
+    for (var clubId in u.roles.admin) {
       if (fondateurClubIds.contains(clubId)) continue;
       profiles.add(
         ProfileOption(

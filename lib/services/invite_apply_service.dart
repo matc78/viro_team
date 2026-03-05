@@ -124,7 +124,9 @@ class InviteApplyService {
       try {
         await PendingMemberMergeService.instance
             .mergePendingMembersForUser(userId, emailNorm);
-      } catch (_) {}
+      } catch (e) {
+        AppLogger.instance.error('mergePendingMembersForUser failed', error: e, context: {'userId': userId});
+      }
 
       AppLogger.instance.info(
         'Invite appliquée pour utilisateur connecté',

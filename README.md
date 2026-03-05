@@ -186,7 +186,7 @@ Dans votre projet Firebase, activez :
 4. Téléchargez le fichier `google-services.json`
 5. Placez-le dans `android/app/google-services.json`
 
-⚠️ **Important** : Le fichier `google-services.json` doit déjà être présent dans le projet. Si vous utilisez un nouveau projet Firebase, remplacez-le.
+⚠️ **Important** : Le fichier `google-services.json` doit déjà être présent dans le projet. Si vous utilisez un nouveau projet Firebase, remplacez-le. Ce fichier n'est pas versionné (voir `.gitignore`) : téléchargez-le depuis la console Firebase et placez-le dans `android/app/`.
 
 ### 4. Générer les options Firebase (si nécessaire)
 

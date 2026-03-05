@@ -6,6 +6,7 @@ import 'package:viro_team/constants/firebase_collections.dart';
 import 'package:viro_team/pages/admin_coach_pages/admin_add_event_page.dart';
 import 'package:viro_team/pages/admin_coach_pages/admin_event_details_page.dart';
 import '../../theme/viro_theme.dart';
+import '../../utils/app_logger.dart';
 import '../../widget/viro_loader.dart';
 
 class AdminPlanningPage extends StatefulWidget {
@@ -884,7 +885,8 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
     try {
       final parsed = DateFormat.jm('en_US').parse(str);
       return parsed.hour * 60 + parsed.minute;
-    } catch (_) {
+    } catch (e) {
+      AppLogger.instance.error('_timeToMinutes parse failed', error: e, context: {'time': str});
       return 0;
     }
   }

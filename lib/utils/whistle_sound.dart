@@ -1,6 +1,8 @@
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/services.dart';
 
+import 'app_logger.dart';
+
 /// Joue le son de sifflet (assets/sons/son_sifflet.mp3).
 /// Utilisé pour le bouton sifflet, les alertes countdown et les changements Zapata.
 class WhistleSound {
@@ -15,7 +17,8 @@ class WhistleSound {
     try {
       await _player.stop();
       await _player.play(AssetSource(_assetPath));
-    } catch (_) {
+    } catch (e) {
+      AppLogger.instance.error('WhistleSound.play failed', error: e);
       HapticFeedback.heavyImpact();
     }
   }

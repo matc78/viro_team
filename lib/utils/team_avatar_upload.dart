@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:viro_team/constants/firebase_collections.dart';
 import 'package:viro_team/utils/firestore_instance.dart';
+import 'app_logger.dart';
 import 'firebase_error_handler.dart';
 
 /// Supprime le fichier Storage correspondant à une URL de téléchargement Firebase
@@ -21,8 +22,9 @@ Future<void> deleteStorageFileFromUrl(String? downloadUrl) async {
     final encodedPath = pathSegment[oIndex + 1];
     final path = Uri.decodeComponent(encodedPath);
     await FirebaseStorage.instance.ref().child(path).delete();
-  } catch (_) {
+  } catch (e) {
     // Fichier déjà supprimé, URL invalide ou autre bucket : on ignore
+    AppLogger.instance.error('deleteStorageFileFromUrl failed', error: e);
   }
 }
 

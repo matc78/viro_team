@@ -1,6 +1,8 @@
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/services.dart';
 
+import 'app_logger.dart';
+
 /// Joue le son de buzzer (assets/sons/son_buzzer.mp3).
 /// Utilisé pour le countdown 3-2-1 et les alertes avant repos/reprise Zapata.
 class BuzzerSound {
@@ -14,7 +16,8 @@ class BuzzerSound {
     try {
       await _player.stop();
       await _player.play(AssetSource(_assetPath));
-    } catch (_) {
+    } catch (e) {
+      AppLogger.instance.error('BuzzerSound.play failed', error: e);
       HapticFeedback.mediumImpact();
     }
   }

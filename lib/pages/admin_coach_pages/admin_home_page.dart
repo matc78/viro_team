@@ -19,6 +19,7 @@ import '../../services/notification_service.dart';
 import '../../services/pending_member_merge_service.dart';
 import '../../theme/viro_theme.dart';
 import '../../utils/firebase_helpers.dart';
+import '../../utils/app_logger.dart';
 import '../../utils/firebase_error_handler.dart';
 import '../../utils/avatar_moderation.dart';
 import '../../widget/profile_switcher_dialog.dart';
@@ -933,7 +934,9 @@ class _AdminHomePageState extends State<AdminHomePage> {
         if (userEmail.isNotEmpty) {
           try {
             await PendingMemberMergeService.instance.mergePendingMembersForUser(userId, userEmail);
-          } catch (_) {}
+          } catch (e) {
+            AppLogger.instance.error('mergePendingMembersForUser failed', error: e, context: {'userId': userId});
+          }
         }
       } else {
         await requestRef.update({

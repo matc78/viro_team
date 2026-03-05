@@ -120,8 +120,9 @@ void main() {
             stackTrace,
             fatal: true,
           );
-        } catch (_) {
+        } catch (e) {
           // Si Crashlytics n'est pas disponible, on continue quand même
+          AppLogger.instance.error('Crashlytics unavailable', error: e);
         }
 
         // Afficher une page d'erreur fatale au lieu de crasher
@@ -133,8 +134,9 @@ void main() {
       // Ces erreurs se produisent dans des Futures, Streams, etc. qui ne sont pas await
       try {
         FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
-      } catch (_) {
+      } catch (e) {
         // Si Crashlytics n'est pas disponible, on log quand même l'erreur
+        AppLogger.instance.error('Crashlytics unavailable', error: e);
         AppLogger.instance.error(
           'Erreur asynchrone non capturée',
           error: error,
@@ -371,7 +373,9 @@ class _AuthGateState extends State<_AuthGate> {
       _appLinks.uriLinkStream.listen((Uri uri) {
         if (mounted) _parseInviteUri(uri);
       });
-    } catch (_) {}
+    } catch (e) {
+      AppLogger.instance.error('AppLinks init failed', error: e);
+    }
   }
 
   void _parseInviteUri(Uri uri) {
@@ -465,7 +469,9 @@ class _AuthGateState extends State<_AuthGate> {
               Future.microtask(() async {
                 try {
                   await signOutCompletely();
-                } catch (_) {}
+                } catch (e) {
+                  AppLogger.instance.error('signOutCompletely failed', error: e);
+                }
               });
               return const AuthPage();
             }

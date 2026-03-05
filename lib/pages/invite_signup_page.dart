@@ -7,6 +7,7 @@ import 'package:viro_team/services/pending_member_merge_service.dart';
 import 'package:viro_team/services/user_session.dart';
 import 'package:viro_team/utils/firestore_instance.dart';
 import 'package:viro_team/utils/firebase_error_handler.dart';
+import 'package:viro_team/utils/app_logger.dart';
 import '../theme/viro_theme.dart';
 import '../widget/viro_loader.dart';
 
@@ -202,8 +203,9 @@ class _InviteSignUpPageState extends State<InviteSignUpPage> {
               .collection(FirebaseCollections.pendingMembers)
               .doc(pendingMemberId);
           await pendingRef.delete();
-        } catch (_) {
+        } catch (e) {
           // Doc déjà supprimé ou erreur permission : on continue pour ne pas bloquer l'utilisateur
+          AppLogger.instance.error('Pending member delete failed', error: e, context: {'pendingMemberId': pendingMemberId});
         }
       }
 
@@ -217,7 +219,9 @@ class _InviteSignUpPageState extends State<InviteSignUpPage> {
       // Fusionner les autres pending_members (même email) dans d'autres clubs
       try {
         await PendingMemberMergeService.instance.mergePendingMembersForUser(uid, email);
-      } catch (_) {}
+      } catch (e) {
+        AppLogger.instance.error('mergePendingMembersForUser failed after signup', error: e, context: {'uid': uid});
+      }
 
       if (mounted) widget.onSignUpSuccess?.call();
     } on FirebaseAuthException catch (e) {

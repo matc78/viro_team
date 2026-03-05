@@ -27,6 +27,7 @@ import '../../services/user_session.dart';
 import '../auth_page.dart';
 import '../onboarding_page.dart';
 import 'admin_home_page.dart';
+import 'widgets/admin_profil_menu_card.dart';
 import '../player_pages/player_home_page.dart';
 
 class AdminProfilPage extends StatefulWidget {
@@ -115,43 +116,48 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
                 const SizedBox(height: 30),
 
                 // --- SECTION : MES INFORMATIONS ---
-                _buildSectionTitle("MES INFORMATIONS"),
-                _buildMenuCard(
+                ProfilSectionTitle("MES INFORMATIONS"),
+                ProfilMenuCard(
                   icon: Icons.badge_outlined,
                   title: "Modifier mon nom & prénom",
                   subtitle: "$displayFirst $displayLast",
                   onTap: () => _editName(firstName, lastName),
+                  disabled: _isSaving,
                 ),
-                _buildMenuCard(
+                ProfilMenuCard(
                   icon: Icons.alternate_email,
                   title: "Changer d'adresse email",
                   subtitle: userData?['email'] ?? user.email ?? "",
                   onTap: () =>
                       _changeEmail(userData?['email'] ?? user.email ?? ""),
+                  disabled: _isSaving,
                 ),
-                _buildMenuCard(
+                ProfilMenuCard(
                   icon: Icons.phone_outlined,
                   title: "Changer mon téléphone",
                   subtitle: userData?['phone'] as String? ?? "Non renseigné",
                   onTap: () =>
                       _changePhone(userData?['phone'] as String? ?? ""),
+                  disabled: _isSaving,
                 ),
-                _buildMenuCard(
+                ProfilMenuCard(
                   icon: Icons.lock_open_outlined,
                   title: "Changer mon mot de passe",
                   subtitle: "Modifier le mot de passe",
                   onTap: _changePassword,
+                  disabled: _isSaving,
                 ),
-                _buildMenuCard(
+                ProfilMenuCard(
                   icon: Icons.info_outline,
                   title: "Afficher mes infos",
                   subtitle: "Voir toutes mes informations",
                   onTap: () => _showInfoDialog(userData ?? {}, user),
+                  disabled: _isSaving,
                 ),
                 const SizedBox(height: 30),
 
                 // --- SECTION : GESTION DU CLUB ---
-                _buildSectionTitle("GESTION DU CLUB"),
+                ProfilSectionTitle("GESTION DU CLUB"),
                 if (clubId.isNotEmpty)
                   StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
                     stream: _firestore
@@ -160,26 +166,29 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
                         .snapshots(),
                     builder: (context, clubSnap) {
                       final sport = clubSnap.data?.data()?['sport'] as String?;
-                      return _buildMenuCard(
+                      return ProfilMenuCard(
                         icon: Icons.edit_location_alt_outlined,
                         title: "Changer Nom du Club",
                         subtitle: formatClubNameWithEmoji(clubName, sport),
                         onTap: () => _showEditClubName(clubId, clubName),
+                        disabled: _isSaving,
                       );
                     },
                   )
                 else
-                  _buildMenuCard(
+                  ProfilMenuCard(
                     icon: Icons.edit_location_alt_outlined,
                     title: "Changer Nom du Club",
                     subtitle: clubName,
                     onTap: () => _showEditClubName(clubId, clubName),
+                  disabled: _isSaving,
                   ),
-                _buildMenuCard(
+                ProfilMenuCard(
                   icon: Icons.image_outlined,
                   title: "Changer le logo du club",
                   subtitle: "Ajouter ou mettre à jour",
                   onTap: () => _pickClubLogo(clubId),
+                  disabled: _isSaving,
                 ),
                 StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
                   stream: _firestore
@@ -213,12 +222,13 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
                       paymentMethodsSubtitle = labels.join(', ');
                     }
 
-                    return _buildMenuCard(
+                    return ProfilMenuCard(
                       icon: Icons.payment_outlined,
                       title: "Moyens de paiement acceptés",
                       subtitle: paymentMethodsSubtitle,
                       onTap: () =>
                           _showPaymentMethodsDialog(clubId, paymentMethodsList),
+                        disabled: _isSaving,
                     );
                   },
                 ),
@@ -254,35 +264,42 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
                         'fr_FR',
                       ).format(seasonEndDate);
 
-                      return _buildMenuCard(
+                      return ProfilMenuCard(
                         icon: Icons.calendar_today_outlined,
                         title: "Date de fin de saison",
                         subtitle: dateStr,
                         onTap: () =>
                             _showEditSeasonEndDate(clubId, seasonEndDate),
+                        disabled: _isSaving,
                       );
                     },
                   ),
-                _buildMenuCard(
+                ProfilMenuCard(
                   icon: Icons.admin_panel_settings_outlined,
                   title: "Gérer les privilèges",
                   subtitle: "Promouvoir ou révoquer des membres",
                   onTap: () {
-                    // TODO: Navigation vers la page de gestion des rôles
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text("Gestion des privilèges — À venir"),
+                      ),
+                    );
                   },
+                  disabled: _isSaving,
                 ),
-                _buildMenuCard(
+                ProfilMenuCard(
                   icon: Icons.file_present_outlined,
                   title: "Documents du Club",
                   subtitle: "Statuts, assurances, RIB...",
                   onTap: () {},
+                  disabled: _isSaving,
                 ),
 
                 const SizedBox(height: 24),
 
                 // --- SECTION : COMPTE ---
-                _buildSectionTitle("PARAMÈTRES DU COMPTE"),
-                _buildMenuCard(
+                ProfilSectionTitle("PARAMÈTRES DU COMPTE"),
+                ProfilMenuCard(
                   icon: Icons.switch_account_outlined,
                   title: "Ajouter un nouveau profil",
                   subtitle:
@@ -293,8 +310,9 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
                       MaterialPageRoute(builder: (_) => const AddProfilePage()),
                     );
                   },
+                  disabled: _isSaving,
                 ),
-                _buildMenuCard(
+                ProfilMenuCard(
                   icon: Icons.notifications_active_outlined,
                   title: "Notifications",
                   subtitle: "Activer ou désactiver certaines notifications",
@@ -308,8 +326,9 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
                       ),
                     );
                   },
+                  disabled: _isSaving,
                 ),
-                _buildMenuCard(
+                ProfilMenuCard(
                   icon: Icons.privacy_tip_outlined,
                   title: "Politique de confidentialité",
                   subtitle:
@@ -328,7 +347,8 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
                           ),
                         );
                       }
-                    } catch (_) {
+                    } catch (e) {
+                      AppLogger.instance.error('url_launcher open link failed', error: e);
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
@@ -338,8 +358,9 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
                       }
                     }
                   },
+                  disabled: _isSaving,
                 ),
-                _buildMenuCard(
+                ProfilMenuCard(
                   icon: Icons.flag_outlined,
                   title: "Signaler un contenu",
                   subtitle: "Signaler un contenu inapproprié ou illégal",
@@ -359,7 +380,8 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
                           ),
                         );
                       }
-                    } catch (_) {
+                    } catch (e) {
+                      AppLogger.instance.error('url_launcher mailto failed', error: e);
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
@@ -369,16 +391,18 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
                       }
                     }
                   },
+                  disabled: _isSaving,
                 ),
 
                 const SizedBox(height: 40),
 
-                _buildSectionTitle("PARAMÈTRES AVANCÉS"),
-                _buildMenuCard(
+                ProfilSectionTitle("PARAMÈTRES AVANCÉS"),
+                ProfilMenuCard(
                   icon: Icons.settings_applications_outlined,
                   title: "Paramètres avancés",
                   subtitle: "Déconnexion, transfert et suppression",
                   onTap: () => _showAdvancedSettings(context, userData ?? {}),
+                  disabled: _isSaving,
                 ),
                 const SizedBox(height: 20),
               ],
@@ -570,67 +594,6 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildSectionTitle(String title) {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Padding(
-        padding: const EdgeInsets.only(left: 4, bottom: 12),
-        child: Text(
-          title,
-          style: const TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w900,
-            color: Colors.grey,
-            letterSpacing: 1.2,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMenuCard({
-    required IconData icon,
-    required String title,
-    String? subtitle,
-    required VoidCallback onTap,
-  }) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: ViroColors.borderColor),
-      ),
-      child: ListTile(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-        leading: Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: ViroColors.background,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Icon(icon, color: ViroColors.primary, size: 22),
-        ),
-        title: Text(
-          title,
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-        ),
-        subtitle: subtitle != null
-            ? Text(
-                subtitle,
-                style: const TextStyle(fontSize: 12, color: Colors.grey),
-              )
-            : null,
-        trailing: const Icon(
-          Icons.arrow_forward_ios_rounded,
-          size: 14,
-          color: ViroColors.borderColor,
-        ),
-        onTap: _isSaving ? null : onTap,
-      ),
     );
   }
 
@@ -1223,7 +1186,13 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
             await ref.delete();
           }
         }
-      } catch (_) {}
+      } catch (e) {
+        AppLogger.instance.error(
+          'Storage delete avatar prefix failed',
+          error: e,
+          context: {'clubId': clubId},
+        );
+      }
 
       if (!mounted) return;
       Navigator.of(context).pop();
@@ -1534,7 +1503,13 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
         jrBatch.delete(d.reference);
       }
       if (joinReq.docs.isNotEmpty) await jrBatch.commit();
-    } catch (_) {}
+    } catch (e) {
+      AppLogger.instance.error(
+          'join_requests batch delete failed',
+          error: e,
+          context: {'uid': uid},
+        );
+    }
 
     try {
       final clubsSnap = await _firestore
@@ -1564,7 +1539,13 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
           }
         }
       }
-    } catch (_) {}
+    } catch (e) {
+      AppLogger.instance.error(
+          'clubs/teams remove uid failed',
+          error: e,
+          context: {'uid': uid},
+        );
+    }
 
     try {
       // Annuler l'écoute sans effacer currentUser pour éviter redirection prématurée et PERMISSION_DENIED
@@ -2049,7 +2030,13 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
         await _firestore.collection(FirebaseCollections.users).doc(uid).set({
           'avatarModerationPending': FieldValue.delete(),
         }, SetOptions(merge: true));
-      } catch (_) {}
+      } catch (e) {
+        AppLogger.instance.error(
+          'avatarModerationPending delete failed',
+          error: e,
+          context: {'uid': uid},
+        );
+      }
     });
   }
 
@@ -2087,7 +2074,13 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
         'avatarModerationRejectedAt': FieldValue.delete(),
         'avatarModerationReason': FieldValue.delete(),
       }, SetOptions(merge: true));
-    } catch (_) {}
+    } catch (e) {
+      AppLogger.instance.error(
+          'avatarModerationRejected clear failed',
+          error: e,
+          context: {'uid': uid},
+        );
+    }
   }
 
   String _formatFirst(String value) {

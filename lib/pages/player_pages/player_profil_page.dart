@@ -246,7 +246,8 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
                           ),
                         );
                       }
-                    } catch (_) {
+                    } catch (e) {
+                      AppLogger.instance.error('url_launcher open link failed', error: e);
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
@@ -277,7 +278,8 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
                           ),
                         );
                       }
-                    } catch (_) {
+                    } catch (e) {
+                      AppLogger.instance.error('url_launcher mailto failed', error: e);
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
@@ -915,7 +917,9 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
                         .update({
                           field: FieldValue.arrayRemove([uid]),
                         });
-                  } catch (_) {}
+                  } catch (e) {
+                    AppLogger.instance.error('arrayRemove from club failed', error: e, context: {'uid': uid, 'finalClubId': finalClubId});
+                  }
                 }
 
                 // Supprimer les demandes d'adhésion associées (meilleur effort)
@@ -927,7 +931,9 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
                   for (final doc in requests.docs) {
                     await doc.reference.delete();
                   }
-                } catch (_) {}
+                } catch (e) {
+                  AppLogger.instance.error('join_requests delete failed', error: e, context: {'uid': uid});
+                }
 
                 // Annuler l'écoute sans effacer currentUser pour éviter redirection prématurée et PERMISSION_DENIED
                 if (pageContext.mounted) {
@@ -1747,7 +1753,9 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
         await appFirestore.collection(FirebaseCollections.users).doc(uid).set({
           'avatarModerationPending': FieldValue.delete(),
         }, SetOptions(merge: true));
-      } catch (_) {}
+      } catch (e) {
+        AppLogger.instance.error('avatarModerationPending delete failed', error: e, context: {'uid': uid});
+      }
     });
   }
 
@@ -1785,6 +1793,8 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
         'avatarModerationRejectedAt': FieldValue.delete(),
         'avatarModerationReason': FieldValue.delete(),
       }, SetOptions(merge: true));
-    } catch (_) {}
+    } catch (e) {
+      AppLogger.instance.error('avatarModerationRejected clear failed', error: e, context: {'uid': uid});
+    }
   }
 }
