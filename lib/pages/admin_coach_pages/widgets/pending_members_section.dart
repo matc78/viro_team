@@ -5,10 +5,14 @@ import '../../../constants/firebase_collections.dart';
 import '../../../theme/viro_theme.dart';
 import '../../../utils/firestore_instance.dart';
 
-/// Section affichant la liste des membres en attente de création de compte.
+/// Section affichant la liste des membres en attente de création de compte
+/// ou la liste des refus d'invitation (selon [onlyDeclined]).
 class PendingMembersSection extends StatelessWidget {
   final String clubId;
   final String search;
+  /// Si true, n'affiche que les membres ayant refusé l'invitation (section "Refus d'invitation").
+  /// Si false, n'affiche que les membres en attente (section "En attente de création de compte").
+  final bool onlyDeclined;
   final bool canEdit;
   final bool canSendInviteLink;
   final void Function(
@@ -35,6 +39,7 @@ class PendingMembersSection extends StatelessWidget {
     super.key,
     required this.clubId,
     required this.search,
+    this.onlyDeclined = false,
     required this.canEdit,
     required this.canSendInviteLink,
     required this.onSendInviteLink,
@@ -55,7 +60,20 @@ class PendingMembersSection extends StatelessWidget {
           return const SizedBox.shrink();
         }
         final docs = snapshot.data!.docs;
-        if (docs.isEmpty) {
+        final list = docs
+            .map((doc) => {'doc': doc, 'data': doc.data()})
+            .where((e) {
+              final status =
+                  (e['data'] as Map<String, dynamic>)['invitationStatus']
+                      as String? ??
+                  'pending';
+              if (onlyDeclined) return status == 'declined';
+              return status != 'declined';
+            })
+            .toList();
+
+        if (list.isEmpty) {
+          if (onlyDeclined) return const SizedBox.shrink();
           return Padding(
             padding: const EdgeInsets.symmetric(vertical: 8.0),
             child: Text(
@@ -67,10 +85,6 @@ class PendingMembersSection extends StatelessWidget {
             ),
           );
         }
-
-        final list = docs
-            .map((doc) => {'doc': doc, 'data': doc.data()})
-            .toList();
 
         list.sort((a, b) {
           final aLast = ((a['data'] as Map)['lastName'] as String? ?? '')
@@ -100,6 +114,7 @@ class PendingMembersSection extends StatelessWidget {
               }).toList();
 
         if (filtered.isEmpty) {
+          if (onlyDeclined) return const SizedBox.shrink();
           return Padding(
             padding: const EdgeInsets.symmetric(vertical: 8.0),
             child: Text(
@@ -124,26 +139,10 @@ class PendingMembersSection extends StatelessWidget {
               final firstName = data['firstName'] as String? ?? '';
               final lastName = data['lastName'] as String? ?? '';
               final email = data['email'] as String? ?? '';
-              final invitationStatus =
-                  data['invitationStatus'] as String? ?? 'pending';
-              final isDeclined = invitationStatus == 'declined';
+              final isDeclined = onlyDeclined;
               return ListTile(
                 contentPadding: EdgeInsets.zero,
                 dense: true,
-                leading: isDeclined
-                    ? Tooltip(
-                        message: "Invitation refusée",
-                        child: Container(
-                          width: 10,
-                          height: 10,
-                          margin: const EdgeInsets.only(right: 8),
-                          decoration: const BoxDecoration(
-                            color: ViroColors.error,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                      )
-                    : null,
                 title: Text(
                   '$firstName $lastName'.trim().isEmpty
                       ? email
@@ -173,7 +172,7 @@ class PendingMembersSection extends StatelessWidget {
                               icon: const Icon(Icons.link),
                               color: ViroColors.primary,
                               tooltip: isDeclined
-                                  ? "Renvoyer l'invitation"
+                                  ? "Renvoyer le lien"
                                   : "Envoyer lien de connexion",
                             ),
                           if (canEdit)

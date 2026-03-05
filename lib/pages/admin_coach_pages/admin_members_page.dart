@@ -594,53 +594,120 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
     );
   }
 
-  /// Contenu de la carte "En attente" (sans Positioned, pour le scroll).
+  /// Contenu des cartes "En attente de création de compte" et "Refus d'invitation".
   Widget _buildBottomCardContent({
     required bool canEdit,
     required bool canSendInviteLink,
   }) {
-    return Card(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(12.0),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Card(
+          margin: EdgeInsets.zero,
+          child: Padding(
+            padding: const EdgeInsets.all(12.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      "En attente de création de compte",
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        color: Colors.black,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const Spacer(),
+                    if (canEdit)
+                      IconButton(
+                        onPressed: _isRemoving
+                            ? null
+                            : () => _showAddMemberEmailDialog(context),
+                        icon: const Icon(Icons.person_add),
+                        color: ViroColors.accent,
+                        tooltip: "Ajouter joueur",
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                PendingMembersSection(
+                  clubId: widget.clubId,
+                  search: _search,
+                  onlyDeclined: false,
+                  canEdit: canEdit,
+                  canSendInviteLink: canSendInviteLink,
+                  onSendInviteLink: (_, id, first, last, email) =>
+                      _sendInviteLink(context, id, first, last, email),
+                  onEditPendingMember: _showEditPendingMemberDialog,
+                  onRemovePendingMember: _confirmRemovePendingMember,
+                ),
+              ],
+            ),
+          ),
+        ),
+        _buildDeclinedInvitationsCard(
+          canEdit: canEdit,
+          canSendInviteLink: canSendInviteLink,
+        ),
+      ],
+    );
+  }
+
+  /// Carte "Refus d'invitation" visible uniquement si au moins un joueur a refusé l'invitation par lien.
+  Widget _buildDeclinedInvitationsCard({
+    required bool canEdit,
+    required bool canSendInviteLink,
+  }) {
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: appFirestore
+          .collection(FirebaseCollections.clubs)
+          .doc(widget.clubId)
+          .collection(FirebaseCollections.pendingMembers)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData || snapshot.hasError) return const SizedBox.shrink();
+        final hasDeclined = snapshot.data!.docs.any((d) =>
+            (d.data()['invitationStatus'] as String? ?? '') == 'declined');
+        if (!hasDeclined) return const SizedBox.shrink();
+        return Card(
+          margin: const EdgeInsets.only(top: 12),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(4),
+            side: const BorderSide(color: ViroColors.error, width: 1.5),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(12.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Text(
-                  "En attente de création de compte",
+                  "Refus d'invitation",
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
                     color: Colors.black,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                const Spacer(),
-                if (canEdit)
-                  IconButton(
-                    onPressed: _isRemoving
-                        ? null
-                        : () => _showAddMemberEmailDialog(context),
-                    icon: const Icon(Icons.person_add),
-                    color: ViroColors.accent,
-                    tooltip: "Ajouter joueur",
-                  ),
+                const SizedBox(height: 8),
+                PendingMembersSection(
+                  clubId: widget.clubId,
+                  search: _search,
+                  onlyDeclined: true,
+                  canEdit: canEdit,
+                  canSendInviteLink: canSendInviteLink,
+                  onSendInviteLink: (_, id, first, last, email) =>
+                      _sendInviteLink(context, id, first, last, email),
+                  onEditPendingMember: _showEditPendingMemberDialog,
+                  onRemovePendingMember: _confirmRemovePendingMember,
+                ),
               ],
             ),
-            const SizedBox(height: 8),
-            PendingMembersSection(
-              clubId: widget.clubId,
-              search: _search,
-              canEdit: canEdit,
-              canSendInviteLink: canSendInviteLink,
-              onSendInviteLink: _sendInviteLink,
-              onEditPendingMember: _showEditPendingMemberDialog,
-              onRemovePendingMember: _confirmRemovePendingMember,
-            ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
