@@ -89,66 +89,77 @@ class MemberTile extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                UserDisplayTile(
-                  userId: userId,
-                  firstName: firstName,
-                  lastName: lastName,
-                  avatarUrl: avatarUrl,
-                  navigateOnTap: false,
-                  textStyle: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
+                Flexible(
+                  flex: 0,
+                  fit: FlexFit.loose,
+                  child: UserDisplayTile(
+                    userId: userId,
+                    firstName: firstName,
+                    lastName: lastName,
+                    avatarUrl: avatarUrl,
+                    navigateOnTap: false,
+                    textStyle: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
-                const Spacer(),
-                Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
+                const SizedBox(width: 8),
+                Expanded(
+                  child: LayoutBuilder(
+                    builder: (context, badgesConstraints) {
+                      return Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                      SizedBox(
+                        width: double.infinity,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            ConstrainedBox(
+                              constraints: BoxConstraints(maxWidth: badgesConstraints.maxWidth),
+                              child: Wrap(
+                                spacing: 6,
+                                runSpacing: 4,
+                                alignment: WrapAlignment.end,
+                                runAlignment: WrapAlignment.end,
+                                children: [
                         if (isStaff)
                           _roleBadge(
                             roleLabel,
                             ViroColors.getMemberBadgeColor(roleLabel),
                           )
-                        else
-                          Wrap(
-                            spacing: 6,
-                            runSpacing: 4,
-                            alignment: WrapAlignment.end,
-                            children: [
-                              if (categories.isEmpty)
-                                _categoryBadge(
-                                  "Sans catégorie",
-                                  ViroColors.getMemberBadgeColor(
-                                    "Sans catégorie",
-                                  ),
-                                )
-                              else
-                                ...categories.map(
-                                  (cat) => _categoryBadge(
-                                    cat,
-                                    ViroColors.getMemberBadgeColor(cat),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        if (isPlayer) ...[
-                          const SizedBox(width: 8),
+                        else ...[
+                          if (categories.isEmpty)
+                            _categoryBadge(
+                              "Sans catégorie",
+                              ViroColors.getMemberBadgeColor(
+                                "Sans catégorie",
+                              ),
+                            )
+                          else
+                            ...categories.map(
+                              (cat) => _categoryBadge(
+                                cat,
+                                ViroColors.getMemberBadgeColor(cat),
+                              ),
+                            ),
+                        ],
+                        if (isPlayer)
                           _categoryBadge(
                             hasLicense ? "Licencié" : "Non licencié",
                             ViroColors.getMemberBadgeColor(
                               hasLicense ? "Licencié" : "Non licencié",
                             ),
                           ),
-                        ],
-                        const SizedBox(width: 8),
                         trailing,
-                      ],
-                    ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     if (isPlayer && teamNames.isNotEmpty) ...[
                       const SizedBox(height: 8),
                       Column(
@@ -182,7 +193,10 @@ class MemberTile extends StatelessWidget {
                             .toList(),
                       ),
                     ],
-                  ],
+                    ],
+                  );
+                    },
+                  ),
                 ),
               ],
             ),

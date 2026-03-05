@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart' show defaultTargetPlatform, TargetPlatf
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:viro_team/constants/firebase_collections.dart';
+import 'package:viro_team/pages/complete_profile_page.dart';
 import 'package:viro_team/pages/onboarding_page.dart';
 import 'package:viro_team/utils/firestore_instance.dart';
 import 'package:viro_team/pages/admin_coach_pages/admin_home_page.dart';
@@ -101,7 +102,7 @@ class _AuthPageState extends State<AuthPage> {
             await appFirestore.collection(FirebaseCollections.users).doc(user.uid).set({
               'firstName': _firstNameController.text.trim(),
               'lastName': _lastNameController.text.trim(),
-              'email': user.email,
+              'email': (user.email ?? '').trim().toLowerCase(),
               'createdAt': FieldValue.serverTimestamp(),
               // On ne met pas de clubId ici, il sera ajouté lors de l'acceptation
             }, SetOptions(merge: true));
@@ -120,7 +121,7 @@ class _AuthPageState extends State<AuthPage> {
               error: e,
               context: {'userId': user.uid, 'email': user.email},
             );
-            FirebaseErrorHandler.showErrorSnackBar(context, e);
+            if (mounted) FirebaseErrorHandler.showErrorSnackBar(context, e);
             // Déconnecter l'utilisateur si la création du document échoue
             await signOutCompletely();
             return;
@@ -137,14 +138,14 @@ class _AuthPageState extends State<AuthPage> {
           'errorCode': e.code,
         },
       );
-      FirebaseErrorHandler.showErrorSnackBar(context, e);
+      if (mounted) FirebaseErrorHandler.showErrorSnackBar(context, e);
     } catch (e) {
       AppLogger.instance.error(
         _isLogin ? 'Erreur inattendue lors de la connexion' : 'Erreur inattendue lors de la création de compte',
         error: e,
         context: {'email': _emailController.text.trim()},
       );
-      FirebaseErrorHandler.showErrorSnackBar(context, e);
+      if (mounted) FirebaseErrorHandler.showErrorSnackBar(context, e);
     }
 
     if (authSuccess) {
@@ -198,22 +199,26 @@ class _AuthPageState extends State<AuthPage> {
 
       final isNewUser = userCredential.additionalUserInfo?.isNewUser == true;
 
-      if (isNewUser) {
+      // Vérifier si le document Firestore existe (isNewUser peut être false alors que le doc n'existe pas)
+      final userDocRef = appFirestore
+          .collection(FirebaseCollections.users)
+          .doc(user.uid);
+      final userDocSnapshot = await userDocRef.get();
+      final needCreateUserDoc = isNewUser || !userDocSnapshot.exists;
+
+      if (needCreateUserDoc) {
         final (firstName, lastName) = _parseDisplayName(user.displayName);
         try {
-          await appFirestore
-              .collection(FirebaseCollections.users)
-              .doc(user.uid)
-              .set({
+          await userDocRef.set({
             'firstName': firstName,
             'lastName': lastName,
-            'email': user.email,
+            'email': (user.email ?? '').trim().toLowerCase(),
             'avatarUrl': user.photoURL,
             'createdAt': FieldValue.serverTimestamp(),
             'profileCompleted': false,
           }, SetOptions(merge: true));
           AppLogger.instance.info(
-            'Compte Google créé',
+            isNewUser ? 'Compte Google créé' : 'Document utilisateur Google créé',
             {
               'userId': user.uid,
               'email': user.email,
@@ -227,7 +232,7 @@ class _AuthPageState extends State<AuthPage> {
             error: e,
             context: {'userId': user.uid},
           );
-          FirebaseErrorHandler.showErrorSnackBar(context, e);
+          if (mounted) FirebaseErrorHandler.showErrorSnackBar(context, e);
           await signOutCompletely();
           if (mounted) setState(() => _isLoading = false);
           return;
@@ -237,23 +242,24 @@ class _AuthPageState extends State<AuthPage> {
           'Connexion Google réussie',
           {'userId': user.uid, 'email': user.email},
         );
-        // Navigation explicite pour éviter le blocage sur la page de connexion
-        // (l'AuthGate peut avoir un délai/race avec UserSession)
-        await _handleNavigation();
       }
+
+      // Navigation explicite pour éviter le blocage sur la page de connexion
+      if (!mounted) return;
+      await _handleNavigation();
     } on FirebaseAuthException catch (e) {
       AppLogger.instance.error(
         'Erreur connexion Google',
         error: e,
         context: {'errorCode': e.code},
       );
-      FirebaseErrorHandler.showErrorSnackBar(context, e);
+      if (mounted) FirebaseErrorHandler.showErrorSnackBar(context, e);
     } catch (e) {
       AppLogger.instance.error(
         'Erreur inattendue connexion Google',
         error: e,
       );
-      FirebaseErrorHandler.showErrorSnackBar(context, e);
+      if (mounted) FirebaseErrorHandler.showErrorSnackBar(context, e);
     }
 
     if (mounted) setState(() => _isLoading = false);
@@ -276,12 +282,20 @@ class _AuthPageState extends State<AuthPage> {
     final activeContext = data['activeContext'] as Map<String, dynamic>?;
     final activeRole = activeContext?['role'] as String?;
     final hasPendingRequest = data['hasPendingRequest'] == true;
+    final profileCompleted = data['profileCompleted'] != false; // défaut true pour rétrocompatibilité
     final roles = data['roles'] as Map<String, dynamic>? ?? {};
     final hasAdminOrCoach = _hasRoleIn(roles, 'admin_fondateur') ||
         _hasRoleIn(roles, 'admin') ||
         _hasRoleIn(roles, 'coach');
     final hasPlayer = roles['player'] != null;
 
+    // Profil non complété (ex. nouveau compte Google) → Compléter le profil en premier
+    if (profileCompleted == false) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const CompleteProfilePage()),
+      );
+      return;
+    }
     if (hasPendingRequest) {
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => const PlayerHomePage()),

@@ -3,6 +3,7 @@ import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -779,19 +780,16 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
     ).replaceAll('=', '').replaceAll('+', '-').replaceAll('/', '_');
   }
 
-  Future<void> _sendInviteLink(
+  /// Crée un invite_link, met à jour le pending_member (invitationSentAt, invitationStatus: pending, supprime declinedAt).
+  /// Retourne les infos pour copier/mailto, ou null en cas d'erreur.
+  Future<({String inviteUrl, String bodyShort, String bodyLong, String firstName})?> _createInviteLinkAndUpdatePending(
     BuildContext context,
     String pendingMemberId,
     String firstName,
     String lastName,
     String email,
   ) async {
-    if (email.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Email manquant pour ce membre.")),
-      );
-      return;
-    }
+    if (email.trim().isEmpty) return null;
     try {
       final clubId = widget.clubId;
       final teamsSnap = await appFirestore
@@ -827,56 +825,31 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
             'expiresAt': Timestamp.fromDate(expiresAt),
             'teams': teams,
           });
+      final pendingRef = appFirestore
+          .collection(FirebaseCollections.clubs)
+          .doc(clubId)
+          .collection(FirebaseCollections.pendingMembers)
+          .doc(pendingMemberId);
+      await pendingRef.set({
+        'invitationStatus': 'pending',
+        'invitationSentAt': FieldValue.serverTimestamp(),
+        'declinedAt': FieldValue.delete(),
+      }, SetOptions(merge: true));
       final inviteUrl = 'viroteam://invite?t=$token&c=$clubId';
-      final toAddress = email.trim().toLowerCase();
-      final subject = 'Invitation ViroTeam - Créer votre compte';
+      final first = firstName.trim();
       final bodyLong =
-          'Bonjour $firstName,\n\n'
+          'Bonjour $first,\n\n'
           'Votre club vous invite à rejoindre ViroTeam. Téléchargez l\'application puis ouvrez ce lien pour créer votre compte :\n\n'
           '$inviteUrl\n\n'
           'Ce lien est valide 7 jours.';
-      await Clipboard.setData(ClipboardData(text: bodyLong));
-      // Corps court dans l'URI pour limiter la longueur (destinataire + corps pré-remplis)
       final bodyShort =
-          'Bonjour $firstName,\n\n'
+          'Bonjour $first,\n\n'
           'Ouvrez ce lien pour créer votre compte ViroTeam (valide 7 jours) :\n\n$inviteUrl';
-      final subjectEnc = Uri.encodeComponent(subject);
-      final bodyEnc = Uri.encodeComponent(bodyShort);
-      final mailtoString =
-          'mailto:$toAddress?subject=$subjectEnc&body=$bodyEnc';
-      final mailto = Uri.parse(mailtoString);
-      bool mailOpened = false;
-      try {
-        if (await canLaunchUrl(mailto)) {
-          mailOpened = await launchUrl(
-            mailto,
-            mode: LaunchMode.externalApplication,
-          );
-        }
-        if (!mailOpened) {
-          mailOpened = await launchUrl(
-            mailto,
-            mode: LaunchMode.platformDefault,
-          );
-        }
-      } catch (_) {
-        mailOpened = false;
-      }
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              mailOpened
-                  ? "Lien copié. Le client mail s'ouvre avec le message."
-                  : "Lien copié. Collez le message depuis le presse-papier si besoin.",
-            ),
-          ),
-        );
-      }
       AppLogger.instance.info('Lien d\'invite créé', {
         'clubId': clubId,
         'pendingMemberId': pendingMemberId,
       });
+      return (inviteUrl: inviteUrl, bodyShort: bodyShort, bodyLong: bodyLong, firstName: first);
     } catch (e) {
       AppLogger.instance.error(
         'Erreur création lien d\'invite',
@@ -888,6 +861,66 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
           SnackBar(content: Text(FirebaseErrorHandler.getErrorMessage(e))),
         );
       }
+      return null;
+    }
+  }
+
+  Future<void> _sendInviteLink(
+    BuildContext context,
+    String pendingMemberId,
+    String firstName,
+    String lastName,
+    String email,
+  ) async {
+    if (email.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Email manquant pour ce membre.")),
+      );
+      return;
+    }
+    final result = await _createInviteLinkAndUpdatePending(
+      context,
+      pendingMemberId,
+      firstName,
+      lastName,
+      email,
+    );
+    if (result == null || !context.mounted) return;
+    await Clipboard.setData(ClipboardData(text: result.bodyLong));
+    final toAddress = email.trim().toLowerCase();
+    final subject = 'Invitation ViroTeam - Créer votre compte';
+    final subjectEnc = Uri.encodeComponent(subject);
+    final bodyEnc = Uri.encodeComponent(result.bodyShort);
+    final mailtoString =
+        'mailto:$toAddress?subject=$subjectEnc&body=$bodyEnc';
+    final mailto = Uri.parse(mailtoString);
+    bool mailOpened = false;
+    try {
+      if (await canLaunchUrl(mailto)) {
+        mailOpened = await launchUrl(
+          mailto,
+          mode: LaunchMode.externalApplication,
+        );
+      }
+      if (!mailOpened) {
+        mailOpened = await launchUrl(
+          mailto,
+          mode: LaunchMode.platformDefault,
+        );
+      }
+    } catch (_) {
+      mailOpened = false;
+    }
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            mailOpened
+                ? "Lien copié. Le client mail s'ouvre avec le message."
+                : "Lien copié. Collez le message depuis le presse-papier si besoin.",
+          ),
+        ),
+      );
     }
   }
 
@@ -951,9 +984,117 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
         .limit(1)
         .get();
 
-    if (userSnap.docs.isNotEmpty && pageContext.mounted) {
-      ScaffoldMessenger.of(pageContext).showSnackBar(
-        const SnackBar(content: Text("Un compte existe déjà pour cet email.")),
+    if (userSnap.docs.isNotEmpty) {
+      if (!pageContext.mounted) return;
+      final userData = userSnap.docs.first.data();
+      final firstName = (userData['firstName'] as String? ?? '').trim();
+      final lastName = (userData['lastName'] as String? ?? '').trim();
+      final email = (userData['email'] as String? ?? '').trim();
+      final displayName = '$firstName $lastName'.trim();
+      final avatarUrl = effectiveAvatarUrl(userData);
+      final confirmed = await showDialog<bool>(
+        context: pageContext,
+        builder: (ctx) => AlertDialog(
+          title: const Text("Compte existant"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                displayName.isEmpty
+                    ? "Un compte existe pour cet email. Confirmer qu'il s'agit de la bonne personne ?"
+                    : "C'est bien la bonne personne ?",
+                style: Theme.of(ctx).textTheme.bodyMedium,
+              ),
+              const SizedBox(height: 16),
+              Material(
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: const BorderSide(
+                    color: ViroColors.borderColor,
+                    width: 1,
+                  ),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 28,
+                        backgroundColor: ViroColors.secondary,
+                        backgroundImage: avatarUrl != null &&
+                                avatarUrl.isNotEmpty
+                            ? CachedNetworkImageProvider(avatarUrl)
+                            : null,
+                        child: avatarUrl == null || avatarUrl.isEmpty
+                            ? Text(
+                                displayName.isEmpty
+                                    ? '?'
+                                    : (firstName.isNotEmpty
+                                            ? firstName[0]
+                                            : '') +
+                                        (lastName.isNotEmpty
+                                            ? lastName[0]
+                                            : ''),
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w600,
+                                  color: ViroColors.primary,
+                                ),
+                              )
+                            : null,
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              displayName.isEmpty ? '—' : displayName,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            if (email.isNotEmpty) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                email,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text("Annuler"),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text("Confirmer"),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !pageContext.mounted) return;
+      await _addPendingMemberForExistingUserAndSendInvite(
+        pageContext,
+        emailNorm,
+        firstName.isEmpty ? 'Prénom' : firstName,
+        lastName.isEmpty ? 'Nom' : lastName,
       );
       return;
     }
@@ -966,17 +1107,150 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
         .limit(1)
         .get();
 
-    if (pendingSnap.docs.isNotEmpty && pageContext.mounted) {
-      ScaffoldMessenger.of(pageContext).showSnackBar(
-        const SnackBar(
-          content: Text("Cet email est déjà en attente de création de compte."),
+    if (pendingSnap.docs.isNotEmpty) {
+      if (!pageContext.mounted) return;
+      final pendingDoc = pendingSnap.docs.first;
+      final data = pendingDoc.data();
+      final resend = await showDialog<bool>(
+        context: pageContext,
+        builder: (ctx) => AlertDialog(
+          title: const Text("Déjà en attente"),
+          content: const Text(
+            "Cet email est déjà en attente. Renvoyer l'invitation ?",
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text("Annuler"),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text("Renvoyer le lien"),
+            ),
+          ],
         ),
       );
+      if (resend != true || !pageContext.mounted) return;
+      final firstName = data['firstName'] as String? ?? '';
+      final lastName = data['lastName'] as String? ?? '';
+      final result = await _createInviteLinkAndUpdatePending(
+        pageContext,
+        pendingDoc.id,
+        firstName,
+        lastName,
+        emailNorm,
+      );
+      if (result != null && pageContext.mounted) {
+        await Clipboard.setData(ClipboardData(text: result.bodyLong));
+        final subject = 'Invitation ViroTeam - Créer votre compte';
+        final mailto = Uri.parse(
+          'mailto:$emailNorm?subject=${Uri.encodeComponent(subject)}&body=${Uri.encodeComponent(result.bodyShort)}',
+        );
+        try {
+          if (await canLaunchUrl(mailto)) {
+            await launchUrl(mailto, mode: LaunchMode.externalApplication);
+          }
+        } catch (_) {}
+        if (pageContext.mounted) {
+          ScaffoldMessenger.of(pageContext).showSnackBar(
+            const SnackBar(content: Text("Lien créé et copié. Invitation renvoyée.")),
+          );
+        }
+      }
       return;
     }
 
     if (!pageContext.mounted) return;
     _showAddMemberNameDialog(pageContext, emailNorm);
+  }
+
+  /// Crée un pending_member pour un utilisateur existant, crée l'invite_link, puis affiche le dialog Copier / Envoyer par email.
+  Future<void> _addPendingMemberForExistingUserAndSendInvite(
+    BuildContext context,
+    String emailNorm,
+    String firstName,
+    String lastName,
+  ) async {
+    try {
+      final adminId = FirebaseAuth.instance.currentUser?.uid;
+      final pendingRef = await appFirestore
+          .collection(FirebaseCollections.clubs)
+          .doc(widget.clubId)
+          .collection(FirebaseCollections.pendingMembers)
+          .add({
+            'email': emailNorm,
+            'firstName': firstName,
+            'lastName': lastName,
+            'invitationStatus': 'pending',
+            'addedAt': FieldValue.serverTimestamp(),
+            if (adminId != null) 'addedBy': adminId,
+          });
+      final pendingMemberId = pendingRef.id;
+      final result = await _createInviteLinkAndUpdatePending(
+        context,
+        pendingMemberId,
+        firstName,
+        lastName,
+        emailNorm,
+      );
+      if (!context.mounted) return;
+      if (result == null) return;
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text("Invitation créée"),
+          content: const Text(
+            "Le lien d'invitation a été créé. Vous pouvez le copier ou l'envoyer par email.",
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text("Fermer"),
+            ),
+            OutlinedButton(
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: result.bodyLong));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("Lien copié dans le presse-papier.")),
+                );
+              },
+              child: const Text("Copier le lien"),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.pop(ctx);
+                await Clipboard.setData(ClipboardData(text: result.bodyLong));
+                final mailto = Uri.parse(
+                  'mailto:$emailNorm?subject=${Uri.encodeComponent('Invitation ViroTeam - Créer votre compte')}&body=${Uri.encodeComponent(result.bodyShort)}',
+                );
+                try {
+                  if (await canLaunchUrl(mailto)) {
+                    await launchUrl(mailto, mode: LaunchMode.externalApplication);
+                  }
+                } catch (_) {}
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("Lien copié. Le client mail s'ouvre.")),
+                  );
+                }
+              },
+              child: const Text("Envoyer par email"),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      AppLogger.instance.error(
+        'Erreur ajout membre existant + invite',
+        error: e,
+        context: {'clubId': widget.clubId, 'email': emailNorm},
+      );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(FirebaseErrorHandler.getErrorMessage(e))),
+        );
+      }
+    }
   }
 
   Future<void> _showAddMemberNameDialog(
@@ -1066,6 +1340,7 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
             'email': emailNorm,
             'firstName': firstName,
             'lastName': lastName,
+            'invitationStatus': 'pending',
             'addedAt': FieldValue.serverTimestamp(),
             if (adminId != null) 'addedBy': adminId,
           });
@@ -1455,6 +1730,20 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
         'members': FieldValue.arrayRemove([uid]),
       });
       try {
+        // Infos pour les stats : équipes, date d'adhésion (si disponible)
+        final rolesPlayer = roles['player'] as Map<String, dynamic>?;
+        Map<String, dynamic>? leaveClubEntry;
+        if (rolesPlayer != null && rolesPlayer['clubs'] is List) {
+          for (var c in (rolesPlayer['clubs'] as List)) {
+            if (c is Map<String, dynamic> && c['clubId'] == clubId) {
+              leaveClubEntry = Map<String, dynamic>.from(c);
+              break;
+            }
+          }
+        }
+        final teamIds = (leaveClubEntry?['teamIds'] as List<dynamic>?)?.whereType<String>().toList() ?? <String>[];
+        final teamNames = (leaveClubEntry?['teamNames'] as List<dynamic>?)?.whereType<String>().toList() ?? <String>[];
+        final joinedAt = leaveClubEntry?['joinedAt'];
         await firestore
             .collection(FirebaseCollections.clubs)
             .doc(clubId)
@@ -1465,6 +1754,9 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
               'lastName': (data['lastName'] as String?)?.trim() ?? '',
               'role': 'player',
               'leftAt': FieldValue.serverTimestamp(),
+              if (teamIds.isNotEmpty) 'teamIds': teamIds,
+              if (teamNames.isNotEmpty) 'teamNames': teamNames,
+              if (joinedAt != null) 'joinedAt': joinedAt,
             });
       } catch (e) {
         AppLogger.instance.error(

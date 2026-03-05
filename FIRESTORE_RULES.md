@@ -21,7 +21,7 @@ Ce document décrit les règles Firestore pour l’application et la stratégie 
 | `clubs/{clubId}/events` | Événements. |
 | `clubs/{clubId}/equipment`, `equipmentCatalog` | Matériel et catalogue. |
 | `clubs/{clubId}/equipment_loans`, `equipment_loan_requests`, `equipment_loan_change_requests` | Prêts et demandes. |
-| `clubs/{clubId}/member_leaves`, `member_removals` | Départs et retraits. |
+| `clubs/{clubId}/member_leaves`, `member_removals` | Départs et retraits. Chaque doc `member_leaves` : userId, firstName, lastName, role, leftAt ; optionnel : teamIds, teamNames, joinedAt (stats du club). |
 | `clubs/{clubId}/pending_members` | Membres en attente de création de compte (email, firstName, lastName, addedAt, addedBy). |
 | `clubs/{clubId}/announcements` | Annonces. |
 | `join_requests/{requestId}` | Demandes d’adhésion (clubId, userId, status, roleRequested, message, createdAt, …). |
@@ -69,23 +69,33 @@ L’app maintient déjà ce tableau : lors de l’acceptation d’une demande d�
 - **Depuis la page joueur** (`player_profil_page`) : l’app met à jour le document club pour retirer l’utilisateur de `members` ou `coaches` via `arrayRemove`. Les règles autorisent cette mise à jour grâce à `isSelfRemovalFromClub` (un utilisateur peut se retirer lui-même, sans pouvoir modifier d’autres champs).
 - **Depuis la page admin/coach** (`admin_profil_page._deleteAccount`) : l’app met à jour les équipes de tous les clubs pour retirer son `uid` des champs `playerIds`/`coachIds`. L’écriture sur `clubs/{clubId}/teams/{teamId}` est autorisée uniquement si l’utilisateur est **admin ou coach** du club (`canWriteClub(clubId)`). Si l’utilisateur a déjà **transféré** le club à quelqu’un d’autre, il n’est plus admin ni coach ; les mises à jour sur les équipes de ce club peuvent alors être refusées. En pratique : ne pas transférer le club avant de supprimer son compte, ou effectuer le nettoyage des équipes avant le transfert. Une alternative est de déléguer ce nettoyage à une Cloud Function déclenchée par la suppression du compte.
 
+## Versioning des règles
+
+En tête du fichier `firestore.rules`, un **Rule set version** (numéro entier, actuellement 1) est indiqué en commentaire. À chaque **changement majeur** des règles, incrémenter ce numéro puis déployer (voir ci‑dessous).
+
 ## Déploiement
 
-Le projet est configuré pour trois bases Firestore : **(default)** (base principale), **test** et **prod** (même fichier `firestore.rules` pour toutes). Les bases **test** et **prod** doivent exister dans la console Firebase (Firestore > Ajouter une base) avant le premier déploiement.
+Le projet utilise **uniquement** les bases Firestore **test** et **prod** (pas de base `(default)`). Le fichier `firebase.json` ne cible que ces deux bases.
 
-- **Toutes les bases** ((default) + test + prod) :
-  ```bash
-  firebase deploy --only firestore
-  ```
-- **Base principale (default) uniquement** (sous PowerShell, mettre la cible entre guillemets) :
-  ```bash
-  firebase deploy --only "firestore:(default)"
-  ```
-- **Base test uniquement** :
+**Important** : la commande `firebase deploy --only firestore:rules` ne met pas à jour les règles sur les bases nommées (test/prod). Il faut déployer **explicitement** sur chaque base.
+
+### Déployer sur test et prod (recommandé)
+
+Sous PowerShell, à la racine du projet :
+
+```powershell
+.\deploy-firestore-rules.ps1
+```
+
+Ce script enchaîne les déploiements sur **test** puis **prod**.
+
+### Déployer une base à la fois
+
+- **Base test** :
   ```bash
   firebase deploy --only firestore:test
   ```
-- **Base prod uniquement** :
+- **Base prod** :
   ```bash
   firebase deploy --only firestore:prod
   ```

@@ -124,9 +124,26 @@ class PendingMembersSection extends StatelessWidget {
               final firstName = data['firstName'] as String? ?? '';
               final lastName = data['lastName'] as String? ?? '';
               final email = data['email'] as String? ?? '';
+              final invitationStatus =
+                  data['invitationStatus'] as String? ?? 'pending';
+              final isDeclined = invitationStatus == 'declined';
               return ListTile(
                 contentPadding: EdgeInsets.zero,
                 dense: true,
+                leading: isDeclined
+                    ? Tooltip(
+                        message: "Invitation refusée",
+                        child: Container(
+                          width: 10,
+                          height: 10,
+                          margin: const EdgeInsets.only(right: 8),
+                          decoration: const BoxDecoration(
+                            color: ViroColors.error,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      )
+                    : null,
                 title: Text(
                   '$firstName $lastName'.trim().isEmpty
                       ? email
@@ -155,7 +172,9 @@ class PendingMembersSection extends StatelessWidget {
                               ),
                               icon: const Icon(Icons.link),
                               color: ViroColors.primary,
-                              tooltip: "Envoyer lien de connexion",
+                              tooltip: isDeclined
+                                  ? "Renvoyer l'invitation"
+                                  : "Envoyer lien de connexion",
                             ),
                           if (canEdit)
                             IconButton(

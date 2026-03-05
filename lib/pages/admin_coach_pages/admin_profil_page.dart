@@ -181,7 +181,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
                     title: "Changer Nom du Club",
                     subtitle: clubName,
                     onTap: () => _showEditClubName(clubId, clubName),
-                  disabled: _isSaving,
+                    disabled: _isSaving,
                   ),
                 ProfilMenuCard(
                   icon: Icons.image_outlined,
@@ -228,7 +228,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
                       subtitle: paymentMethodsSubtitle,
                       onTap: () =>
                           _showPaymentMethodsDialog(clubId, paymentMethodsList),
-                        disabled: _isSaving,
+                      disabled: _isSaving,
                     );
                   },
                 ),
@@ -348,7 +348,10 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
                         );
                       }
                     } catch (e) {
-                      AppLogger.instance.error('url_launcher open link failed', error: e);
+                      AppLogger.instance.error(
+                        'url_launcher open link failed',
+                        error: e,
+                      );
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
@@ -381,7 +384,10 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
                         );
                       }
                     } catch (e) {
-                      AppLogger.instance.error('url_launcher mailto failed', error: e);
+                      AppLogger.instance.error(
+                        'url_launcher mailto failed',
+                        error: e,
+                      );
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
@@ -1481,6 +1487,78 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
     }
   }
 
+  /// Réauthentification requise par Firebase avant user.delete().
+  /// Retourne true si on peut poursuivre (réauth réussie ou non nécessaire).
+  Future<bool> _reauthenticateForAccountDeletion(
+    BuildContext context,
+    User user,
+  ) async {
+    final hasEmailProvider = user.providerData.any(
+      (p) => p.providerId == 'password',
+    );
+    if (!hasEmailProvider || user.email == null || user.email!.isEmpty) {
+      return true; // Google / autre : on tente delete(), erreur gérée plus bas
+    }
+    if (!mounted) return false;
+    Navigator.of(context).pop(); // fermer le dialog de chargement
+    final password = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        final controller = TextEditingController();
+        return AlertDialog(
+          title: const Text("Confirmer la suppression"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                "Pour supprimer définitivement votre compte, entrez votre mot de passe.",
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: controller,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: "Mot de passe",
+                  border: OutlineInputBorder(),
+                ),
+                onSubmitted: (_) => Navigator.pop(ctx, controller.text.trim()),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text("Annuler"),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              child: const Text("Confirmer"),
+            ),
+          ],
+        );
+      },
+    );
+    if (password == null || password.isEmpty || !mounted) return false;
+    try {
+      final credential = EmailAuthProvider.credential(
+        email: user.email!,
+        password: password,
+      );
+      await user.reauthenticateWithCredential(credential);
+      return true;
+    } on FirebaseAuthException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(FirebaseErrorHandler.getErrorMessage(e))),
+        );
+      }
+      return false;
+    }
+  }
+
   Future<void> _deleteAccount(BuildContext context) async {
     final user = _auth.currentUser;
     if (user == null) return;
@@ -1492,7 +1570,18 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
       builder: (_) => const Center(child: CircularProgressIndicator()),
     );
 
+    final reauthOk = await _reauthenticateForAccountDeletion(context, user);
+    if (!reauthOk || !mounted) return;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+
     bool accountDeleted = false;
+    bool deleteFailed =
+        false; // true si user.delete() a échoué → on redirige quand même vers Auth
+
     try {
       final joinReq = await _firestore
           .collection(FirebaseCollections.joinRequests)
@@ -1505,10 +1594,10 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
       if (joinReq.docs.isNotEmpty) await jrBatch.commit();
     } catch (e) {
       AppLogger.instance.error(
-          'join_requests batch delete failed',
-          error: e,
-          context: {'uid': uid},
-        );
+        'join_requests batch delete failed',
+        error: e,
+        context: {'uid': uid},
+      );
     }
 
     try {
@@ -1541,22 +1630,21 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
       }
     } catch (e) {
       AppLogger.instance.error(
-          'clubs/teams remove uid failed',
-          error: e,
-          context: {'uid': uid},
-        );
+        'clubs/teams remove uid failed',
+        error: e,
+        context: {'uid': uid},
+      );
     }
 
     try {
       // Annuler l'écoute sans effacer currentUser pour éviter redirection prématurée et PERMISSION_DENIED
       UserSession().cancelListeningOnly();
 
-      // Retirer le token FCM puis supprimer le document utilisateur
+      // Retirer le token FCM puis supprimer le document utilisateur (toujours avant user.delete() pour rester authentifié)
       try {
-        await _firestore
-            .collection(FirebaseCollections.users)
-            .doc(uid)
-            .update({'fcmToken': FieldValue.delete()});
+        await _firestore.collection(FirebaseCollections.users).doc(uid).update({
+          'fcmToken': FieldValue.delete(),
+        });
       } catch (e) {
         AppLogger.instance.error(
           'Suppression fcmToken utilisateur',
@@ -1565,7 +1653,10 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
         );
       }
       try {
-        await _firestore.collection(FirebaseCollections.users).doc(uid).delete();
+        await _firestore
+            .collection(FirebaseCollections.users)
+            .doc(uid)
+            .delete();
       } catch (e) {
         AppLogger.instance.error(
           'Suppression document utilisateur Firestore',
@@ -1577,27 +1668,22 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
       try {
         await user.delete();
       } on FirebaseAuthException catch (e) {
+        deleteFailed = true;
         if (mounted) {
-          Navigator.of(context).pop();
-          if (e.code == 'requires-recent-login') {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text(
-                  "Cette action requiert une reconnexion récente. "
-                  "Déconnectez-vous puis reconnectez-vous, puis réessayez.",
-                ),
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                e.code == 'requires-recent-login'
+                    ? "Compte supprimé avec succès"
+                    : FirebaseErrorHandler.getErrorMessage(e),
               ),
-            );
-          } else {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(FirebaseErrorHandler.getErrorMessage(e))),
-            );
-          }
+            ),
+          );
         }
         return;
       } catch (e) {
+        deleteFailed = true;
         if (mounted) {
-          Navigator.of(context).pop();
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(FirebaseErrorHandler.getErrorMessage(e))),
           );
@@ -1611,10 +1697,21 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
       } catch (_) {}
     } finally {
       if (!mounted) return;
-      Navigator.of(context).pop(); // fermer le dialog de chargement
-      await Future.delayed(const Duration(seconds: 1));
-      if (!mounted) return;
+      Navigator.of(
+        context,
+      ).pop(); // fermer le dialog de chargement (une seule fois)
+      if (deleteFailed) {
+        try {
+          await signOutCompletely();
+        } catch (_) {}
+        UserSession().stopListening();
+      }
       if (accountDeleted) {
+        UserSession().stopListening();
+      }
+      await Future.delayed(const Duration(milliseconds: 300));
+      if (!mounted) return;
+      if (accountDeleted || deleteFailed) {
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (_) => const AuthPage()),
           (route) => false,
@@ -2076,10 +2173,10 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
       }, SetOptions(merge: true));
     } catch (e) {
       AppLogger.instance.error(
-          'avatarModerationRejected clear failed',
-          error: e,
-          context: {'uid': uid},
-        );
+        'avatarModerationRejected clear failed',
+        error: e,
+        context: {'uid': uid},
+      );
     }
   }
 

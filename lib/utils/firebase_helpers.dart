@@ -362,6 +362,7 @@ Future<void> updatePlayerClubsForTeam(
       'teamIds': [teamId],
       'teamNames': teamName.isNotEmpty ? [teamName] : [],
       'categories': teamCategory.isNotEmpty ? [teamCategory] : [],
+      'joinedAt': Timestamp.fromDate(DateTime.now()),
     });
   }
 

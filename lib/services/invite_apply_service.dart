@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:viro_team/constants/firebase_collections.dart';
 import 'package:viro_team/utils/firestore_instance.dart';
 import 'package:viro_team/utils/firebase_helpers.dart';
+import 'package:viro_team/utils/firebase_error_handler.dart';
 import 'package:viro_team/utils/app_logger.dart';
 import 'pending_member_merge_service.dart';
 
@@ -75,6 +76,33 @@ class InviteApplyService {
         );
       }
 
+      // Si l'invite n'a aucune équipe, écrire quand même roles.player avec le club (sans équipes)
+      if (teams.isEmpty) {
+        final userSnap = await userRef.get();
+        final userData = userSnap.data() ?? {};
+        final roles = Map<String, dynamic>.from(userData['roles'] as Map? ?? {});
+        final playerData = Map<String, dynamic>.from(roles['player'] as Map? ?? {});
+        List<Map<String, dynamic>> clubsList = [];
+        if (playerData['clubs'] is List) {
+          clubsList = (playerData['clubs'] as List)
+              .map((e) => Map<String, dynamic>.from(e as Map))
+              .toList();
+        }
+        final hasClub = clubsList.any((c) => c['clubId'] == clubId);
+        if (!hasClub) {
+          clubsList.add({
+            'clubId': clubId,
+            'teamIds': <String>[],
+            'teamNames': <String>[],
+            'categories': <String>[],
+            'joinedAt': Timestamp.fromDate(DateTime.now()),
+          });
+          playerData['clubs'] = clubsList;
+          roles['player'] = playerData;
+          await userRef.set({'roles': roles}, SetOptions(merge: true));
+        }
+      }
+
       await userRef.set({
         'activeContext': {
           'role': 'player',
@@ -139,7 +167,7 @@ class InviteApplyService {
         error: e,
         context: {'userId': userId, 'clubId': clubId},
       );
-      return e.toString();
+      return FirebaseErrorHandler.getErrorMessage(e);
     }
   }
 

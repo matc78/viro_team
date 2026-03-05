@@ -92,9 +92,17 @@ class _InviteApplyPageState extends State<InviteApplyPage> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  "Vous avez rejoint le club et vos équipes. Redirection...",
+                  "Vous avez rejoint le club et vos équipes.",
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.bodyMedium,
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton(
+                  onPressed: widget.onDone,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: ViroColors.primary,
+                  ),
+                  child: const Text("Aller à l'accueil"),
                 ),
               ],
             ),

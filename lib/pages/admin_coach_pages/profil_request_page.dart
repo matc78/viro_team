@@ -259,6 +259,7 @@ class _ProfilRequestPageState extends State<ProfilRequestPage> {
               clubsList.add({
                 'clubId': clubId,
                 'teamIds': [],
+                'joinedAt': FieldValue.serverTimestamp(),
                 if (license != null && license.isNotEmpty) 'license': license,
               });
             }

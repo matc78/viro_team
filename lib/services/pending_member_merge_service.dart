@@ -117,6 +117,7 @@ class PendingMemberMergeService {
           'teamIds': <String>[],
           'teamNames': <String>[],
           'categories': <String>[],
+          'joinedAt': FieldValue.serverTimestamp(),
         };
         clubsList.add(clubEntry);
       }

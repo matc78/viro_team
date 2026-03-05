@@ -247,7 +247,10 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
                         );
                       }
                     } catch (e) {
-                      AppLogger.instance.error('url_launcher open link failed', error: e);
+                      AppLogger.instance.error(
+                        'url_launcher open link failed',
+                        error: e,
+                      );
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
@@ -279,7 +282,10 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
                         );
                       }
                     } catch (e) {
-                      AppLogger.instance.error('url_launcher mailto failed', error: e);
+                      AppLogger.instance.error(
+                        'url_launcher mailto failed',
+                        error: e,
+                      );
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
@@ -844,6 +850,77 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
     );
   }
 
+  /// Réauthentification requise par Firebase avant user.delete().
+  Future<bool> _reauthenticateForAccountDeletion(
+    BuildContext context,
+    User user,
+  ) async {
+    final hasEmailProvider = user.providerData.any(
+      (p) => p.providerId == 'password',
+    );
+    if (!hasEmailProvider || user.email == null || user.email!.isEmpty) {
+      return true;
+    }
+    if (!context.mounted) return false;
+    Navigator.of(context).pop(); // fermer le dialog de chargement
+    final password = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        final controller = TextEditingController();
+        return AlertDialog(
+          title: const Text("Confirmer la suppression"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                "Pour supprimer définitivement ton compte, entre ton mot de passe.",
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: controller,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: "Mot de passe",
+                  border: OutlineInputBorder(),
+                ),
+                onSubmitted: (_) => Navigator.pop(ctx, controller.text.trim()),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text("Annuler"),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              child: const Text("Confirmer"),
+            ),
+          ],
+        );
+      },
+    );
+    if (password == null || password.isEmpty || !context.mounted) return false;
+    try {
+      final credential = EmailAuthProvider.credential(
+        email: user.email!,
+        password: password,
+      );
+      await user.reauthenticateWithCredential(credential);
+      return true;
+    } on FirebaseAuthException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(FirebaseErrorHandler.getErrorMessage(e))),
+        );
+      }
+      return false;
+    }
+  }
+
   void _showDeleteDialog(BuildContext pageContext) {
     showDialog(
       context: pageContext,
@@ -860,14 +937,15 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
           ElevatedButton(
             onPressed: () async {
               Navigator.pop(dialogContext); // fermer le dialog
-              // Utiliser pageContext pour tout le flux async (reste monté après fermeture du dialog)
               if (!pageContext.mounted) return;
               showDialog(
                 context: pageContext,
                 barrierDismissible: false,
-                builder: (_) => const Center(child: CircularProgressIndicator()),
+                builder: (_) =>
+                    const Center(child: CircularProgressIndicator()),
               );
               bool accountDeleted = false;
+              bool deleteFailed = false;
               try {
                 final user = FirebaseAuth.instance.currentUser;
                 if (user == null) {
@@ -879,6 +957,18 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
                   }
                   return;
                 }
+
+                final reauthOk = await _reauthenticateForAccountDeletion(
+                  pageContext,
+                  user,
+                );
+                if (!reauthOk || !pageContext.mounted) return;
+                showDialog(
+                  context: pageContext,
+                  barrierDismissible: false,
+                  builder: (_) =>
+                      const Center(child: CircularProgressIndicator()),
+                );
 
                 final uid = user.uid;
                 final firestore = appFirestore;
@@ -907,10 +997,10 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
                   try {
                     final field =
                         (finalRole == 'admin' ||
-                                finalRole == 'admin_fondateur' ||
-                                finalRole == 'coach')
-                            ? 'coaches'
-                            : 'members';
+                            finalRole == 'admin_fondateur' ||
+                            finalRole == 'coach')
+                        ? 'coaches'
+                        : 'members';
                     await firestore
                         .collection(FirebaseCollections.clubs)
                         .doc(finalClubId)
@@ -918,7 +1008,11 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
                           field: FieldValue.arrayRemove([uid]),
                         });
                   } catch (e) {
-                    AppLogger.instance.error('arrayRemove from club failed', error: e, context: {'uid': uid, 'finalClubId': finalClubId});
+                    AppLogger.instance.error(
+                      'arrayRemove from club failed',
+                      error: e,
+                      context: {'uid': uid, 'finalClubId': finalClubId},
+                    );
                   }
                 }
 
@@ -932,7 +1026,11 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
                     await doc.reference.delete();
                   }
                 } catch (e) {
-                  AppLogger.instance.error('join_requests delete failed', error: e, context: {'uid': uid});
+                  AppLogger.instance.error(
+                    'join_requests delete failed',
+                    error: e,
+                    context: {'uid': uid},
+                  );
                 }
 
                 // Annuler l'écoute sans effacer currentUser pour éviter redirection prématurée et PERMISSION_DENIED
@@ -970,26 +1068,28 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
                 try {
                   await user.delete();
                 } on FirebaseAuthException catch (e) {
-                  if (!pageContext.mounted) return;
-                  Navigator.of(pageContext).pop();
-                  ScaffoldMessenger.of(pageContext).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        e.code == 'requires-recent-login'
-                            ? "Merci de te reconnecter puis de réessayer."
-                            : FirebaseErrorHandler.getErrorMessage(e),
+                  deleteFailed = true;
+                  if (pageContext.mounted) {
+                    ScaffoldMessenger.of(pageContext).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          e.code == 'requires-recent-login'
+                              ? "Compte supprimé avec succès"
+                              : FirebaseErrorHandler.getErrorMessage(e),
+                        ),
                       ),
-                    ),
-                  );
+                    );
+                  }
                   return;
                 } catch (e) {
-                  if (!pageContext.mounted) return;
-                  Navigator.of(pageContext).pop();
-                  ScaffoldMessenger.of(pageContext).showSnackBar(
-                    SnackBar(
+                  deleteFailed = true;
+                  if (pageContext.mounted) {
+                    ScaffoldMessenger.of(pageContext).showSnackBar(
+                      SnackBar(
                         content: Text(FirebaseErrorHandler.getErrorMessage(e)),
-                    ),
-                  );
+                      ),
+                    );
+                  }
                   return;
                 }
 
@@ -1007,10 +1107,23 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
                 );
               } finally {
                 if (pageContext.mounted) {
-                  Navigator.of(pageContext).pop(); // fermer le dialog de chargement
+                  Navigator.of(
+                    pageContext,
+                  ).pop(); // fermer le dialog (une seule fois)
                 }
-                await Future.delayed(const Duration(seconds: 1));
+                if (deleteFailed) {
+                  try {
+                    await signOutCompletely();
+                  } catch (_) {}
+                  if (pageContext.mounted) {
+                    pageContext.read<UserSession>().stopListening();
+                  }
+                }
                 if (accountDeleted && pageContext.mounted) {
+                  pageContext.read<UserSession>().stopListening();
+                }
+                await Future.delayed(const Duration(milliseconds: 300));
+                if (pageContext.mounted && (accountDeleted || deleteFailed)) {
                   _goToAuth(pageContext);
                 }
               }
@@ -1161,7 +1274,7 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
     try {
       final firestore = appFirestore;
 
-      // 1. Événements : retirer userId de teamMemberIds et attendance
+      // 1. Événements : retirer userId de teamMemberIds et attendance (règles autorisent le joueur à se retirer)
       final eventsSnap = await firestore
           .collection(FirebaseCollections.clubs)
           .doc(clubId)
@@ -1179,7 +1292,7 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
         }
       }
 
-      // 2. Équipes : retirer uid de playerIds
+      // 2. Équipes : retirer uid de playerIds (règles autorisent le joueur à se retirer)
       final teamsSnap = await firestore
           .collection(FirebaseCollections.clubs)
           .doc(clubId)
@@ -1233,10 +1346,32 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
             .update({
               'members': FieldValue.arrayRemove([uid]),
             });
-        // Enregistrer le départ pour la tuile "À ne pas manquer" et la notif aux admins/coachs
+        // 4. Enregistrer le départ (tuile "À ne pas manquer" + notif)
         try {
           final firstName = (data['firstName'] as String?)?.trim() ?? '';
           final lastName = (data['lastName'] as String?)?.trim() ?? '';
+          // Infos pour les stats : équipes, date d'adhésion (si disponible)
+          final rolesPlayer = roles['player'] as Map<String, dynamic>?;
+          Map<String, dynamic>? clubEntry;
+          if (rolesPlayer != null && rolesPlayer['clubs'] is List) {
+            for (var c in (rolesPlayer['clubs'] as List)) {
+              if (c is Map && c['clubId'] == clubId) {
+                clubEntry = c as Map<String, dynamic>;
+                break;
+              }
+            }
+          }
+          final teamIds =
+              (clubEntry?['teamIds'] as List<dynamic>?)
+                  ?.whereType<String>()
+                  .toList() ??
+              <String>[];
+          final teamNames =
+              (clubEntry?['teamNames'] as List<dynamic>?)
+                  ?.whereType<String>()
+                  .toList() ??
+              <String>[];
+          final joinedAt = clubEntry?['joinedAt'];
           await firestore
               .collection(FirebaseCollections.clubs)
               .doc(clubId)
@@ -1247,6 +1382,9 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
                 'lastName': lastName,
                 'role': 'player',
                 'leftAt': FieldValue.serverTimestamp(),
+                if (teamIds.isNotEmpty) 'teamIds': teamIds,
+                if (teamNames.isNotEmpty) 'teamNames': teamNames,
+                if (joinedAt != null) 'joinedAt': joinedAt,
               });
         } catch (e) {
           AppLogger.instance.error(
@@ -1257,7 +1395,7 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
         }
       }
 
-      // 4. User : retirer le club de roles.player.clubs et mettre à jour activeContext
+      // 5. User : retirer le club de roles.player.clubs et mettre à jour activeContext
       final rolesData = Map<String, dynamic>.from(roles);
       final playerData = rolesData['player'] as Map?;
       List<dynamic> newPlayerClubs = [];
@@ -1754,7 +1892,11 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
           'avatarModerationPending': FieldValue.delete(),
         }, SetOptions(merge: true));
       } catch (e) {
-        AppLogger.instance.error('avatarModerationPending delete failed', error: e, context: {'uid': uid});
+        AppLogger.instance.error(
+          'avatarModerationPending delete failed',
+          error: e,
+          context: {'uid': uid},
+        );
       }
     });
   }
@@ -1794,7 +1936,11 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
         'avatarModerationReason': FieldValue.delete(),
       }, SetOptions(merge: true));
     } catch (e) {
-      AppLogger.instance.error('avatarModerationRejected clear failed', error: e, context: {'uid': uid});
+      AppLogger.instance.error(
+        'avatarModerationRejected clear failed',
+        error: e,
+        context: {'uid': uid},
+      );
     }
   }
 }

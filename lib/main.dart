@@ -18,7 +18,7 @@ import 'pages/admin_coach_pages/admin_home_page.dart';
 import 'pages/admin_coach_pages/admin_loans_page.dart';
 import 'pages/auth_page.dart';
 import 'pages/complete_profile_page.dart';
-import 'package:viro_team/pages/invite_apply_page.dart';
+import 'package:viro_team/pages/player_confirm_club_invitation_page.dart';
 import 'pages/invite_signup_page.dart';
 import 'pages/no_internet_page.dart';
 import 'pages/player_pages/player_home_page.dart';
@@ -358,6 +358,7 @@ class _AuthGateState extends State<_AuthGate> {
   int _userDocRetryCount = 0;
   String? _inviteToken;
   String? _inviteClubId;
+  bool _initialLinkChecked = false;
   final AppLinks _appLinks = AppLinks();
 
   @override
@@ -373,8 +374,10 @@ class _AuthGateState extends State<_AuthGate> {
       _appLinks.uriLinkStream.listen((Uri uri) {
         if (mounted) _parseInviteUri(uri);
       });
+      if (mounted) setState(() => _initialLinkChecked = true);
     } catch (e) {
       AppLogger.instance.error('AppLinks init failed', error: e);
+      if (mounted) setState(() => _initialLinkChecked = true);
     }
   }
 
@@ -476,14 +479,14 @@ class _AuthGateState extends State<_AuthGate> {
               return const AuthPage();
             }
 
-            // Utilisateur connecté qui ouvre un lien d'invitation : appliquer l'invite (club, équipes, suppression pending) puis continuer
+            // Utilisateur connecté qui ouvre un lien d'invitation : page de confirmation (Accepter / Refuser) puis appliquer ou refuser
             final inviteToken = _inviteToken;
             final inviteClubId = _inviteClubId;
             if (inviteToken != null && inviteClubId != null) {
               final email = currentUser.email ?? '';
               if (email.isNotEmpty) {
                 final uid = user.uid;
-                return InviteApplyPage(
+                return PlayerConfirmClubInvitationPage(
                   token: inviteToken,
                   clubId: inviteClubId,
                   userId: uid,
@@ -534,6 +537,11 @@ class _AuthGateState extends State<_AuthGate> {
             }
 
             if (!currentUser.hasAnyRole && activeContext == null) {
+              if (!_initialLinkChecked) {
+                return const Scaffold(
+                  body: Center(child: ViroLoader(size: 50)),
+                );
+              }
               return const OnboardingPage();
             }
             if (activeContext != null &&
@@ -550,6 +558,11 @@ class _AuthGateState extends State<_AuthGate> {
             }
             if (currentUser.hasPendingRequest) {
               return const PlayerHomePage();
+            }
+            if (!_initialLinkChecked) {
+              return const Scaffold(
+                body: Center(child: ViroLoader(size: 50)),
+              );
             }
             return const OnboardingPage();
           },
