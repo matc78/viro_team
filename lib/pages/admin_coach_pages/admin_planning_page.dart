@@ -409,6 +409,7 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
                   value: catValue,
                   items: catList,
                   onChanged: (val) => setState(() => _filterCategory = val!),
+                  isCategoryFilter: true,
                 ),
               ),
             ],
@@ -423,6 +424,7 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
     required String value,
     required List<String> items,
     required Function(String?) onChanged,
+    bool isCategoryFilter = false,
   }) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -437,9 +439,33 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
           isExpanded: true,
           items: items
               .map(
-                (e) => DropdownMenuItem(
+                (e) => DropdownMenuItem<String>(
                   value: e,
-                  child: Text(e, style: const TextStyle(fontSize: 13)),
+                  child: isCategoryFilter && e != "Choisir une catégorie"
+                      ? Row(
+                          children: [
+                            Container(
+                              width: 12,
+                              height: 12,
+                              decoration: BoxDecoration(
+                                color: ViroColors.getCategoryColor(e),
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: Colors.grey.shade300,
+                                  width: 0.5,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                e,
+                                style: const TextStyle(fontSize: 13),
+                              ),
+                            ),
+                          ],
+                        )
+                      : Text(e, style: const TextStyle(fontSize: 13)),
                 ),
               )
               .toList(),
@@ -633,13 +659,25 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
     VoidCallback? onTap,
   }) {
     final bool canceled = data['canceled'] == true;
+    final bool isMatch = data['type'] == 'Match';
     final bool allDay = data['startTime'] == null && data['endTime'] == null;
-    final String time =
-        allDay ? "ALL DAY" : (data['startTime']?.toString() ?? "--:--");
+    final String time = isMatch
+        ? (data['meetingTime']?.toString() ?? data['startTime']?.toString() ?? "--:--")
+        : (allDay ? "ALL DAY" : (data['startTime']?.toString() ?? "--:--"));
     final String type = (data['title'] ?? data['type'] ?? "Événement").toString();
     final String teamName = _audienceText(data);
+    final String? meetingLoc = data['meetingLocation']?.toString().trim();
+    final String locationDisplay = isMatch
+        ? ((meetingLoc != null && meetingLoc.isNotEmpty)
+            ? "RDV $meetingLoc"
+            : (data['location']?.toString() ?? "Stade du club"))
+        : (data['location']?.toString() ?? "Stade du club");
 
-    final Color teamColor = _getTeamColor(teamName);
+    final String eventCategory = (data['category'] as String?)?.trim() ?? '';
+    // Couleur par catégorie (orange et vert réservés aux badges licence)
+    final Color teamColor = eventCategory.isNotEmpty
+        ? ViroColors.getCategoryColor(eventCategory)
+        : ViroColors.primary;
 
     final Map<String, dynamic> attendance = Map<String, dynamic>.from(
       data['attendance'] ?? {},
@@ -788,10 +826,7 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
                               const SizedBox(width: 4),
                               Expanded(
                                 child: Text(
-                                  _truncate(
-                                    data['location']?.toString() ??
-                                        "Stade du club",
-                                  ),
+                                  _truncate(locationDisplay, max: 50),
                                   style: const TextStyle(
                                     color: Colors.grey,
                                     fontSize: 13,
@@ -823,13 +858,6 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
         ),
       ),
     );
-  }
-
-  /// Couleur déterministe par équipe (pour bordure, bloc heure, type).
-  Color _getTeamColor(String teamName) {
-    if (teamName.isEmpty) return ViroColors.primary;
-    final index = teamName.hashCode.abs() % ViroColors.clubPalette.length;
-    return ViroColors.clubPalette[index];
   }
 
   Widget _buildPresenceNumber(int count, Color color) {

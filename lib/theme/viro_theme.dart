@@ -25,6 +25,40 @@ class ViroColors {
     Color(0xFFD50000), // Rouge Racing
     Color(0xFF0091EA), // Bleu Azur Sport
   ];
+
+  /// Indices de la palette réservés aux badges licence (orange = 3, vert = 5) ; les catégories ne les utilisent pas.
+  static const List<int> _categoryPaletteIndices = [0, 1, 2, 4, 6, 7];
+
+  /// Couleur déterministe par catégorie d'équipe (U7, Sénior, etc.).
+  /// Utilisée dans le planning et la page équipes. N'utilise pas orange ni vert (réservés à Licencié / Non licencié).
+  static Color getCategoryColor(String category) {
+    if (category.trim().isEmpty) return primary;
+    final i = category.hashCode.abs() % _categoryPaletteIndices.length;
+    return clubPalette[_categoryPaletteIndices[i]];
+  }
+
+  /// Couleurs réservées pour les badges membres (rôles + licence) afin qu'aucun ne se confonde.
+  /// Licencié = vert (index 5), Non licencié = orange (index 3) obligatoirement.
+  static const Map<String, int> _memberBadgeReservedIndices = {
+    'Admin Fondateur': 0,
+    'Admin': 1,
+    'Coach': 2,
+    'Non licencié': 3, // Orange (palette index 3)
+    'Sans catégorie': 4,
+    'Licencié': 5, // Vert (palette index 5)
+  };
+
+  /// Couleur pour un badge de la page membres : rôles, licence ou catégorie.
+  /// Garantit que Admin Fondateur, Admin, Coach, Licencié, Non licencié et Sans catégorie ont des couleurs distinctes.
+  static Color getMemberBadgeColor(String label) {
+    final key = label.trim();
+    if (key.isEmpty) return primary;
+    final reserved = _memberBadgeReservedIndices[key];
+    if (reserved != null) return clubPalette[reserved];
+    // Catégories : utiliser uniquement les indices 6 et 7 pour éviter toute collision avec les réservés
+    final categoryIndex = 6 + (key.hashCode.abs() % 2);
+    return clubPalette[categoryIndex];
+  }
 }
 
 class ViroTheme {

@@ -375,13 +375,21 @@ class _AdminTeamsPageState extends State<AdminTeamsPage> {
                       data['playerIds'] ?? [],
                     );
                     final playerCount = playerIds.length;
+                    final String category = (data['category'] as String?)?.trim() ?? '';
+                    // Couleur par catégorie (orange et vert réservés aux badges licence)
+                    final Color categoryColor = category.isNotEmpty
+                        ? ViroColors.getCategoryColor(category)
+                        : ViroColors.primary;
 
                     return Container(
                       margin: const EdgeInsets.only(bottom: 12),
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(15),
-                        border: Border.all(color: ViroColors.borderColor),
+                        border: Border.all(
+                          color: categoryColor.withValues(alpha: 0.6),
+                          width: 2,
+                        ),
                       ),
                       child: ListTile(
                         contentPadding: const EdgeInsets.symmetric(
@@ -389,15 +397,15 @@ class _AdminTeamsPageState extends State<AdminTeamsPage> {
                           vertical: 8,
                         ),
                         leading: CircleAvatar(
-                          backgroundColor: ViroColors.primary.withValues(alpha: 0.1),
+                          backgroundColor: categoryColor.withValues(alpha: 0.15),
                           backgroundImage:
                               (_clubLogoUrl != null && _clubLogoUrl!.isNotEmpty)
                               ? CachedNetworkImageProvider(_clubLogoUrl!)
                               : null,
                           child: (_clubLogoUrl == null || _clubLogoUrl!.isEmpty)
-                              ? const Icon(
+                              ? Icon(
                                   Icons.groups_rounded,
-                                  color: ViroColors.primary,
+                                  color: categoryColor,
                                 )
                               : null,
                         ),

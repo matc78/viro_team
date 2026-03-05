@@ -51,16 +51,11 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
 
   @override
   Widget build(BuildContext context) {
-    final bool hasFilters =
-        _selectedCategory != null ||
-        _selectedTeam != null ||
-        _search.isNotEmpty;
     final bool canEdit =
         widget.currentViewerRole == 'admin' ||
         widget.currentViewerRole == 'admin_fondateur';
     final bool canSendInviteLink =
-        canEdit ||
-        widget.currentViewerRole == 'coach';
+        canEdit || widget.currentViewerRole == 'coach';
 
     return Scaffold(
       appBar: AppBar(
@@ -88,164 +83,281 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
           return CustomScrollView(
             slivers: [
               SliverToBoxAdapter(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.all(12.0),
-                      child: TextField(
-                        controller: _searchController,
-                        decoration: const InputDecoration(
-                          prefixIcon: Icon(Icons.search),
-                          hintText: "Rechercher par nom ou email",
-                          border: OutlineInputBorder(),
-                        ),
-                        onChanged: (val) =>
-                            setState(() => _search = val.trim().toLowerCase()),
+                child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                  stream: appFirestore
+                      .collection(FirebaseCollections.clubs)
+                      .doc(widget.clubId)
+                      .collection(FirebaseCollections.teams)
+                      .snapshots(),
+                  builder: (context, teamsSnapshot) {
+                    final categories = <String>{};
+                    final allTeamsByCategory = <String, List<String>>{};
+                    if (teamsSnapshot.hasData) {
+                      for (final doc in teamsSnapshot.data!.docs) {
+                        final data = doc.data();
+                        final cat = (data['category'] as String?)?.trim() ?? '';
+                        final team = (data['name'] as String?)?.trim() ?? '';
+                        if (cat.isNotEmpty) categories.add(cat);
+                        if (team.isNotEmpty) {
+                          allTeamsByCategory
+                              .putIfAbsent(cat, () => [])
+                              .add(team);
+                        }
+                      }
+                    }
+                    final catList = categories.toList()..sort();
+                    final List<String> teamList = _selectedCategory != null
+                        ? List<String>.from(
+                            allTeamsByCategory[_selectedCategory] ?? [],
+                          )
+                        : allTeamsByCategory.values
+                              .expand((l) => l)
+                              .toSet()
+                              .toList();
+                    teamList.sort();
+                    if (_selectedCategory != null &&
+                        !catList.contains(_selectedCategory)) {
+                      _selectedCategory = null;
+                    }
+                    if (_selectedTeam != null &&
+                        !teamList.contains(_selectedTeam)) {
+                      _selectedTeam = null;
+                    }
+                    final hasFilters =
+                        _selectedCategory != null ||
+                        _selectedTeam != null ||
+                        _search.isNotEmpty;
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
                       ),
-                    ),
-                    StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                      stream: appFirestore
-                          .collection(FirebaseCollections.clubs)
-                          .doc(widget.clubId)
-                          .collection(FirebaseCollections.teams)
-                          .snapshots(),
-                      builder: (context, teamsSnapshot) {
-                        final categories = <String>{};
-                        final teams = <String>{};
-                        if (teamsSnapshot.hasData) {
-                          for (final doc in teamsSnapshot.data!.docs) {
-                            final data = doc.data();
-                            final cat = data['category'] as String?;
-                            final team = data['name'] as String?;
-                            if (cat != null && cat.isNotEmpty)
-                              categories.add(cat);
-                            if (team != null && team.isNotEmpty)
-                              teams.add(team);
-                          }
-                        }
-                        final catList = categories.toList()..sort();
-                        final teamList = teams.toList()..sort();
-                        if (_selectedCategory != null &&
-                            !catList.contains(_selectedCategory)) {
-                          _selectedCategory = null;
-                        }
-                        if (_selectedTeam != null &&
-                            !teamList.contains(_selectedTeam)) {
-                          _selectedTeam = null;
-                        }
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 4,
+                      child: Card(
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          side: const BorderSide(
+                            color: ViroColors.borderColor,
+                            width: 1,
                           ),
-                          child: Row(
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(12.0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              Expanded(
-                                child: DropdownButtonFormField<String>(
-                                  initialValue: _selectedCategory,
-                                  decoration: const InputDecoration(
-                                    labelText: "Catégorie",
-                                    border: OutlineInputBorder(),
-                                    contentPadding: EdgeInsets.symmetric(
-                                      horizontal: 12,
+                              Row(
+                                children: [
+                                  Text(
+                                    "Filtres",
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.grey[700],
                                     ),
                                   ),
-                                  hint: const Text("Catégorie"),
-                                  items:
-                                      catList
-                                          .map(
-                                            (c) => DropdownMenuItem(
-                                              value: c,
-                                              child: Text(c),
-                                            ),
-                                          )
-                                          .toList()
-                                        ..insert(
-                                          0,
-                                          const DropdownMenuItem(
-                                            value: null,
-                                            child: Text("Catégorie"),
-                                          ),
-                                        ),
-                                  onChanged: (val) =>
-                                      setState(() => _selectedCategory = val),
+                                  const Spacer(),
+                                  if (hasFilters)
+                                    IconButton(
+                                      onPressed: () => setState(() {
+                                        _selectedCategory = null;
+                                        _selectedTeam = null;
+                                        _search = "";
+                                        _searchController.clear();
+                                      }),
+                                      icon: Icon(
+                                        Icons.filter_alt_off,
+                                        color: ViroColors.primary,
+                                        size: 22,
+                                      ),
+                                      tooltip: "Effacer les filtres",
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(
+                                        minWidth: 36,
+                                        minHeight: 36,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                              TextField(
+                                controller: _searchController,
+                                decoration: const InputDecoration(
+                                  prefixIcon: Icon(Icons.search),
+                                  hintText: "Rechercher par nom ou email",
+                                  border: OutlineInputBorder(),
+                                  isDense: true,
+                                  contentPadding: EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 12,
+                                  ),
+                                ),
+                                onChanged: (val) => setState(
+                                  () => _search = val.trim().toLowerCase(),
                                 ),
                               ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: DropdownButtonFormField<String>(
-                                  initialValue: _selectedTeam,
-                                  decoration: const InputDecoration(
-                                    labelText: "Équipe",
-                                    border: OutlineInputBorder(),
-                                    contentPadding: EdgeInsets.symmetric(
-                                      horizontal: 12,
+                              const SizedBox(height: 10),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: LayoutBuilder(
+                                      builder: (context, constraints) {
+                                        return SizedBox(
+                                          width: constraints.maxWidth,
+                                          child: DropdownButtonFormField<String>(
+                                            initialValue: _selectedCategory,
+                                            decoration: const InputDecoration(
+                                              labelText: "Catégorie",
+                                              border: OutlineInputBorder(),
+                                              contentPadding:
+                                                  EdgeInsets.symmetric(
+                                                    horizontal: 12,
+                                                  ),
+                                            ),
+                                            hint: const Text("Catégorie"),
+                                            isExpanded: true,
+                                            selectedItemBuilder: (context) {
+                                              return [
+                                                const Text("Catégorie"),
+                                                ...catList.map(
+                                                  (c) => Row(
+                                                    mainAxisSize:
+                                                        MainAxisSize.min,
+                                                    children: [
+                                                      Container(
+                                                        width: 12,
+                                                        height: 12,
+                                                        decoration: BoxDecoration(
+                                                          color:
+                                                              ViroColors.getCategoryColor(
+                                                                c,
+                                                              ),
+                                                          shape:
+                                                              BoxShape.circle,
+                                                          border: Border.all(
+                                                            color: Colors
+                                                                .grey
+                                                                .shade300,
+                                                            width: 0.5,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                      const SizedBox(width: 8),
+                                                      Expanded(
+                                                        child: Text(
+                                                          c,
+                                                          overflow: TextOverflow
+                                                              .ellipsis,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ];
+                                            },
+                                            items: [
+                                              const DropdownMenuItem<String>(
+                                                value: null,
+                                                child: Text("Catégorie"),
+                                              ),
+                                              ...catList.map(
+                                                (c) => DropdownMenuItem<String>(
+                                                  value: c,
+                                                  child: Row(
+                                                    mainAxisSize:
+                                                        MainAxisSize.min,
+                                                    children: [
+                                                      Container(
+                                                        width: 12,
+                                                        height: 12,
+                                                        decoration: BoxDecoration(
+                                                          color:
+                                                              ViroColors.getCategoryColor(
+                                                                c,
+                                                              ),
+                                                          shape:
+                                                              BoxShape.circle,
+                                                          border: Border.all(
+                                                            color: Colors
+                                                                .grey
+                                                                .shade300,
+                                                            width: 0.5,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                      const SizedBox(width: 8),
+                                                      Text(c),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                            onChanged: (val) => setState(
+                                              () => _selectedCategory = val,
+                                            ),
+                                          ),
+                                        );
+                                      },
                                     ),
                                   ),
-                                  hint: const Text("Équipe"),
-                                  items:
-                                      teamList
-                                          .map(
-                                            (t) => DropdownMenuItem(
-                                              value: t,
-                                              child: Text(t),
-                                            ),
-                                          )
-                                          .toList()
-                                        ..insert(
-                                          0,
-                                          const DropdownMenuItem(
-                                            value: null,
-                                            child: Text("Équipe"),
-                                          ),
-                                        ),
-                                  onChanged: (val) =>
-                                      setState(() => _selectedTeam = val),
-                                ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: LayoutBuilder(
+                                      builder: (context, constraints) {
+                                        return SizedBox(
+                                          width: constraints.maxWidth,
+                                          child:
+                                              DropdownButtonFormField<String>(
+                                                initialValue: _selectedTeam,
+                                                decoration:
+                                                    const InputDecoration(
+                                                      labelText: "Équipe",
+                                                      border:
+                                                          OutlineInputBorder(),
+                                                      contentPadding:
+                                                          EdgeInsets.symmetric(
+                                                            horizontal: 12,
+                                                          ),
+                                                    ),
+                                                hint: const Text("Équipe"),
+                                                items:
+                                                    teamList
+                                                        .map(
+                                                          (t) =>
+                                                              DropdownMenuItem<
+                                                                String
+                                                              >(
+                                                                value: t,
+                                                                child: Text(t),
+                                                              ),
+                                                        )
+                                                        .toList()
+                                                      ..insert(
+                                                        0,
+                                                        const DropdownMenuItem<
+                                                          String
+                                                        >(
+                                                          value: null,
+                                                          child: Text("Équipe"),
+                                                        ),
+                                                      ),
+                                                onChanged: (val) => setState(
+                                                  () => _selectedTeam = val,
+                                                ),
+                                              ),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
                           ),
-                        );
-                      },
-                    ),
-                    AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 150),
-                      child: hasFilters
-                          ? SafeArea(
-                              top: false,
-                              child: Padding(
-                                padding: const EdgeInsets.all(12.0),
-                                child: SizedBox(
-                                  width: double.infinity,
-                                  child: ElevatedButton(
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.grey.shade200,
-                                      foregroundColor: Colors.black87,
-                                      side: const BorderSide(
-                                        color: ViroColors.primary,
-                                      ),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(10),
-                                      ),
-                                      padding: const EdgeInsets.symmetric(
-                                        vertical: 12,
-                                      ),
-                                    ),
-                                    onPressed: () => setState(() {
-                                      _selectedCategory = null;
-                                      _selectedTeam = null;
-                                      _search = "";
-                                      _searchController.clear();
-                                    }),
-                                    child: const Text("Enlever les filtres"),
-                                  ),
-                                ),
-                              ),
-                            )
-                          : const SizedBox.shrink(),
-                    ),
-                  ],
+                        ),
+                      ),
+                    );
+                  },
                 ),
               ),
               _buildMembersSliver(snapshot),
@@ -253,7 +365,10 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(12, 16, 12, 24),
-                    child: _buildBottomCardContent(canEdit: canEdit, canSendInviteLink: canSendInviteLink),
+                    child: _buildBottomCardContent(
+                      canEdit: canEdit,
+                      canSendInviteLink: canSendInviteLink,
+                    ),
                   ),
                 ),
               SliverToBoxAdapter(
@@ -389,7 +504,12 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
     return SliverList(
       delegate: SliverChildBuilderDelegate((context, index) {
         if (slots[index] == -1) {
-          return const Divider(height: 1, color: Colors.black);
+          return const Divider(
+            height: 1,
+            color: Colors.black,
+            indent: 50,
+            endIndent: 50,
+          );
         }
         final entryIndex = slots[index];
         final entry = filtered[entryIndex];
@@ -404,9 +524,6 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
         final avatarUrl = effectiveAvatarUrl(data);
         final isPlayer = role == 'player';
         final userCategories = getUserCategories(data);
-        final category = isPlayer
-            ? (userCategories.isNotEmpty ? userCategories.join(", ") : "")
-            : "";
         final isStaff =
             role == 'admin_fondateur' || role == 'coach' || role == 'admin';
         final roleLabel = role
@@ -457,7 +574,7 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
           roleLabel: roleLabel,
           isPlayer: isPlayer,
           isStaff: isStaff,
-          category: category,
+          categories: userCategories,
           teamNames: getUserTeamNames(data),
           hasLicense: playerHasLicense(data, widget.clubId),
           trailing: trailing,
@@ -476,7 +593,10 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
   }
 
   /// Contenu de la carte "En attente" (sans Positioned, pour le scroll).
-  Widget _buildBottomCardContent({required bool canEdit, required bool canSendInviteLink}) {
+  Widget _buildBottomCardContent({
+    required bool canEdit,
+    required bool canSendInviteLink,
+  }) {
     return Card(
       margin: EdgeInsets.zero,
       child: Padding(
@@ -507,14 +627,20 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
               ],
             ),
             const SizedBox(height: 8),
-            _buildPendingMembersSection(canEdit: canEdit, canSendInviteLink: canSendInviteLink),
+            _buildPendingMembersSection(
+              canEdit: canEdit,
+              canSendInviteLink: canSendInviteLink,
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildPendingMembersSection({required bool canEdit, required bool canSendInviteLink}) {
+  Widget _buildPendingMembersSection({
+    required bool canEdit,
+    required bool canSendInviteLink,
+  }) {
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
       stream: appFirestore
           .collection(FirebaseCollections.clubs)
@@ -669,8 +795,7 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
     String currentLastName,
     String currentEmail,
   ) async {
-    final firstNameController =
-        TextEditingController(text: currentFirstName);
+    final firstNameController = TextEditingController(text: currentFirstName);
     final lastNameController = TextEditingController(text: currentLastName);
     final emailController = TextEditingController(text: currentEmail);
     final formKey = GlobalKey<FormState>();
@@ -774,9 +899,7 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
       });
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Membre en attente mis à jour."),
-          ),
+          const SnackBar(content: Text("Membre en attente mis à jour.")),
         );
       }
     } catch (e) {
@@ -796,7 +919,9 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
   /// Génère un token unique et URL-safe pour un lien d'invite (utilisé comme ID de document).
   String _generateInviteToken() {
     final bytes = List<int>.generate(18, (_) => Random.secure().nextInt(256));
-    return base64UrlEncode(bytes).replaceAll('=', '').replaceAll('+', '-').replaceAll('/', '_');
+    return base64UrlEncode(
+      bytes,
+    ).replaceAll('=', '').replaceAll('+', '-').replaceAll('/', '_');
   }
 
   Future<void> _sendInviteLink(
@@ -839,38 +964,45 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
           .collection(FirebaseCollections.inviteLinks)
           .doc(token)
           .set({
-        'token': token,
-        'pendingMemberId': pendingMemberId,
-        'email': email.trim().toLowerCase(),
-        'firstName': firstName.trim(),
-        'lastName': lastName.trim(),
-        'expiresAt': Timestamp.fromDate(expiresAt),
-        'teams': teams,
-      });
+            'token': token,
+            'pendingMemberId': pendingMemberId,
+            'email': email.trim().toLowerCase(),
+            'firstName': firstName.trim(),
+            'lastName': lastName.trim(),
+            'expiresAt': Timestamp.fromDate(expiresAt),
+            'teams': teams,
+          });
       final inviteUrl = 'viroteam://invite?t=$token&c=$clubId';
       final toAddress = email.trim().toLowerCase();
       final subject = 'Invitation ViroTeam - Créer votre compte';
       final bodyLong =
-        'Bonjour $firstName,\n\n'
-        'Votre club vous invite à rejoindre ViroTeam. Téléchargez l\'application puis ouvrez ce lien pour créer votre compte :\n\n'
-        '$inviteUrl\n\n'
-        'Ce lien est valide 7 jours.';
+          'Bonjour $firstName,\n\n'
+          'Votre club vous invite à rejoindre ViroTeam. Téléchargez l\'application puis ouvrez ce lien pour créer votre compte :\n\n'
+          '$inviteUrl\n\n'
+          'Ce lien est valide 7 jours.';
       await Clipboard.setData(ClipboardData(text: bodyLong));
       // Corps court dans l'URI pour limiter la longueur (destinataire + corps pré-remplis)
       final bodyShort =
-        'Bonjour $firstName,\n\n'
-        'Ouvrez ce lien pour créer votre compte ViroTeam (valide 7 jours) :\n\n$inviteUrl';
+          'Bonjour $firstName,\n\n'
+          'Ouvrez ce lien pour créer votre compte ViroTeam (valide 7 jours) :\n\n$inviteUrl';
       final subjectEnc = Uri.encodeComponent(subject);
       final bodyEnc = Uri.encodeComponent(bodyShort);
-      final mailtoString = 'mailto:$toAddress?subject=$subjectEnc&body=$bodyEnc';
+      final mailtoString =
+          'mailto:$toAddress?subject=$subjectEnc&body=$bodyEnc';
       final mailto = Uri.parse(mailtoString);
       bool mailOpened = false;
       try {
         if (await canLaunchUrl(mailto)) {
-          mailOpened = await launchUrl(mailto, mode: LaunchMode.externalApplication);
+          mailOpened = await launchUrl(
+            mailto,
+            mode: LaunchMode.externalApplication,
+          );
         }
         if (!mailOpened) {
-          mailOpened = await launchUrl(mailto, mode: LaunchMode.platformDefault);
+          mailOpened = await launchUrl(
+            mailto,
+            mode: LaunchMode.platformDefault,
+          );
         }
       } catch (_) {
         mailOpened = false;
@@ -886,10 +1018,10 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
           ),
         );
       }
-      AppLogger.instance.info(
-        'Lien d\'invite créé',
-        {'clubId': clubId, 'pendingMemberId': pendingMemberId},
-      );
+      AppLogger.instance.info('Lien d\'invite créé', {
+        'clubId': clubId,
+        'pendingMemberId': pendingMemberId,
+      });
     } catch (e) {
       AppLogger.instance.error(
         'Erreur création lien d\'invite',
@@ -1784,7 +1916,7 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
   }
 }
 
-/// Tuile par membre : carte lisible avec avatar, nom, rôle, et infos joueur (catégorie, équipe, licence).
+/// Tuile par membre : carte lisible avec avatar, nom, rôle, et infos joueur (catégories, équipe, licence).
 class _MemberTile extends StatelessWidget {
   final String userId;
   final String firstName;
@@ -1793,7 +1925,7 @@ class _MemberTile extends StatelessWidget {
   final String roleLabel;
   final bool isPlayer;
   final bool isStaff;
-  final String category;
+  final List<String> categories;
   final List<String> teamNames;
   final bool hasLicense;
   final Widget trailing;
@@ -1807,12 +1939,48 @@ class _MemberTile extends StatelessWidget {
     required this.roleLabel,
     required this.isPlayer,
     required this.isStaff,
-    required this.category,
+    required this.categories,
     required this.teamNames,
     required this.hasLicense,
     required this.trailing,
     required this.onTap,
   });
+
+  Widget _roleBadge(String label, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: color,
+        ),
+      ),
+    );
+  }
+
+  Widget _categoryBadge(String label, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: color,
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1844,15 +2012,7 @@ class _MemberTile extends StatelessWidget {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: const [],
-                  ),
-                ),
-                const SizedBox(width: 8),
+                const Spacer(),
                 Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.end,
@@ -1861,66 +2021,42 @@ class _MemberTile extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: isStaff
-                                    ? ViroColors.primary.withValues(alpha: 0.12)
-                                    : ViroColors.secondary.withValues(
-                                        alpha: 0.5,
-                                      ),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Text(
-                                isStaff
-                                    ? roleLabel
-                                    : (category.isNotEmpty
-                                          ? category
-                                          : "Sans catégorie"),
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: isStaff
-                                      ? ViroColors.primary
-                                      : Colors.grey[800],
-                                ),
-                              ),
-                            ),
-                            if (isPlayer) ...[
-                              const SizedBox(width: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 4,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: hasLicense
-                                      ? ViroColors.success.withValues(
-                                          alpha: 0.15,
-                                        )
-                                      : Colors.orange.withValues(alpha: 0.15),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Text(
-                                  hasLicense ? "Licencié" : "Non licencié",
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w500,
-                                    color: hasLicense
-                                        ? ViroColors.success
-                                        : Colors.orange[800],
+                        if (isStaff)
+                          _roleBadge(
+                            roleLabel,
+                            ViroColors.getMemberBadgeColor(roleLabel),
+                          )
+                        else
+                          Wrap(
+                            spacing: 6,
+                            runSpacing: 4,
+                            alignment: WrapAlignment.end,
+                            children: [
+                              if (categories.isEmpty)
+                                _categoryBadge(
+                                  "Sans catégorie",
+                                  ViroColors.getMemberBadgeColor(
+                                    "Sans catégorie",
+                                  ),
+                                )
+                              else
+                                ...categories.map(
+                                  (cat) => _categoryBadge(
+                                    cat,
+                                    ViroColors.getMemberBadgeColor(cat),
                                   ),
                                 ),
-                              ),
                             ],
-                          ],
-                        ),
+                          ),
+                        if (isPlayer) ...[
+                          const SizedBox(width: 8),
+                          _categoryBadge(
+                            hasLicense ? "Licencié" : "Non licencié",
+                            ViroColors.getMemberBadgeColor(
+                              hasLicense ? "Licencié" : "Non licencié",
+                            ),
+                          ),
+                        ],
                         const SizedBox(width: 8),
                         trailing,
                       ],

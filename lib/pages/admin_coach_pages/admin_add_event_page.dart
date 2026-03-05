@@ -38,6 +38,8 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
 
   final _locationController = TextEditingController(text: "Stade du club");
   final _titleController = TextEditingController();
+  final _meetingLocationController = TextEditingController();
+  TimeOfDay _rdvTime = const TimeOfDay(hour: 17, minute: 30);
   bool _allDay = false;
 
   bool _isRecurring = false;
@@ -55,6 +57,7 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
   void dispose() {
     _locationController.dispose();
     _titleController.dispose();
+    _meetingLocationController.dispose();
     super.dispose();
   }
 
@@ -166,7 +169,7 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
             ? null
             : _endTime.format(context);
 
-        batch.set(ref, {
+        final Map<String, dynamic> eventData = {
           'title': (_selectedType == 'Entraînement' || _selectedType == 'Match')
               ? null
               : _titleController.text.trim(),
@@ -203,7 +206,13 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
           'creatorId': FirebaseAuth.instance.currentUser?.uid,
           'clubName': clubName,
           'clubSport': clubSport,
-        });
+        };
+        if (_selectedType == 'Match') {
+          eventData['meetingLocation'] =
+              _meetingLocationController.text.trim();
+          eventData['meetingTime'] = _rdvTime.format(context);
+        }
+        batch.set(ref, eventData);
       }
 
       await batch.commit();
@@ -581,7 +590,11 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
                         _summonAllPlayers = true;
                         _selectedPlayersMatch.clear();
                       }
-                      if (_selectedType == 'Match') _weeksCount = 1;
+                      if (_selectedType == 'Match') {
+                        _weeksCount = 1;
+                        _meetingLocationController.text =
+                            _locationController.text;
+                      }
                     }),
                   ),
 
@@ -692,7 +705,7 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
                   TextFormField(
                     controller: _locationController,
                     decoration: _inputDecoration(
-                      "Lieu",
+                      _selectedType == 'Match' ? "Lieu du match" : "Lieu",
                       Icons.location_on_outlined,
                     ),
                   ),
@@ -703,7 +716,9 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
                     children: [
                       Expanded(
                         child: _buildDateTimePicker(
-                          label: "Jour",
+                          label: _selectedType == 'Match'
+                              ? "Jour du match"
+                              : "Jour",
                           value: DateFormat(
                             'dd/MM/yyyy',
                             'fr_FR',
@@ -728,7 +743,9 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
                       children: [
                         Expanded(
                           child: _buildDateTimePicker(
-                            label: "Début",
+                            label: _selectedType == 'Match'
+                                ? "Heure du match"
+                                : "Début",
                             value: _startTime.format(context),
                             onTap: () => _pickTime(true),
                           ),
@@ -744,6 +761,29 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
                           ),
                       ],
                     ),
+
+                  if (_selectedType == 'Match') ...[
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _meetingLocationController,
+                      decoration: _inputDecoration(
+                        "Lieu du RDV",
+                        Icons.place_outlined,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildDateTimePicker(
+                            label: "Heure du RDV (même jour que le match)",
+                            value: _rdvTime.format(context),
+                            onTap: _pickRdvTime,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
 
                   if (_selectedType == 'Entraînement') ...[
                     const Divider(height: 40),
@@ -874,6 +914,14 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
     if (picked != null) {
       setState(() => isStart ? _startTime = picked : _endTime = picked);
     }
+  }
+
+  Future<void> _pickRdvTime() async {
+    TimeOfDay? picked = await showTimePicker(
+      context: context,
+      initialTime: _rdvTime,
+    );
+    if (picked != null) setState(() => _rdvTime = picked);
   }
 
   Widget _buildDropdown<T>({

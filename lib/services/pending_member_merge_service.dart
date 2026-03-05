@@ -167,11 +167,16 @@ class PendingMemberMergeService {
         });
       }
 
-      // Ajouter l'utilisateur aux événements des équipes (teamMemberIds + attendance)
+      // Ajouter l'utilisateur aux événements des équipes et retirer l'ancien pendingMemberId
       for (final t in teamInfos) {
         final teamName = t['teamName'] as String? ?? '';
         if (teamName.isEmpty) continue;
-        await _addUserToEventsForTeam(clubId, teamName, userId);
+        await _addUserToEventsForTeam(
+          clubId,
+          teamName,
+          userId,
+          replacePendingMemberId: pendingMemberId,
+        );
       }
 
       // Supprimer le pending_member
@@ -206,11 +211,13 @@ class PendingMemberMergeService {
   }
 
   /// Ajoute [userId] à tous les événements du club concernant l'équipe [teamName].
+  /// Si [replacePendingMemberId] est fourni, le retire des teamMemberIds et de attendance.
   Future<void> _addUserToEventsForTeam(
     String clubId,
     String teamName,
-    String userId,
-  ) async {
+    String userId, {
+    String? replacePendingMemberId,
+  }) async {
     if (teamName.isEmpty) return;
     final eventsRef = _db
         .collection(FirebaseCollections.clubs)
@@ -231,6 +238,14 @@ class PendingMemberMergeService {
           'teamMemberIds': FieldValue.arrayUnion([userId]),
           'attendance.$userId': 'none',
         }, SetOptions(merge: true));
+
+        if (replacePendingMemberId != null &&
+            replacePendingMemberId.isNotEmpty) {
+          await doc.reference.update({
+            'teamMemberIds': FieldValue.arrayRemove([replacePendingMemberId]),
+            'attendance.$replacePendingMemberId': FieldValue.delete(),
+          });
+        }
       }
     }
   }
