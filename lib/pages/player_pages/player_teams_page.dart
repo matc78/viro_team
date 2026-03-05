@@ -280,20 +280,10 @@ class _PlayerTeamsPageState extends State<PlayerTeamsPage> {
     );
   }
 
-  // Générer une couleur unique par clubId
+  /// Couleur du club (même palette que planning, home, etc. pour cohérence).
   Color _getClubColor(String clubId) {
-    final colors = [
-      Colors.blue,
-      Colors.green,
-      Colors.orange,
-      Colors.purple,
-      Colors.teal,
-      Colors.indigo,
-      Colors.pink,
-      Colors.amber,
-    ];
-    final index = clubId.hashCode % colors.length;
-    return colors[index.abs()];
+    final index = clubId.hashCode % ViroColors.clubPalette.length;
+    return ViroColors.clubPalette[index.abs()];
   }
 
   Widget _buildTeamCard(
