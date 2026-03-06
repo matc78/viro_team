@@ -117,27 +117,17 @@ class _PlayerInfosPageState extends State<PlayerInfosPage> {
           }
 
           final Set<String> clubIdsSet = {};
-          final roles = userData['roles'] as Map<String, dynamic>? ?? {};
-
-          // Priorité : contexte actif, puis roles, puis legacy
           final activeContext =
               userData['activeContext'] as Map<String, dynamic>?;
           final activeClubId = activeContext?['clubId'] as String?;
           if (activeClubId != null && activeClubId.isNotEmpty) {
             clubIdsSet.add(activeClubId);
           }
-
-          if (roles['player'] is Map) {
-            final playerData = roles['player'] as Map;
-            if (playerData['clubs'] is List) {
-              final clubs = (playerData['clubs'] as List).whereType<Map>();
-              for (var club in clubs) {
-                final clubIdFromClub = club['clubId'] as String?;
-                if (clubIdFromClub != null) clubIdsSet.add(clubIdFromClub);
-              }
-            }
+          final summaries = (userData['profileSummaries'] as List?)?.whereType<Map>().toList() ?? [];
+          for (final e in summaries) {
+            final cid = e['clubId'] as String?;
+            if (cid != null && cid.isNotEmpty) clubIdsSet.add(cid);
           }
-
           final legacyClubId = userData['clubId'] as String?;
           if (legacyClubId != null) clubIdsSet.add(legacyClubId);
           clubIdsSet.add(widget.clubId);
@@ -700,54 +690,46 @@ class _ClubAnnouncementsList extends StatelessWidget {
           .get();
 
       final userData = userDoc.data() ?? {};
-      final roles = userData['roles'] as Map<String, dynamic>? ?? {};
-
       final Map<String, Map<String, dynamic>> clubsInfo = {};
+      final summaries = (userData['profileSummaries'] as List?)?.whereType<Map>().toList() ?? [];
+      final playerSummaries = summaries.where((e) => e['role'] == 'player').toList();
 
-      // Récupérer les informations pour chaque club
-      if (roles['player'] is Map) {
-        final playerData = roles['player'] as Map;
-        if (playerData['clubs'] is List) {
-          final clubs = (playerData['clubs'] as List).whereType<Map>();
-          for (var club in clubs) {
-            final clubIdFromClub = club['clubId'] as String?;
-            if (clubIdFromClub == null) continue;
+      for (final e in playerSummaries) {
+        final clubIdFromClub = e['clubId'] as String?;
+        if (clubIdFromClub == null) continue;
 
-            final teamIds =
-                (club['teamIds'] as List?)?.whereType<String>().toList() ?? [];
-
-            // Catégories : source unifiée roles.player.clubs, sinon fetch depuis équipes
-            List<String> categories =
-                (club['categories'] as List?)?.whereType<String>().toList() ??
-                [];
-            if (categories.isEmpty && teamIds.isNotEmpty) {
-              final teamsSnapshot = await appFirestore
-                  .collection(FirebaseCollections.clubs)
-                  .doc(clubIdFromClub)
-                  .collection(FirebaseCollections.teams)
-                  .get();
-              for (var teamDoc in teamsSnapshot.docs) {
-                if (teamIds.contains(teamDoc.id)) {
-                  final category = teamDoc.data()['category'] as String?;
-                  if (category != null && category.isNotEmpty) {
-                    categories.add(category);
-                  }
-                }
+        final member = await getMemberData(appFirestore, userId, clubIdFromClub);
+        final player = member?['player'] as Map<String, dynamic>?;
+        final teamIds =
+            (player?['teamIds'] as List?)?.whereType<String>().toList() ?? [];
+        List<String> categories =
+            (player?['categories'] as List?)?.whereType<String>().toList() ?? [];
+        if (categories.isEmpty && teamIds.isNotEmpty) {
+          final teamsSnapshot = await appFirestore
+              .collection(FirebaseCollections.clubs)
+              .doc(clubIdFromClub)
+              .collection(FirebaseCollections.teams)
+              .get();
+          for (var teamDoc in teamsSnapshot.docs) {
+            if (teamIds.contains(teamDoc.id)) {
+              final category = teamDoc.data()['category'] as String?;
+              if (category != null && category.isNotEmpty) {
+                categories.add(category);
               }
             }
-            if (categories.isEmpty) {
-              final userCategory = userData['category'] as String?;
-              if (userCategory != null && userCategory.isNotEmpty) {
-                categories.add(userCategory);
-              }
-            }
-
-            clubsInfo[clubIdFromClub] = {
-              'teamIds': teamIds,
-              'categories': categories,
-            };
           }
         }
+        if (categories.isEmpty) {
+          final userCategory = userData['category'] as String?;
+          if (userCategory != null && userCategory.isNotEmpty) {
+            categories.add(userCategory);
+          }
+        }
+
+        clubsInfo[clubIdFromClub] = {
+          'teamIds': teamIds,
+          'categories': categories,
+        };
       }
 
       return clubsInfo;

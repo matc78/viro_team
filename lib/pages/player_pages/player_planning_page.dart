@@ -34,30 +34,16 @@ class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
     );
   }
 
-  // Extraire tous les clubIds du joueur depuis roles
+  // Extraire tous les clubIds du joueur depuis profileSummaries
   List<String> _extractClubIds(Map<String, dynamic>? userData) {
     final Set<String> clubIdsSet = {};
-    final roles = userData?['roles'] as Map<String, dynamic>? ?? {};
-
-    // Player
-    if (roles['player'] is Map) {
-      final playerData = roles['player'] as Map;
-      // Nouvelle structure : liste de clubs
-      if (playerData['clubs'] is List) {
-        final clubs = (playerData['clubs'] as List).whereType<Map>();
-        for (var club in clubs) {
-          final clubId = club['clubId'] as String?;
-          if (clubId != null) clubIdsSet.add(clubId);
-        }
-      }
-      // Ancienne structure : clubId direct (compatibilité)
-      else {
-        final playerClubId = playerData['clubId'] as String?;
-        if (playerClubId != null) clubIdsSet.add(playerClubId);
-      }
+    final summaries =
+        (userData?['profileSummaries'] as List?)?.whereType<Map>().toList() ??
+        [];
+    for (final e in summaries) {
+      final cid = e['clubId'] as String?;
+      if (cid != null && cid.isNotEmpty) clubIdsSet.add(cid);
     }
-
-    // Priorité contexte actif, puis fallback legacy
     final activeContext = userData?['activeContext'] as Map<String, dynamic>?;
     final activeClubId = activeContext?['clubId'] as String?;
     if (activeClubId != null && activeClubId.isNotEmpty) {
@@ -330,66 +316,102 @@ class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
           seasonEndMap[clubId] = date;
         }
 
-        // Combiner tous les événements avec leur clubId
-        final List<Map<String, dynamic>> allEventsWithClub = [];
-        for (int i = 0; i < snapshots.length && i < clubIds.length; i++) {
-          final snapshot = snapshots[i];
-          if (snapshot == null) continue;
-          final clubId = clubIds[i];
-          final seasonEndDate = seasonEndMap[clubId];
-          for (var doc in snapshot.docs) {
-            final data = doc.data() as Map<String, dynamic>;
-            // Vérifier si le joueur est concerné par cet événement
-            if (_isEventRelevantForPlayer(data)) {
-              // Vérifier si l'événement est terminé
-              bool isSeasonCompleted = false;
-              if (seasonEndDate != null && data['type'] == 'Entraînement') {
-                final eventDate = (data['date'] as Timestamp?)?.toDate();
-                if (eventDate != null && eventDate.isAfter(seasonEndDate)) {
-                  isSeasonCompleted = true;
+        // Charger teams/categories par club pour le filtre (async)
+        return FutureBuilder<Map<String, Map<String, List<String>>>>(
+          future: () async {
+            final map = <String, Map<String, List<String>>>{};
+            final uid = _currentUserId;
+            if (uid.isNotEmpty) {
+              for (final cid in clubIds) {
+                final teams = await getUserTeamNames(
+                  appFirestore,
+                  uid,
+                  clubId: cid,
+                );
+                final cats = await getUserCategories(
+                  appFirestore,
+                  uid,
+                  clubId: cid,
+                );
+                map[cid] = {'teams': teams, 'categories': cats};
+              }
+            }
+            return map;
+          }(),
+          builder: (context, userDataSnap) {
+            if (!userDataSnap.hasData) {
+              return const Center(child: ViroLoader(size: 50));
+            }
+            final userTeamsByClub = userDataSnap.data!;
+            // Combiner tous les événements avec leur clubId
+            final List<Map<String, dynamic>> allEventsWithClub = [];
+            for (int i = 0; i < snapshots.length && i < clubIds.length; i++) {
+              final snapshot = snapshots[i];
+              if (snapshot == null) continue;
+              final clubId = clubIds[i];
+              final seasonEndDate = seasonEndMap[clubId];
+              final userTeams = userTeamsByClub[clubId]?['teams'] ?? [];
+              final userCategories =
+                  userTeamsByClub[clubId]?['categories'] ?? [];
+              for (var doc in snapshot.docs) {
+                final data = doc.data() as Map<String, dynamic>;
+                if (_isEventRelevantForPlayer(
+                  data,
+                  userTeams,
+                  userCategories,
+                )) {
+                  bool isSeasonCompleted = false;
+                  if (seasonEndDate != null && data['type'] == 'Entraînement') {
+                    final eventDate = (data['date'] as Timestamp?)?.toDate();
+                    if (eventDate != null && eventDate.isAfter(seasonEndDate)) {
+                      isSeasonCompleted = true;
+                    }
+                  }
+                  allEventsWithClub.add({
+                    'eventId': doc.id,
+                    'eventData': data,
+                    'clubId': clubId,
+                    'isSeasonCompleted': isSeasonCompleted,
+                  });
                 }
               }
-
-              allEventsWithClub.add({
-                'eventId': doc.id,
-                'eventData': data,
-                'clubId': clubId,
-                'isSeasonCompleted': isSeasonCompleted,
-              });
             }
-          }
-        }
 
-        // Trier par date
-        allEventsWithClub.sort((a, b) {
-          final eventDataA = a['eventData'] as Map<String, dynamic>;
-          final eventDataB = b['eventData'] as Map<String, dynamic>;
-          final dateA =
-              (eventDataA['date'] as Timestamp?)?.toDate() ?? DateTime.now();
-          final dateB =
-              (eventDataB['date'] as Timestamp?)?.toDate() ?? DateTime.now();
-          return dateA.compareTo(dateB);
-        });
+            // Trier par date
+            allEventsWithClub.sort((a, b) {
+              final eventDataA = a['eventData'] as Map<String, dynamic>;
+              final eventDataB = b['eventData'] as Map<String, dynamic>;
+              final dateA =
+                  (eventDataA['date'] as Timestamp?)?.toDate() ??
+                  DateTime.now();
+              final dateB =
+                  (eventDataB['date'] as Timestamp?)?.toDate() ??
+                  DateTime.now();
+              return dateA.compareTo(dateB);
+            });
 
-        if (allEventsWithClub.isEmpty) {
-          return _buildEmptyState();
-        }
+            if (allEventsWithClub.isEmpty) {
+              return _buildEmptyState();
+            }
 
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: allEventsWithClub.length,
-          itemBuilder: (context, index) {
-            final eventInfo = allEventsWithClub[index];
-            final eventId = eventInfo['eventId'] as String;
-            final eventData = eventInfo['eventData'] as Map<String, dynamic>;
-            final clubId = eventInfo['clubId'] as String;
-            final isSeasonCompleted =
-                eventInfo['isSeasonCompleted'] as bool? ?? false;
-            return _buildEventCard(
-              eventId,
-              eventData,
-              clubId,
-              isSeasonCompleted: isSeasonCompleted,
+            return ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: allEventsWithClub.length,
+              itemBuilder: (context, index) {
+                final eventInfo = allEventsWithClub[index];
+                final eventId = eventInfo['eventId'] as String;
+                final eventData =
+                    eventInfo['eventData'] as Map<String, dynamic>;
+                final clubId = eventInfo['clubId'] as String;
+                final isSeasonCompleted =
+                    eventInfo['isSeasonCompleted'] as bool? ?? false;
+                return _buildEventCard(
+                  eventId,
+                  eventData,
+                  clubId,
+                  isSeasonCompleted: isSeasonCompleted,
+                );
+              },
             );
           },
         );
@@ -431,22 +453,21 @@ class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
     return results;
   }
 
-  // Vérifier si un événement concerne le joueur
-  bool _isEventRelevantForPlayer(Map<String, dynamic> eventData) {
+  // Vérifier si un événement concerne le joueur (teamNames/categories chargés depuis member)
+  bool _isEventRelevantForPlayer(
+    Map<String, dynamic> eventData,
+    List<String> userTeams,
+    List<String> userCategories,
+  ) {
     final memberIds = (eventData['teamMemberIds'] as List<dynamic>?) ?? [];
     final teamNames =
         (eventData['teamNames'] as List?)?.whereType<String>().toList() ?? [];
     final teamName = eventData['teamName'] as String?;
     final eventCategory = eventData['category'] as String?;
 
-    // Si l'événement a des teamMemberIds, vérifier si le joueur y est
     if (memberIds.isNotEmpty) {
       return memberIds.contains(_currentUserId);
     }
-
-    // Sinon, vérifier par équipe ou catégorie (source unifiée : roles.player.clubs)
-    final userTeams = getUserTeamNames(_userData ?? {});
-    final userCategories = getUserCategories(_userData ?? {});
 
     final bool matchTeam =
         teamNames.any(userTeams.contains) ||
@@ -527,10 +548,7 @@ class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
             .doc(clubId)
             .get();
         final pendingIds = await _getPendingPlayerIdsForTeam(clubId, teamName);
-        return {
-          'club': clubDoc,
-          'pendingCount': pendingIds.length,
-        };
+        return {'club': clubDoc, 'pendingCount': pendingIds.length};
       }(),
       builder: (context, snap) {
         final clubDoc = snap.data?['club'] as DocumentSnapshot?;
@@ -541,8 +559,8 @@ class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
 
         // Total convoqués = membres avec compte + pending ; sans réponse = total - présents - absents
         final totalConvoqued = teamMemberIds.length + pendingCount;
-        final noResponseCount =
-            (totalConvoqued - presentCount - absentCount).clamp(0, totalConvoqued);
+        final noResponseCount = (totalConvoqued - presentCount - absentCount)
+            .clamp(0, totalConvoqued);
 
         return Container(
           margin: const EdgeInsets.only(bottom: 12),

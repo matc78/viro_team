@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:viro_team/constants/firebase_collections.dart';
+import 'package:viro_team/services/membership_service.dart';
 import 'package:viro_team/utils/firestore_instance.dart';
 
 /// Récupère plusieurs documents utilisateur en batch pour éviter les N+1 queries.
@@ -34,76 +35,39 @@ Future<List<DocumentSnapshot<Map<String, dynamic>>>> fetchUsersBatch(List<String
       .toList();
 }
 
+/// Met à jour le champ profileSummaries de users/{uid} (liste [{ clubId, role }, ...]).
+/// À appeler après chaque création/modification/suppression d'un membership.
+Future<void> updateProfileSummariesForUser(
+  String uid,
+  List<Map<String, String>> summaries,
+) async {
+  await appFirestore
+      .collection(FirebaseCollections.users)
+      .doc(uid)
+      .set({
+    'profileSummaries': summaries,
+    'updatedAt': FieldValue.serverTimestamp(),
+  }, SetOptions(merge: true));
+}
+
 /// Vérifie si un utilisateur appartient à un club avec un rôle donné
-/// Compatible avec l'ancienne structure (clubId/role à la racine) et la nouvelle (roles/activeContext)
+/// Utilise profileSummaries et activeContext.
 bool userBelongsToClub(Map<String, dynamic> userData, String clubId, {String? role}) {
-  // Nouvelle structure : vérifier dans roles
-  final roles = userData['roles'] as Map<String, dynamic>?;
-  
-  if (roles != null) {
-    // Vérifier player
-    if (roles['player'] is Map) {
-      final playerData = roles['player'] as Map;
-      
-      // Nouvelle structure : liste de clubs
-      if (playerData['clubs'] is List) {
-        final clubs = (playerData['clubs'] as List).whereType<Map>();
-        final isInClub = clubs.any((club) => club['clubId'] == clubId);
-        if (isInClub) {
-          if (role == null || role == 'player') return true;
-        }
-      }
-      // Ancienne structure : clubId direct (compatibilité)
-      else if (playerData['clubId'] == clubId) {
-        if (role == null || role == 'player') return true;
-      }
-    }
-    
-    // Vérifier coach
-    if (roles['coach'] is List) {
-      for (var coach in (roles['coach'] as List)) {
-        if (coach is Map) {
-          final coachClubId = coach['clubId'] as String?;
-          if (coachClubId == clubId) {
-            if (role == null || role == 'coach') return true;
-          }
-        }
-      }
-    }
-    
-    // Vérifier admin_fondateur (roles.admin_fondateur = liste d'ids de clubs fondés)
-    if (roles['admin_fondateur'] is List) {
-      final fondateurClubIds = (roles['admin_fondateur'] as List).whereType<String>();
-      if (fondateurClubIds.contains(clubId)) {
-        if (role == null || role == 'admin' || role == 'admin_fondateur') return true;
-      }
-    }
-    // Vérifier admin
-    if (roles['admin'] is List) {
-      final adminClubIds = (roles['admin'] as List).whereType<String>();
-      if (adminClubIds.contains(clubId)) {
-        if (role == null || role == 'admin' || role == 'admin_fondateur') return true;
+  // Option A : profileSummaries (liste [{ clubId, role }])
+  final summaries = userData['profileSummaries'] as List?;
+  if (summaries != null) {
+    for (final e in summaries) {
+      if (e is Map && e['clubId'] == clubId) {
+        final r = e['role'] as String?;
+        if (role == null || r == role) return true;
       }
     }
   }
 
-  // Contexte actif (priorité sur legacy)
+  // Contexte actif
   final activeContext = userData['activeContext'] as Map<String, dynamic>?;
   if (activeContext != null && activeContext['clubId'] == clubId) {
     if (role == null || role == activeContext['role']) return true;
-  }
-
-  // Ancienne structure (fallback pour compatibilité)
-  final legacyClubId = userData['clubId'] as String?;
-  if (legacyClubId == clubId) {
-    if (role != null) {
-      final legacyRole = userData['role'] as String?;
-      if (role == 'admin_fondateur') {
-        return legacyRole == 'admin_fondateur' || legacyRole == 'admin';
-      }
-      return legacyRole == role;
-    }
-    return true;
   }
 
   return false;
@@ -124,57 +88,21 @@ List<DocumentSnapshot<Map<String, dynamic>>> filterUsersByClub(
 
 /// Récupère le rôle principal d'un utilisateur dans un club donné
 String? getUserRoleInClub(Map<String, dynamic> userData, String clubId) {
-  final roles = userData['roles'] as Map<String, dynamic>?;
-  
-  if (roles != null) {
-    // Vérifier player
-    if (roles['player'] is Map) {
-      final playerData = roles['player'] as Map;
-      
-      // Nouvelle structure : liste de clubs
-      if (playerData['clubs'] is List) {
-        final clubs = (playerData['clubs'] as List).whereType<Map>();
-        final isInClub = clubs.any((club) => club['clubId'] == clubId);
-        if (isInClub) return 'player';
+  // Option A : profileSummaries
+  final summaries = userData['profileSummaries'] as List?;
+  if (summaries != null) {
+    for (final e in summaries) {
+      if (e is Map && e['clubId'] == clubId) {
+        final r = e['role'] as String?;
+        if (r != null && r.isNotEmpty) return r;
       }
-      // Ancienne structure : clubId direct (compatibilité)
-      else if (playerData['clubId'] == clubId) {
-        return 'player';
-      }
-    }
-    
-    // Vérifier coach
-    if (roles['coach'] is List) {
-      for (var coach in (roles['coach'] as List)) {
-        if (coach is Map) {
-          final coachClubId = coach['clubId'] as String?;
-          if (coachClubId == clubId) return 'coach';
-        }
-      }
-    }
-    
-    // Vérifier admin_fondateur (priorité sur admin)
-    if (roles['admin_fondateur'] is List) {
-      final fondateurClubIds = (roles['admin_fondateur'] as List).whereType<String>();
-      if (fondateurClubIds.contains(clubId)) return 'admin_fondateur';
-    }
-    // Vérifier admin
-    if (roles['admin'] is List) {
-      final adminClubIds = (roles['admin'] as List).whereType<String>();
-      if (adminClubIds.contains(clubId)) return 'admin';
     }
   }
 
-  // Contexte actif (priorité sur legacy)
+  // Contexte actif
   final activeContext = userData['activeContext'] as Map<String, dynamic>?;
   if (activeContext != null && activeContext['clubId'] == clubId) {
     return activeContext['role'] as String?;
-  }
-
-  // Fallback ancienne structure
-  final legacyClubId = userData['clubId'] as String?;
-  if (legacyClubId == clubId) {
-    return userData['role'] as String?;
   }
 
   return null;
@@ -184,55 +112,19 @@ String? getUserRoleInClub(Map<String, dynamic> userData, String clubId) {
 /// Retourne une liste de rôles (peut contenir 'player', 'coach', 'admin', etc.)
 List<String> getAllUserRolesInClub(Map<String, dynamic> userData, String clubId) {
   final result = <String>[];
-  final roles = userData['roles'] as Map<String, dynamic>?;
-  
-  if (roles != null) {
-    // Vérifier player
-    if (roles['player'] is Map) {
-      final playerData = roles['player'] as Map;
-      
-      // Nouvelle structure : liste de clubs
-      if (playerData['clubs'] is List) {
-        final clubs = (playerData['clubs'] as List).whereType<Map>();
-        final isInClub = clubs.any((club) => club['clubId'] == clubId);
-        if (isInClub) result.add('player');
-      }
-      // Ancienne structure : clubId direct (compatibilité)
-      else if (playerData['clubId'] == clubId) {
-        result.add('player');
+  // Option A : profileSummaries
+  final summaries = userData['profileSummaries'] as List?;
+  if (summaries != null) {
+    for (final e in summaries) {
+      if (e is Map && e['clubId'] == clubId) {
+        final r = e['role'] as String?;
+        if (r != null && r.isNotEmpty && !result.contains(r)) result.add(r);
       }
     }
-    
-    // Vérifier coach
-    if (roles['coach'] is List) {
-      for (var coach in (roles['coach'] as List)) {
-        if (coach is Map) {
-          final coachClubId = coach['clubId'] as String?;
-          if (coachClubId == clubId) {
-            result.add('coach');
-            break; // Un seul rôle coach par club
-          }
-        }
-      }
-    }
-    
-    // Vérifier admin_fondateur (priorité : fondateur du club)
-    if (roles['admin_fondateur'] is List) {
-      final fondateurClubIds = (roles['admin_fondateur'] as List).whereType<String>();
-      if (fondateurClubIds.contains(clubId)) {
-        result.add('admin_fondateur');
-      }
-    }
-    // Vérifier admin (si pas déjà fondateur)
-    if (roles['admin'] is List) {
-      final adminClubIds = (roles['admin'] as List).whereType<String>();
-      if (adminClubIds.contains(clubId) && !result.contains('admin_fondateur')) {
-        result.add('admin');
-      }
-    }
+    if (result.isNotEmpty) return result;
   }
 
-  // Contexte actif (priorité sur legacy)
+  // Contexte actif
   final activeContext = userData['activeContext'] as Map<String, dynamic>?;
   if (activeContext != null && activeContext['clubId'] == clubId) {
     final activeRole = activeContext['role'] as String?;
@@ -241,78 +133,105 @@ List<String> getAllUserRolesInClub(Map<String, dynamic> userData, String clubId)
     }
   }
 
-  if (result.isEmpty) {
-    // Fallback ancienne structure
-    final legacyClubId = userData['clubId'] as String?;
-    if (legacyClubId == clubId) {
-      final legacyRole = userData['role'] as String?;
-      if (legacyRole != null) {
-        result.add(legacyRole);
-      }
-    }
-  }
-
   return result;
 }
 
-/// Extrait les noms d'équipes de l'utilisateur depuis roles.player.clubs (source unifiée).
-/// Fallback sur les champs racine teamNames/teamName pour les anciennes données.
-List<String> getUserTeamNames(Map<String, dynamic> userData) {
-  final roles = userData['roles'] as Map<String, dynamic>? ?? {};
-  if (roles['player'] is Map) {
-    final playerData = roles['player'] as Map;
-    if (playerData['clubs'] is List) {
-      final clubs = (playerData['clubs'] as List).whereType<Map>();
-      final names = <String>{};
-      for (var club in clubs) {
-        final list = (club['teamNames'] as List?)?.whereType<String>().toList() ?? [];
+/// Récupère les données du document member pour un utilisateur dans un club.
+Future<Map<String, dynamic>?> getMemberData(
+  FirebaseFirestore firestore,
+  String uid,
+  String clubId,
+) async {
+  final snap = await firestore
+      .collection(FirebaseCollections.clubs)
+      .doc(clubId)
+      .collection(FirebaseCollections.members)
+      .doc(uid)
+      .get();
+  return snap.data();
+}
+
+/// Extrait les noms d'équipes du joueur depuis les documents member.
+/// Si [clubId] est fourni, lit uniquement ce club ; sinon agrège tous les clubs player via profileSummaries.
+Future<List<String>> getUserTeamNames(
+  FirebaseFirestore firestore,
+  String uid, {
+  String? clubId,
+  List<Map<String, String>>? profileSummaries,
+}) async {
+  if (clubId != null) {
+    final member = await getMemberData(firestore, uid, clubId);
+    final player = member?['player'] as Map<String, dynamic>?;
+    final list = (player?['teamNames'] as List?)?.whereType<String>().toList() ?? [];
+    return list;
+  }
+  List<Map<String, String>> summaries = profileSummaries ?? [];
+  if (summaries.isEmpty) {
+    final userSnap = await firestore.collection(FirebaseCollections.users).doc(uid).get();
+    final raw = userSnap.data()?['profileSummaries'] as List?;
+    if (raw != null) {
+      summaries = raw
+          .where((e) => e is Map)
+          .map((e) => Map<String, String>.from(Map.from(e).map((k, v) => MapEntry(k.toString(), v?.toString() ?? ''))))
+          .toList();
+    }
+  }
+  final names = <String>{};
+  for (final e in summaries) {
+    if (e['role'] == 'player') {
+      final cid = e['clubId'];
+      if (cid != null && cid.isNotEmpty) {
+        final member = await getMemberData(firestore, uid, cid);
+        final player = member?['player'] as Map<String, dynamic>?;
+        final list = (player?['teamNames'] as List?)?.whereType<String>() ?? [];
         names.addAll(list);
       }
-      if (names.isNotEmpty) return names.toList();
-    }
-    // Migration : ancienne structure clubId direct
-    if (playerData['clubId'] != null) {
-      final list = (playerData['teamNames'] as List?)?.whereType<String>().toList() ?? [];
-      if (list.isNotEmpty) return list;
     }
   }
-  // Fallback champs racine (données legacy)
-  final rootList = (userData['teamNames'] as List?)?.whereType<String>().toList() ?? [];
-  if (rootList.isNotEmpty) return rootList;
-  final single = userData['teamName'] as String?;
-  if (single != null && single.isNotEmpty) return [single];
-  return [];
+  return names.toList();
 }
 
-/// Extrait les catégories d'équipes de l'utilisateur depuis roles.player.clubs (source unifiée).
-/// Fallback sur les champs racine categories/category pour les anciennes données.
-List<String> getUserCategories(Map<String, dynamic> userData) {
-  final roles = userData['roles'] as Map<String, dynamic>? ?? {};
-  if (roles['player'] is Map) {
-    final playerData = roles['player'] as Map;
-    if (playerData['clubs'] is List) {
-      final clubs = (playerData['clubs'] as List).whereType<Map>();
-      final cats = <String>{};
-      for (var club in clubs) {
-        final list = (club['categories'] as List?)?.whereType<String>().toList() ?? [];
+/// Extrait les catégories du joueur depuis les documents member.
+Future<List<String>> getUserCategories(
+  FirebaseFirestore firestore,
+  String uid, {
+  String? clubId,
+  List<Map<String, String>>? profileSummaries,
+}) async {
+  if (clubId != null) {
+    final member = await getMemberData(firestore, uid, clubId);
+    final player = member?['player'] as Map<String, dynamic>?;
+    final list = (player?['categories'] as List?)?.whereType<String>().toList() ?? [];
+    return list;
+  }
+  List<Map<String, String>> summaries = profileSummaries ?? [];
+  if (summaries.isEmpty) {
+    final userSnap = await firestore.collection(FirebaseCollections.users).doc(uid).get();
+    final raw = userSnap.data()?['profileSummaries'] as List?;
+    if (raw != null) {
+      summaries = raw
+          .where((e) => e is Map)
+          .map((e) => Map<String, String>.from(Map.from(e).map((k, v) => MapEntry(k.toString(), v?.toString() ?? ''))))
+          .toList();
+    }
+  }
+  final cats = <String>{};
+  for (final e in summaries) {
+    if (e['role'] == 'player') {
+      final cid = e['clubId'];
+      if (cid != null && cid.isNotEmpty) {
+        final member = await getMemberData(firestore, uid, cid);
+        final player = member?['player'] as Map<String, dynamic>?;
+        final list = (player?['categories'] as List?)?.whereType<String>() ?? [];
         cats.addAll(list);
       }
-      if (cats.isNotEmpty) return cats.toList();
-    }
-    if (playerData['clubId'] != null) {
-      final list = (playerData['categories'] as List?)?.whereType<String>().toList() ?? [];
-      if (list.isNotEmpty) return list;
     }
   }
-  final rootList = (userData['categories'] as List?)?.whereType<String>().toList() ?? [];
-  if (rootList.isNotEmpty) return rootList;
-  final single = userData['category'] as String?;
-  if (single != null && single.isNotEmpty) return [single];
-  return [];
+  return cats.toList();
 }
 
-/// Met à jour roles.player.clubs pour un joueur (ajout ou retrait d'équipe).
-/// Source unifiée : teamIds, teamNames, categories stockés par club.
+/// Met à jour le document member pour un joueur (ajout ou retrait d'équipe).
+/// Ne lit ni n'écrit plus le champ roles du document user.
 Future<void> updatePlayerClubsForTeam(
   FirebaseFirestore firestore,
   String userId,
@@ -322,106 +241,42 @@ Future<void> updatePlayerClubsForTeam(
   required String teamName,
   required String teamCategory,
 }) async {
-  final userRef = firestore.collection(FirebaseCollections.users).doc(userId);
-  final userSnap = await userRef.get();
-  final userData = userSnap.data() ?? {};
-  final roles = userData['roles'] as Map<String, dynamic>? ?? {};
-  final playerData = roles['player'] as Map<String, dynamic>? ?? {};
+  final memberData = await getMemberData(firestore, userId, clubId);
+  if (memberData == null) return;
 
-  List<Map<String, dynamic>> clubsList;
-  if (playerData['clubs'] is List) {
-    clubsList = (playerData['clubs'] as List)
-        .map((e) => Map<String, dynamic>.from(e as Map))
-        .toList();
-  } else if (playerData['clubId'] != null) {
-    clubsList = [
-      {
-        'clubId': playerData['clubId'],
-        'teamIds': (playerData['teamIds'] as List?)?.toList() ?? [],
-        'teamNames': (playerData['teamNames'] as List?)?.toList() ?? [],
-        'categories': (playerData['categories'] as List?)?.toList() ?? [],
-        if (playerData['license'] != null) 'license': playerData['license'],
-      },
-    ];
+  final player = Map<String, dynamic>.from((memberData['player'] as Map?) ?? {});
+  final teamIds = List<String>.from((player['teamIds'] as List?)?.whereType<String>() ?? []);
+  final teamNames = List<String>.from((player['teamNames'] as List?)?.whereType<String>() ?? []);
+  final categories = List<String>.from((player['categories'] as List?)?.whereType<String>() ?? []);
+
+  if (add) {
+    if (!teamIds.contains(teamId)) teamIds.add(teamId);
+    if (teamName.isNotEmpty && !teamNames.contains(teamName)) teamNames.add(teamName);
+    if (teamCategory.isNotEmpty && !categories.contains(teamCategory)) categories.add(teamCategory);
   } else {
-    clubsList = [];
+    teamIds.remove(teamId);
+    teamNames.remove(teamName);
+    categories.remove(teamCategory);
   }
 
-  bool found = false;
-  for (var club in clubsList) {
-    if (club['clubId'] == clubId) {
-      found = true;
-      final teamIds =
-          List<String>.from((club['teamIds'] as List?)?.whereType<String>() ?? []);
-      final teamNames =
-          List<String>.from((club['teamNames'] as List?)?.whereType<String>() ?? []);
-      final categories =
-          List<String>.from((club['categories'] as List?)?.whereType<String>() ?? []);
-
-      if (add) {
-        if (!teamIds.contains(teamId)) teamIds.add(teamId);
-        if (teamName.isNotEmpty && !teamNames.contains(teamName)) {
-          teamNames.add(teamName);
-        }
-        if (teamCategory.isNotEmpty && !categories.contains(teamCategory)) {
-          categories.add(teamCategory);
-        }
-      } else {
-        teamIds.remove(teamId);
-        teamNames.remove(teamName);
-        categories.remove(teamCategory);
-      }
-
-      club['teamIds'] = teamIds;
-      club['teamNames'] = teamNames;
-      club['categories'] = categories;
-      break;
-    }
-  }
-
-  if (!found && add) {
-    clubsList.add({
-      'clubId': clubId,
-      'teamIds': [teamId],
-      'teamNames': teamName.isNotEmpty ? [teamName] : [],
-      'categories': teamCategory.isNotEmpty ? [teamCategory] : [],
-      'joinedAt': Timestamp.fromDate(DateTime.now()),
-    });
-  }
-
-  final updatedRoles = Map<String, dynamic>.from(roles);
-  updatedRoles['player'] = {...playerData, 'clubs': clubsList};
-
-  await userRef.set({
-    'roles': updatedRoles,
-    '_adminClubId': clubId,
-  }, SetOptions(merge: true));
+  await MembershipService.instance.updateMemberPlayer(
+    uid: userId,
+    clubId: clubId,
+    license: player['license'] as String?,
+    teamIds: teamIds,
+    teamNames: teamNames,
+    categories: categories,
+  );
 }
 
-/// Vérifie si un joueur a un numéro de licence dans un club donné
-/// Retourne true si la licence existe et n'est pas vide, false sinon
-bool playerHasLicense(Map<String, dynamic> userData, String clubId) {
-  final roles = userData['roles'] as Map<String, dynamic>?;
-  
-  if (roles != null && roles['player'] is Map) {
-    final playerData = roles['player'] as Map;
-    
-    // Nouvelle structure : liste de clubs
-    if (playerData['clubs'] is List) {
-      final clubs = (playerData['clubs'] as List).whereType<Map>();
-      final club = clubs.firstWhere(
-        (c) => c['clubId'] == clubId,
-        orElse: () => <String, dynamic>{},
-      );
-      final license = club['license'] as String?;
-      return license != null && license.trim().isNotEmpty;
-    }
-    // Ancienne structure : clubId direct (compatibilité)
-    else if (playerData['clubId'] == clubId) {
-      final license = playerData['license'] as String?;
-      return license != null && license.trim().isNotEmpty;
-    }
-  }
-  
-  return false;
+/// Vérifie si un joueur a un numéro de licence dans un club donné (lecture depuis le document member).
+Future<bool> playerHasLicense(
+  FirebaseFirestore firestore,
+  String uid,
+  String clubId,
+) async {
+  final member = await getMemberData(firestore, uid, clubId);
+  final player = member?['player'] as Map<String, dynamic>?;
+  final license = player?['license'] as String?;
+  return license != null && license.trim().isNotEmpty;
 }

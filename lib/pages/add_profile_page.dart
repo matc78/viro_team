@@ -183,65 +183,19 @@ class _AddProfilePageState extends State<AddProfilePage> {
     String? role,
   }) {
     final List<String> excluded = [];
-    final roles = userData['roles'] as Map<String, dynamic>? ?? {};
-
-    // Ne exclure que les clubs pour le rôle sélectionné
-    if (role == 'player') {
-      if (roles['player'] is Map) {
-        final playerData = roles['player'] as Map;
-        if (playerData['clubs'] is List) {
-          final clubs = (playerData['clubs'] as List).whereType<Map>();
-          excluded.addAll(
-            clubs
-                .map((c) => c['clubId'] as String? ?? '')
-                .where((id) => id.isNotEmpty),
-          );
+    final summaries = (userData['profileSummaries'] as List?)?.whereType<Map>().toList() ?? [];
+    if (role != null) {
+      for (final e in summaries) {
+        if (e['role'] == role) {
+          final cid = e['clubId'] as String?;
+          if (cid != null && cid.isNotEmpty) excluded.add(cid);
         }
       }
       return excluded;
     }
-
-    if (role == 'coach') {
-      if (roles['coach'] is List) {
-        final coaches = (roles['coach'] as List).whereType<Map>();
-        excluded.addAll(
-          coaches
-              .map((c) => c['clubId'] as String? ?? '')
-              .where((id) => id.isNotEmpty),
-        );
-      }
-      return excluded;
-    }
-
-    if (role == 'admin') {
-      if (roles['admin'] is List) {
-        excluded.addAll((roles['admin'] as List).whereType<String>());
-      }
-      return excluded;
-    }
-
-    // Pas de rôle sélectionné : exclure tous les clubs (comportement par défaut)
-    if (roles['player'] is Map) {
-      final playerData = roles['player'] as Map;
-      if (playerData['clubs'] is List) {
-        final clubs = (playerData['clubs'] as List).whereType<Map>();
-        excluded.addAll(
-          clubs
-              .map((c) => c['clubId'] as String? ?? '')
-              .where((id) => id.isNotEmpty),
-        );
-      }
-    }
-    if (roles['coach'] is List) {
-      final coaches = (roles['coach'] as List).whereType<Map>();
-      excluded.addAll(
-        coaches
-            .map((c) => c['clubId'] as String? ?? '')
-            .where((id) => id.isNotEmpty),
-      );
-    }
-    if (roles['admin'] is List) {
-      excluded.addAll((roles['admin'] as List).whereType<String>());
+    for (final e in summaries) {
+      final cid = e['clubId'] as String?;
+      if (cid != null && cid.isNotEmpty) excluded.add(cid);
     }
     return excluded;
   }

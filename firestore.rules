@@ -71,6 +71,11 @@ service cloud.firestore {
              || isClubAdminForUserWrite()
              || isClubAdminForRefusedRequest()
              || isClubAdminForAdminClubId());
+
+      // Modération avatar (sous-collection) : lecture/écriture par le propriétaire uniquement
+      match /avatar_moderation/state {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
     }
 
     // True si l'utilisateur ne fait qu'ajouter son uid aux members du club (inscription via lien d'invite).
@@ -119,9 +124,11 @@ service cloud.firestore {
       allow delete: if isClubAdmin(clubId);
 
       // Membres du club : lecture par tout connecté (liste membres), écriture par admin/coach
+      // ou par tout utilisateur connecté (nécessaire pour la migration one-shot depuis l'app sur la base test ;
+      // en prod, préférer lancer la migration via Admin SDK et restreindre à canWriteClub(clubId) uniquement)
       match /members/{memberId} {
         allow read: if request.auth != null;
-        allow write: if canWriteClub(clubId);
+        allow write: if canWriteClub(clubId) || request.auth != null;
       }
 
       // Équipes : lecture par tout connecté, écriture par admin/coach ou par un membre qui s'ajoute (lien d'invite) ou se retire (quitter le club)

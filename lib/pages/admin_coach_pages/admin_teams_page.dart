@@ -8,6 +8,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:viro_team/constants/firebase_collections.dart';
+import 'package:viro_team/services/membership_service.dart';
 import 'package:viro_team/services/team_service.dart';
 import '../../theme/viro_theme.dart';
 import '../../utils/app_logger.dart';
@@ -664,16 +665,32 @@ class _AdminTeamsPageState extends State<AdminTeamsPage> {
     try {
       await _cleanupEvents(teamName, memberIds);
 
-      // Mise à jour des profils membres (source unifiée : roles.player.clubs)
+      // Mise à jour des profils membres (members + roles.player.clubs)
       for (final uid in memberIds) {
         final isCoach = coachIds.contains(uid);
         if (isCoach) {
-          await _db.collection(FirebaseCollections.users).doc(uid).set({
-            'coachedTeams': FieldValue.arrayRemove([
-              {'teamId': teamDoc.id, 'teamName': teamName},
-            ]),
-            '_adminClubId': widget.clubId,
-          }, SetOptions(merge: true));
+          final memberRef = _db
+              .collection(FirebaseCollections.clubs)
+              .doc(widget.clubId)
+              .collection(FirebaseCollections.members)
+              .doc(uid);
+          final memberSnap = await memberRef.get();
+          if (memberSnap.exists) {
+            final coach = (memberSnap.data()?['coach'] as Map?) ?? {};
+            final tIds = List<String>.from((coach['teamIds'] as List?)?.whereType<String>() ?? []);
+            final tNames = List<String>.from((coach['teamNames'] as List?)?.whereType<String>() ?? tIds);
+            final idx = tIds.indexOf(teamDoc.id);
+            if (idx >= 0) {
+              tIds.removeAt(idx);
+              if (idx < tNames.length) tNames.removeAt(idx);
+              await MembershipService.instance.updateMemberCoach(
+                uid: uid,
+                clubId: widget.clubId,
+                teamIds: tIds,
+                teamNames: tNames,
+              );
+            }
+          }
         } else {
           await updatePlayerClubsForTeam(
             _db,

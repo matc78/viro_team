@@ -11,6 +11,7 @@ import '../../widget/viro_loader.dart';
 import '../../utils/firebase_helpers.dart';
 import '../../utils/firebase_error_handler.dart';
 import '../../utils/avatar_moderation.dart';
+import '../../services/membership_service.dart';
 
 class ProfilDisplayPage extends StatelessWidget {
   final String userId;
@@ -39,79 +40,28 @@ class ProfilDisplayPage extends StatelessWidget {
     final legacyRole = currentUserData['role'] as String?;
     final finalRole = role ?? legacyRole;
 
-    // Admins et coachs voient toujours les coordonnées
+    // Admins et coachs voient les coordonnées ; un joueur ne les voit jamais (sauf les siennes)
     if (finalRole == 'admin' ||
         finalRole == 'admin_fondateur' ||
         finalRole == 'coach') {
       return {'hasAccess': true, 'role': finalRole};
     }
 
-    // Un joueur peut voir les coordonnées des coachs/admins des clubs auxquels il appartient
-    final viewerClubIds = _getViewerPlayerClubIds(currentUserData);
-    if (viewerClubIds.isEmpty) return {'hasAccess': false, 'role': finalRole};
+    // Un joueur ne peut jamais voir les coordonnées d'un autre utilisateur
+    if (finalRole == 'player') {
+      return {'hasAccess': false, 'role': finalRole};
+    }
 
-    final viewedUserDoc = await appFirestore
-        .collection(FirebaseCollections.users)
-        .doc(userId)
-        .get();
-    final viewedData = viewedUserDoc.data();
-    if (viewedData == null) return {'hasAccess': false, 'role': finalRole};
+    return {'hasAccess': false, 'role': finalRole};
+  }
 
-    final staffClubIds = _getStaffClubIds(viewedData);
-    final hasSharedClub = viewerClubIds.any(
-      (clubId) => staffClubIds.contains(clubId),
+  void _showFullScreenAvatar(BuildContext context, String imageUrl) {
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        opaque: true,
+        pageBuilder: (_, __, ___) => _FullScreenAvatarView(imageUrl: imageUrl),
+      ),
     );
-    final hasAccess = hasSharedClub;
-
-    return {'hasAccess': hasAccess, 'role': finalRole};
-  }
-
-  /// Club IDs auxquels le viewer appartient en tant que joueur
-  List<String> _getViewerPlayerClubIds(Map<String, dynamic> userData) {
-    final ids = <String>{};
-    // Priorité : contexte actif, puis roles, puis legacy
-    final activeContext = userData['activeContext'] as Map<String, dynamic>?;
-    final activeClubId = activeContext?['clubId'] as String?;
-    if (activeClubId != null && activeClubId.isNotEmpty) ids.add(activeClubId);
-
-    final roles = userData['roles'] as Map<String, dynamic>?;
-    if (roles != null && roles['player'] is Map) {
-      final playerData = roles['player'] as Map;
-      if (playerData['clubs'] is List) {
-        for (final c in (playerData['clubs'] as List)) {
-          if (c is Map) {
-            final clubId = c['clubId'] as String?;
-            if (clubId != null && clubId.isNotEmpty) ids.add(clubId);
-          }
-        }
-      } else if (playerData['clubId'] != null) {
-        ids.add(playerData['clubId'] as String);
-      }
-    }
-    final legacyClubId = userData['clubId'] as String?;
-    if (legacyClubId != null && legacyClubId.isNotEmpty) ids.add(legacyClubId);
-    return ids.toList();
-  }
-
-  /// Club IDs où l'utilisateur est coach ou admin
-  List<String> _getStaffClubIds(Map<String, dynamic> userData) {
-    final ids = <String>{};
-    final roles = userData['roles'] as Map<String, dynamic>?;
-    if (roles == null) return ids.toList();
-    if (roles['coach'] is List) {
-      for (final c in (roles['coach'] as List)) {
-        if (c is Map) {
-          final clubId = c['clubId'] as String?;
-          if (clubId != null && clubId.isNotEmpty) ids.add(clubId);
-        }
-      }
-    }
-    if (roles['admin'] is List) {
-      for (final id in (roles['admin'] as List).whereType<String>()) {
-        if (id.isNotEmpty) ids.add(id);
-      }
-    }
-    return ids.toList();
   }
 
   // Vérifie si l'utilisateur actuel peut modifier la licence d'un joueur dans un club
@@ -127,18 +77,6 @@ class ProfilDisplayPage extends StatelessWidget {
     final currentUserData = currentUserDoc.data();
     if (currentUserData == null) return false;
 
-    // Vérifier directement dans la structure des rôles
-    final roles = currentUserData['roles'] as Map<String, dynamic>? ?? {};
-
-    // Vérifier si l'utilisateur est admin de ce club
-    if (roles['admin'] is List) {
-      final adminClubIds = (roles['admin'] as List).whereType<String>();
-      if (adminClubIds.contains(clubId)) {
-        return true; // Admin ou admin_fondateur (tous deux stockés dans roles.admin)
-      }
-    }
-
-    // Vérifier le rôle avec getUserRoleInClub (fallback)
     final role = getUserRoleInClub(currentUserData, clubId);
     if (role == 'admin' || role == 'admin_fondateur') {
       return true;
@@ -237,43 +175,11 @@ class ProfilDisplayPage extends StatelessWidget {
               Navigator.pop(ctx);
 
               try {
-                // Récupérer les données actuelles de l'utilisateur
-                final userDoc = await appFirestore
-                    .collection(FirebaseCollections.users)
-                    .doc(userId)
-                    .get();
-                final userData = userDoc.data() ?? {};
-                final roles = userData['roles'] as Map<String, dynamic>? ?? {};
-                final playerData =
-                    roles['player'] as Map<String, dynamic>? ?? {};
-                final clubs =
-                    (playerData['clubs'] as List?)?.whereType<Map>().toList() ??
-                    [];
-
-                // Trouver et mettre à jour la licence pour ce club
-                bool found = false;
-                for (int i = 0; i < clubs.length; i++) {
-                  if (clubs[i]['clubId'] == clubId) {
-                    clubs[i] = {...clubs[i], 'license': newVal};
-                    found = true;
-                    break;
-                  }
-                }
-
-                // Si le club n'existe pas dans la liste, l'ajouter
-                if (!found) {
-                  clubs.add({'clubId': clubId, 'license': newVal});
-                }
-
-                // Mettre à jour Firestore avec la structure complète
-                // Reconstruire toute la structure roles pour éviter les problèmes de chemins imbriqués
-                final updatedRoles = Map<String, dynamic>.from(roles);
-                updatedRoles['player'] = {...playerData, 'clubs': clubs};
-
-                await appFirestore
-                    .collection(FirebaseCollections.users)
-                    .doc(userId)
-                    .update({'roles': updatedRoles});
+                await MembershipService.instance.updateMemberPlayer(
+                  uid: userId,
+                  clubId: clubId,
+                  license: newVal,
+                );
 
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -347,7 +253,7 @@ class ProfilDisplayPage extends StatelessWidget {
                                   Builder(
                                     builder: (context) {
                                       final url = effectiveAvatarUrl(data);
-                                      return CircleAvatar(
+                                      final avatar = CircleAvatar(
                                         radius: 60,
                                         backgroundColor: ViroColors.primary
                                             .withValues(alpha: 0.1),
@@ -361,6 +267,12 @@ class ProfilDisplayPage extends StatelessWidget {
                                                 color: ViroColors.primary,
                                               )
                                             : null,
+                                      );
+                                      if (url == null) return avatar;
+                                      return GestureDetector(
+                                        onTap: () =>
+                                            _showFullScreenAvatar(context, url),
+                                        child: avatar,
                                       );
                                     },
                                   ),
@@ -846,81 +758,38 @@ class ProfilDisplayPage extends StatelessWidget {
     );
   }
 
-  // Extraire les rôles organisés par club
+  // Extraire les rôles organisés par club (profileSummaries + members pour licence)
   Future<List<Map<String, dynamic>>> _extractRolesByClub(
     Map<String, dynamic> userData,
   ) async {
     final Map<String, Map<String, dynamic>> clubsMap = {};
-    final roles = userData['roles'] as Map<String, dynamic>? ?? {};
+    final summaries = (userData['profileSummaries'] as List?)?.whereType<Map>().toList() ?? [];
+    final uid = userId;
 
-    // 1. Extraire les rôles ADMIN (liste de clubIds)
-    if (roles['admin'] is List) {
-      for (var clubId in (roles['admin'] as List).whereType<String>()) {
-        clubsMap[clubId] = {'clubId': clubId, 'roles': <String>[]};
-        clubsMap[clubId]!['roles'].add('admin');
+    for (final e in summaries) {
+      final clubId = e['clubId'] as String?;
+      final role = e['role'] as String?;
+      if (clubId == null || clubId.isEmpty || role == null || role.isEmpty) continue;
+      clubsMap[clubId] ??= {'clubId': clubId, 'roles': <String>[]};
+      if (!(clubsMap[clubId]!['roles'] as List<String>).contains(role)) {
+        (clubsMap[clubId]!['roles'] as List<String>).add(role);
       }
     }
 
-    // 2. Extraire les rôles PLAYER (structure avec clubs)
-    if (roles['player'] is Map) {
-      final playerData = roles['player'] as Map;
-      if (playerData['clubs'] is List) {
-        for (var clubEntry in (playerData['clubs'] as List).whereType<Map>()) {
-          final clubId = clubEntry['clubId'] as String?;
-          if (clubId == null) continue;
-
-          if (!clubsMap.containsKey(clubId)) {
-            clubsMap[clubId] = {'clubId': clubId, 'roles': <String>[]};
-          }
-          clubsMap[clubId]!['roles'].add('player');
-
-          // Ajouter la licence si disponible pour ce club
-          final license = clubEntry['license'] as String?;
-          if (license != null && license.isNotEmpty) {
-            clubsMap[clubId]!['license'] = license;
-          }
-        }
-      }
-      // Compatibilité avec l'ancienne structure (clubId direct)
-      else {
-        final legacyClubId = playerData['clubId'] as String?;
-        if (legacyClubId != null) {
-          if (!clubsMap.containsKey(legacyClubId)) {
-            clubsMap[legacyClubId] = {
-              'clubId': legacyClubId,
-              'roles': <String>[],
-            };
-          }
-          clubsMap[legacyClubId]!['roles'].add('player');
+    // Licence et détails player depuis les documents member
+    for (final clubId in clubsMap.keys) {
+      final roles = clubsMap[clubId]!['roles'] as List<String>? ?? [];
+      if (roles.contains('player')) {
+        final member = await getMemberData(appFirestore, uid, clubId);
+        final player = member?['player'] as Map<String, dynamic>?;
+        final license = player?['license'] as String?;
+        if (license != null && license.isNotEmpty) {
+          clubsMap[clubId]!['license'] = license;
         }
       }
     }
 
-    // 3. Extraire les rôles COACH (structure similaire à player ou liste)
-    if (roles['coach'] is Map) {
-      final coachData = roles['coach'] as Map;
-      if (coachData['clubs'] is List) {
-        for (var clubEntry in (coachData['clubs'] as List).whereType<Map>()) {
-          final clubId = clubEntry['clubId'] as String?;
-          if (clubId == null) continue;
-
-          if (!clubsMap.containsKey(clubId)) {
-            clubsMap[clubId] = {'clubId': clubId, 'roles': <String>[]};
-          }
-          clubsMap[clubId]!['roles'].add('coach');
-        }
-      }
-    } else if (roles['coach'] is List) {
-      // Ancienne structure : liste de clubIds
-      for (var clubId in (roles['coach'] as List).whereType<String>()) {
-        if (!clubsMap.containsKey(clubId)) {
-          clubsMap[clubId] = {'clubId': clubId, 'roles': <String>[]};
-        }
-        clubsMap[clubId]!['roles'].add('coach');
-      }
-    }
-
-    // 4. Contexte actif (priorité sur legacy)
+    // Contexte actif / legacy si pas déjà dans la map
     final activeContext = userData['activeContext'] as Map<String, dynamic>?;
     final activeClubId = activeContext?['clubId'] as String?;
     final activeRole = activeContext?['role'] as String?;
@@ -933,7 +802,6 @@ class ProfilDisplayPage extends StatelessWidget {
       };
     }
 
-    // 5. Compatibilité avec l'ancienne structure (clubId direct)
     final legacyClubId = userData['clubId'] as String?;
     if (legacyClubId != null && !clubsMap.containsKey(legacyClubId)) {
       final legacyRole = userData['role'] as String?;
@@ -943,7 +811,7 @@ class ProfilDisplayPage extends StatelessWidget {
       };
     }
 
-    // 6. Récupérer les infos des clubs (nom, logo)
+    // Récupérer les infos des clubs (nom, logo)
     final List<Map<String, dynamic>> result = [];
     for (var entry in clubsMap.entries) {
       final clubId = entry.key;
@@ -1019,6 +887,44 @@ class ProfilDisplayPage extends StatelessWidget {
   }
 }
 
+class _FullScreenAvatarView extends StatelessWidget {
+  const _FullScreenAvatarView({required this.imageUrl});
+
+  final String imageUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => Navigator.of(context).pop(),
+      behavior: HitTestBehavior.opaque,
+      child: Scaffold(
+        backgroundColor: Colors.black87,
+        body: Stack(
+          children: [
+            Center(
+              child: CachedNetworkImage(
+                imageUrl: imageUrl,
+                fit: BoxFit.contain,
+                placeholder: (_, __) => const ViroLoader(size: 48),
+                errorWidget: (_, __, ___) =>
+                    const Icon(Icons.person, size: 80, color: Colors.white70),
+              ),
+            ),
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 8,
+              right: 16,
+              child: IconButton(
+                icon: const Icon(Icons.close, color: Colors.white, size: 28),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 String _formatName(String first, String last) {
   String cap(String v) =>
       v.isEmpty ? v : v[0].toUpperCase() + v.substring(1).toLowerCase();
@@ -1030,47 +936,11 @@ String _formatName(String first, String last) {
 Future<List<String>> _fetchClubLogos(Map<String, dynamic> data) async {
   final logos = <String>[];
   final Set<String> clubIdsSet = {};
-  final roles = data['roles'] as Map<String, dynamic>? ?? {};
-
-  // Player
-  if (roles['player'] is Map) {
-    final playerData = roles['player'] as Map;
-    // Nouvelle structure : liste de clubs
-    if (playerData['clubs'] is List) {
-      final clubs = (playerData['clubs'] as List).whereType<Map>();
-      for (var club in clubs) {
-        final clubId = club['clubId'] as String?;
-        if (clubId != null) clubIdsSet.add(clubId);
-      }
-    }
-    // Ancienne structure : clubId direct (compatibilité)
-    else {
-      final playerClubId = playerData['clubId'] as String?;
-      if (playerClubId != null) clubIdsSet.add(playerClubId);
-    }
+  final summaries = (data['profileSummaries'] as List?)?.whereType<Map>().toList() ?? [];
+  for (final e in summaries) {
+    final cid = e['clubId'] as String?;
+    if (cid != null && cid.isNotEmpty) clubIdsSet.add(cid);
   }
-
-  // Coach
-  if (roles['coach'] is Map) {
-    final coachData = roles['coach'] as Map;
-    if (coachData['clubs'] is List) {
-      final clubs = (coachData['clubs'] as List).whereType<Map>();
-      for (var club in clubs) {
-        final clubId = club['clubId'] as String?;
-        if (clubId != null) clubIdsSet.add(clubId);
-      }
-    }
-  } else if (roles['coach'] is List) {
-    // Ancienne structure : liste de clubIds
-    clubIdsSet.addAll((roles['coach'] as List).whereType<String>());
-  }
-
-  // Admin
-  if (roles['admin'] is List) {
-    clubIdsSet.addAll((roles['admin'] as List).whereType<String>());
-  }
-
-  // Fallback pour compatibilité
   if (data['clubIds'] is List) {
     clubIdsSet.addAll((data['clubIds'] as List).whereType<String>());
   }

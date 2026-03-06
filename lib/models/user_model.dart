@@ -179,6 +179,89 @@ class UserModel {
     );
   }
 
+  /// Construit un UserModel à partir du document user et des documents member (clubs/{clubId}/members/{uid}).
+  /// Source de vérité : profileSummaries sur le user + données détaillées dans chaque member.
+  factory UserModel.fromUserDocAndMembers(
+    DocumentSnapshot<Map<String, dynamic>> userDoc,
+    Map<String, Map<String, dynamic>> membersByClub,
+  ) {
+    final data = userDoc.data() ?? {};
+    ActiveContext? activeCtx;
+    if (data['activeContext'] is Map) {
+      final ctxData = data['activeContext'] as Map<String, dynamic>;
+      activeCtx = ActiveContext(
+        role: ctxData['role'] as String?,
+        clubId: ctxData['clubId'] as String?,
+      );
+    }
+
+    final raw = data['profileSummaries'] as List? ?? [];
+    final summaries = raw
+        .whereType<Map>()
+        .map((m) => {'clubId': m['clubId'] as String? ?? '', 'role': m['role'] as String? ?? ''})
+        .where((e) => (e['clubId'] ?? '').isNotEmpty && (e['role'] ?? '').isNotEmpty)
+        .toList();
+
+    final playerClubs = <PlayerClubInfo>[];
+    final coachProfiles = <CoachProfile>[];
+    final adminClubIds = <String>[];
+    final adminFondateurClubIds = <String>[];
+
+    for (final e in summaries) {
+      final clubId = e['clubId']!;
+      final role = e['role']!;
+      final member = membersByClub[clubId];
+
+      if (role == 'player' && member != null && member['player'] is Map) {
+        final p = member['player'] as Map<String, dynamic>;
+        playerClubs.add(PlayerClubInfo(
+          clubId: clubId,
+          teamIds: (p['teamIds'] as List?)?.whereType<String>().toList() ?? [],
+          teamNames: (p['teamNames'] as List?)?.whereType<String>().toList() ?? [],
+          categories: (p['categories'] as List?)?.whereType<String>().toList() ?? [],
+          license: p['license'] as String?,
+        ));
+      } else if (role == 'coach' && member != null && member['coach'] is Map) {
+        final c = member['coach'] as Map<String, dynamic>;
+        final teams = (c['teamIds'] as List?)?.whereType<String>().toList() ??
+            (c['teamNames'] as List?)?.whereType<String>().toList() ?? [];
+        coachProfiles.add(CoachProfile(clubId: clubId, teams: teams));
+      } else if (role == 'coach') {
+        coachProfiles.add(CoachProfile(clubId: clubId, teams: const []));
+      } else if (role == 'admin') {
+        adminClubIds.add(clubId);
+      } else if (role == 'admin_fondateur') {
+        adminFondateurClubIds.add(clubId);
+      }
+    }
+
+    PlayerProfile? playerProfile =
+        playerClubs.isEmpty ? null : PlayerProfile(clubs: playerClubs);
+
+    final hasPending = data['hasPendingRequest'] == true;
+    final profileCompletedRaw = data['profileCompleted'];
+    final profileCompleted =
+        identical(profileCompletedRaw, false) ? false : true;
+
+    return UserModel(
+      uid: userDoc.id,
+      email: data['email'] as String?,
+      firstName: data['firstName'] as String?,
+      lastName: data['lastName'] as String?,
+      phone: data['phone'] as String?,
+      avatarUrl: data['avatarUrl'] as String?,
+      activeContext: activeCtx,
+      roles: UserRoles(
+        player: playerProfile,
+        coach: coachProfiles,
+        admin: adminClubIds,
+        adminFondateur: adminFondateurClubIds,
+      ),
+      hasPendingRequest: hasPending,
+      profileCompleted: profileCompleted,
+    );
+  }
+
   /// Convertit en Map pour Firestore
   Map<String, dynamic> toFirestore() {
     final Map<String, dynamic> rolesMap = {};
@@ -354,4 +437,143 @@ class CoachProfile {
     this.clubId,
     this.teams = const [],
   });
+}
+
+// ---------------------------------------------------------------------------
+// Nouveau modèle (Option A) : UserProfile + profileSummaries
+// ---------------------------------------------------------------------------
+
+/// Un profil disponible dans le switcher (dérivé de profileSummaries).
+class ProfileSummary {
+  final String clubId;
+  final String role;
+
+  ProfileSummary({required this.clubId, required this.role});
+}
+
+/// Profil utilisateur global (document users/{uid}) avec profileSummaries.
+/// Les champs modération sont fusionnés depuis users/{uid}/avatar_moderation/state.
+class UserProfile {
+  final String uid;
+  final String? email;
+  final String? emailNorm;
+  final String? firstName;
+  final String? lastName;
+  final String? displayName;
+  final String? phone;
+  final String? avatarUrl;
+  final bool avatarModerationRejected;
+  final bool avatarModerationPending;
+  final String? avatarModerationReason;
+  final DateTime? avatarModerationRejectedAt;
+  final bool avatarModerationOk;
+  final ActiveContext? activeContext;
+  final List<ProfileSummary> profileSummaries;
+  final bool profileCompleted;
+  final bool hasPendingRequest;
+  final bool disabled;
+  final Map<String, bool> notificationPreferences;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
+
+  UserProfile({
+    required this.uid,
+    this.email,
+    this.emailNorm,
+    this.firstName,
+    this.lastName,
+    this.displayName,
+    this.phone,
+    this.avatarUrl,
+    this.avatarModerationRejected = false,
+    this.avatarModerationPending = false,
+    this.avatarModerationReason,
+    this.avatarModerationRejectedAt,
+    this.avatarModerationOk = false,
+    this.activeContext,
+    this.profileSummaries = const [],
+    this.profileCompleted = true,
+    this.hasPendingRequest = false,
+    this.disabled = false,
+    this.notificationPreferences = const {},
+    this.createdAt,
+    this.updatedAt,
+  });
+
+  /// Construit à partir d'un Map déjà fusionné (user doc + avatar_moderation/state).
+  /// Si profileSummaries est vide, dérive depuis roles (rétrocompatibilité).
+  factory UserProfile.fromMergedData(String uid, Map<String, dynamic> d) {
+    final flags = d['flags'] as Map<String, dynamic>? ?? {};
+    final prefs = d['notificationPreferences'] as Map<String, dynamic>? ?? {};
+    final summariesRaw = d['profileSummaries'] as List? ?? [];
+    List<ProfileSummary> list = summariesRaw
+        .whereType<Map>()
+        .map((m) => ProfileSummary(
+              clubId: m['clubId'] as String? ?? '',
+              role: m['role'] as String? ?? '',
+            ))
+        .where((s) => s.clubId.isNotEmpty && s.role.isNotEmpty)
+        .toList();
+
+    ActiveContext? ctx;
+    if (d['activeContext'] is Map) {
+      final c = d['activeContext'] as Map<String, dynamic>;
+      ctx = ActiveContext(
+        role: c['role'] as String?,
+        clubId: c['clubId'] as String?,
+      );
+    }
+
+    return UserProfile(
+      uid: uid,
+      email: d['email'] as String?,
+      emailNorm: d['emailNorm'] as String?,
+      firstName: d['firstName'] as String?,
+      lastName: d['lastName'] as String?,
+      displayName: d['displayName'] as String?,
+      phone: d['phone'] as String?,
+      avatarUrl: d['avatarUrl'] as String?,
+      avatarModerationRejected: d['avatarModerationRejected'] == true,
+      avatarModerationPending: d['avatarModerationPending'] == true,
+      avatarModerationReason: d['avatarModerationReason'] as String?,
+      avatarModerationRejectedAt:
+          (d['avatarModerationRejectedAt'] as Timestamp?)?.toDate(),
+      avatarModerationOk: d['avatarModerationOk'] == true,
+      activeContext: ctx,
+      profileSummaries: list,
+      profileCompleted: identical(flags['profileCompleted'], false) || identical(d['profileCompleted'], false) ? false : true,
+      hasPendingRequest: flags['hasPendingRequest'] == true || d['hasPendingRequest'] == true,
+      disabled: flags['disabled'] == true,
+      notificationPreferences:
+          prefs.map((k, v) => MapEntry(k, v == true)),
+      createdAt: (d['createdAt'] as Timestamp?)?.toDate(),
+      updatedAt: (d['updatedAt'] as Timestamp?)?.toDate(),
+    );
+  }
+
+  /// Map fusionné pour effectiveAvatarUrl et autres usages (avatarUrl + champs modération).
+  Map<String, dynamic> toAvatarMergeMap() {
+    return {
+      'avatarUrl': avatarUrl,
+      'avatarModerationRejected': avatarModerationRejected,
+      'avatarModerationPending': avatarModerationPending,
+      'avatarModerationReason': avatarModerationReason,
+      'avatarModerationRejectedAt': avatarModerationRejectedAt,
+      'avatarModerationOk': avatarModerationOk,
+    };
+  }
+
+  bool get hasAnyRole => profileSummaries.isNotEmpty;
+
+  bool get isActiveContextCoherent {
+    final ctx = activeContext;
+    if (ctx == null || !ctx.isValid) return false;
+    return profileSummaries.any((s) =>
+        s.clubId == ctx.clubId && s.role == ctx.role);
+  }
+
+  bool hasRoleInClub(String role, String clubId) {
+    return profileSummaries
+        .any((s) => s.clubId == clubId && s.role == role);
+  }
 }

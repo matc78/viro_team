@@ -65,35 +65,19 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
     }
   }
 
-  // Extraire les clubIds où le user a le rôle PLAYER uniquement
-  // (exclut fondateur, admin, coach — ces rôles ont leur propre interface)
+  // Extraire les clubIds où le user a le rôle PLAYER (profileSummaries avec role player)
   List<String> _extractPlayerClubIds(Map<String, dynamic>? userData) {
     final Set<String> clubIdsSet = {};
-    final roles = userData?['roles'] as Map<String, dynamic>? ?? {};
-
-    // Priorité : contexte actif, puis roles, puis legacy
     final activeContext = userData?['activeContext'] as Map<String, dynamic>?;
     final activeClubId = activeContext?['clubId'] as String?;
     if (activeClubId != null && activeClubId.isNotEmpty) {
       clubIdsSet.add(activeClubId);
     }
-
-    if (roles['player'] is Map) {
-      final playerData = roles['player'] as Map;
-      // Nouvelle structure : liste de clubs
-      if (playerData['clubs'] is List) {
-        final clubs = (playerData['clubs'] as List).whereType<Map>();
-        for (var club in clubs) {
-          final clubId = club['clubId'] as String?;
-          if (clubId != null && clubId.isNotEmpty) clubIdsSet.add(clubId);
-        }
-      }
-      // Ancienne structure : clubId direct (compatibilité)
-      else {
-        final playerClubId = playerData['clubId'] as String?;
-        if (playerClubId != null && playerClubId.isNotEmpty) {
-          clubIdsSet.add(playerClubId);
-        }
+    final summaries = (userData?['profileSummaries'] as List?)?.whereType<Map>().toList() ?? [];
+    for (final e in summaries) {
+      if (e['role'] == 'player') {
+        final cid = e['clubId'] as String?;
+        if (cid != null && cid.isNotEmpty) clubIdsSet.add(cid);
       }
     }
 
@@ -358,37 +342,38 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
 
   // --- COMPOSANTS DE L'INTERFACE ---
 
+  Future<Map<String, List<String>>> _loadClubTeamIdsMap(
+    String userId,
+    List<String> clubIds,
+  ) async {
+    final Map<String, List<String>> out = {};
+    for (final clubId in clubIds) {
+      final member = await getMemberData(appFirestore, userId, clubId);
+      final player = member?['player'] as Map<String, dynamic>?;
+      final teamIds =
+          (player?['teamIds'] as List?)?.whereType<String>().toList() ?? [];
+      out[clubId] = teamIds;
+    }
+    return out;
+  }
+
   Widget _buildAnnouncements(
     List<String> clubIds,
     Map<String, dynamic>? userData,
   ) {
     if (clubIds.isEmpty) return const SizedBox.shrink();
-
-    // Récupérer les informations du joueur pour chaque club
-    final roles = userData?['roles'] as Map<String, dynamic>? ?? {};
-    final Map<String, List<String>> clubTeamIdsMap = {};
-    if (roles['player'] is Map) {
-      final playerData = roles['player'] as Map;
-      if (playerData['clubs'] is List) {
-        final clubs = (playerData['clubs'] as List).whereType<Map>();
-        for (var club in clubs) {
-          final clubIdFromClub = club['clubId'] as String?;
-          if (clubIdFromClub == null || !clubIds.contains(clubIdFromClub)) {
-            continue;
-          }
-          final teamIds =
-              (club['teamIds'] as List?)?.whereType<String>().toList() ?? [];
-          clubTeamIdsMap[clubIdFromClub] = teamIds;
-        }
-      }
-    }
-
-    // Combiner les annonces de tous les clubs via StreamBuilders imbriqués
-    return _buildAnnouncementsNestedStream(
-      clubIds: clubIds,
-      clubTeamIdsMap: clubTeamIdsMap,
-      currentIndex: 0,
-      snapshots: [],
+    final userId = FirebaseAuth.instance.currentUser?.uid ?? '';
+    return FutureBuilder<Map<String, List<String>>>(
+      future: _loadClubTeamIdsMap(userId, clubIds),
+      builder: (context, snap) {
+        if (!snap.hasData) return const SizedBox.shrink();
+        return _buildAnnouncementsNestedStream(
+          clubIds: clubIds,
+          clubTeamIdsMap: snap.data!,
+          currentIndex: 0,
+          snapshots: [],
+        );
+      },
     );
   }
 
@@ -822,14 +807,18 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
       return StreamBuilder<QuerySnapshot>(
         stream: streams[0],
         builder: (context, snapshot) {
-          final line = _getNextEventLineFromSnapshots(
-            [snapshot.data],
-            clubIds,
-            userData,
-          );
-          return Text(
-            line ?? "Ta journée est libre.",
-            style: TextStyle(fontSize: 14, color: Colors.grey[700]),
+          return FutureBuilder<String?>(
+            future: _getNextEventLineFromSnapshots(
+              [snapshot.data],
+              clubIds,
+              userData,
+            ),
+            builder: (context, lineSnap) {
+              return Text(
+                lineSnap.data ?? "Ta journée est libre.",
+                style: TextStyle(fontSize: 14, color: Colors.grey[700]),
+              );
+            },
           );
         },
       );
@@ -841,14 +830,18 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
           return StreamBuilder<QuerySnapshot>(
             stream: streams[1],
             builder: (context, snapshot1) {
-              final line = _getNextEventLineFromSnapshots(
-                [snapshot0.data, snapshot1.data],
-                clubIds,
-                userData,
-              );
-              return Text(
-                line ?? "Ta journée est libre.",
-                style: TextStyle(fontSize: 14, color: Colors.grey[700]),
+              return FutureBuilder<String?>(
+                future: _getNextEventLineFromSnapshots(
+                  [snapshot0.data, snapshot1.data],
+                  clubIds,
+                  userData,
+                ),
+                builder: (context, lineSnap) {
+                  return Text(
+                    lineSnap.data ?? "Ta journée est libre.",
+                    style: TextStyle(fontSize: 14, color: Colors.grey[700]),
+                  );
+                },
               );
             },
           );
@@ -865,26 +858,34 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
               return StreamBuilder<QuerySnapshot>(
                 stream: streams[2],
                 builder: (context, snapshot2) {
-                  final line = _getNextEventLineFromSnapshots(
-                    [snapshot0.data, snapshot1.data, snapshot2.data],
-                    clubIds,
-                    userData,
-                  );
-                  return Text(
-                    line ?? "Ta journée est libre.",
-                    style: TextStyle(fontSize: 14, color: Colors.grey[700]),
+                  return FutureBuilder<String?>(
+                    future: _getNextEventLineFromSnapshots(
+                      [snapshot0.data, snapshot1.data, snapshot2.data],
+                      clubIds,
+                      userData,
+                    ),
+                    builder: (context, lineSnap) {
+                      return Text(
+                        lineSnap.data ?? "Ta journée est libre.",
+                        style: TextStyle(fontSize: 14, color: Colors.grey[700]),
+                      );
+                    },
                   );
                 },
               );
             }
-            final line = _getNextEventLineFromSnapshots(
-              [snapshot0.data, snapshot1.data],
-              clubIds.take(2).toList(),
-              userData,
-            );
-            return Text(
-              line ?? "Ta journée est libre.",
-              style: TextStyle(fontSize: 14, color: Colors.grey[700]),
+            return FutureBuilder<String?>(
+              future: _getNextEventLineFromSnapshots(
+                [snapshot0.data, snapshot1.data],
+                clubIds.take(2).toList(),
+                userData,
+              ),
+              builder: (context, lineSnap) {
+                return Text(
+                  lineSnap.data ?? "Ta journée est libre.",
+                  style: TextStyle(fontSize: 14, color: Colors.grey[700]),
+                );
+              },
             );
           },
         );
@@ -892,12 +893,12 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
     );
   }
 
-  String? _getNextEventLineFromSnapshots(
+  Future<String?> _getNextEventLineFromSnapshots(
     List<QuerySnapshot?>? snapshots,
     List<String> clubIds,
     Map<String, dynamic>? userData,
-  ) {
-    final events = _extractEventsFromSnapshots(
+  ) async {
+    final events = await _extractEventsFromSnapshots(
       snapshots,
       clubIds,
       userData,
@@ -938,18 +939,28 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
     return "Prochain événement : $title${dateLabel.isNotEmpty ? ' — $dateLabel' : ''}";
   }
 
-  List<Map<String, dynamic>> _extractEventsFromSnapshots(
+  Future<List<Map<String, dynamic>>> _extractEventsFromSnapshots(
     List<QuerySnapshot?>? snapshots,
     List<String> clubIds,
     Map<String, dynamic>? userData, {
     required bool onlyNeedingAction,
-  }) {
+  }) async {
     final List<Map<String, dynamic>> result = [];
     if (snapshots == null || snapshots.isEmpty) return result;
+    final uid = _currentUserId;
+    if (uid.isEmpty) return result;
+    final Map<String, List<String>> teamsByClub = {};
+    final Map<String, List<String>> catsByClub = {};
+    for (final cid in clubIds) {
+      teamsByClub[cid] = await getUserTeamNames(appFirestore, uid, clubId: cid);
+      catsByClub[cid] = await getUserCategories(appFirestore, uid, clubId: cid);
+    }
     for (int i = 0; i < snapshots.length && i < clubIds.length; i++) {
       final snapshot = snapshots[i];
       if (snapshot == null) continue;
       final clubId = clubIds[i];
+      final userTeams = teamsByClub[clubId] ?? [];
+      final userCategories = catsByClub[clubId] ?? [];
       for (var doc in snapshot.docs) {
         final data = doc.data() as Map<String, dynamic>;
         final memberIds = (data['teamMemberIds'] as List<dynamic>?) ?? [];
@@ -957,9 +968,6 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
             (data['teamNames'] as List?)?.whereType<String>().toList() ?? [];
         final teamName = data['teamName'] as String?;
         final eventCategory = data['category'] as String?;
-        final effectiveUserData = _manualUserData ?? userData ?? {};
-        final userTeams = getUserTeamNames(effectiveUserData);
-        final userCategories = getUserCategories(effectiveUserData);
         final bool inMemberIds =
             memberIds.isNotEmpty && memberIds.contains(_currentUserId);
         final bool matchTeam =
@@ -1057,22 +1065,27 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
               return StreamBuilder<QuerySnapshot>(
                 stream: returnStream,
                 builder: (context, returnSnap) {
-                  final result = _buildActionRequiredList(
-                    null,
-                    loanReqSnap.data,
-                    prepSnap.data,
-                    returnSnap.data,
-                    clubId,
-                    allClubIds,
-                    userData,
-                  );
-                  if (result.isEmpty) return const SizedBox.shrink();
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildSectionTitleLarge("À faire maintenant"),
-                      result.widget,
-                    ],
+                  return FutureBuilder<({bool isEmpty, Widget widget})>(
+                    future: _buildActionRequiredList(
+                      null,
+                      loanReqSnap.data,
+                      prepSnap.data,
+                      returnSnap.data,
+                      clubId,
+                      allClubIds,
+                      userData,
+                    ),
+                    builder: (context, resultSnap) {
+                      final result = resultSnap.data ?? (isEmpty: true, widget: const SizedBox.shrink());
+                      if (result.isEmpty) return const SizedBox.shrink();
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildSectionTitleLarge("À faire maintenant"),
+                          result.widget,
+                        ],
+                      );
+                    },
                   );
                 },
               );
@@ -1094,22 +1107,27 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
                 return StreamBuilder<QuerySnapshot>(
                   stream: returnStream,
                   builder: (context, returnSnap) {
-                    final result = _buildActionRequiredList(
-                      eventSnap.data,
-                      loanReqSnap.data,
-                      prepSnap.data,
-                      returnSnap.data,
-                      clubId,
-                      allClubIds,
-                      userData,
-                    );
-                    if (result.isEmpty) return const SizedBox.shrink();
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildSectionTitleLarge("À faire maintenant"),
-                        result.widget,
-                      ],
+                    return FutureBuilder<({bool isEmpty, Widget widget})>(
+                      future: _buildActionRequiredList(
+                        eventSnap.data,
+                        loanReqSnap.data,
+                        prepSnap.data,
+                        returnSnap.data,
+                        clubId,
+                        allClubIds,
+                        userData,
+                      ),
+                      builder: (context, resultSnap) {
+                        final result = resultSnap.data ?? (isEmpty: true, widget: const SizedBox.shrink());
+                        if (result.isEmpty) return const SizedBox.shrink();
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildSectionTitleLarge("À faire maintenant"),
+                            result.widget,
+                          ],
+                        );
+                      },
                     );
                   },
                 );
@@ -1121,7 +1139,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
     );
   }
 
-  ({bool isEmpty, Widget widget}) _buildActionRequiredList(
+  Future<({bool isEmpty, Widget widget})> _buildActionRequiredList(
     QuerySnapshot? eventSnapshot,
     QuerySnapshot? loanRequestSnapshot,
     QuerySnapshot? preparationSnapshot,
@@ -1129,7 +1147,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
     String clubId,
     List<String> allClubIds,
     Map<String, dynamic>? userData,
-  ) {
+  ) async {
     final List<Widget> items = [];
     final primaryClubId = allClubIds.isNotEmpty ? allClubIds.first : clubId;
     final now = DateTime.now();
@@ -1142,7 +1160,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
 
     final pendingEvents = eventSnapshot == null
         ? <Map<String, dynamic>>[]
-        : _extractEventsFromSnapshots(
+        : await _extractEventsFromSnapshots(
             [eventSnapshot],
             [primaryClubId],
             userData,
@@ -1396,26 +1414,31 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
           builder: (context, eventsSnap) {
             final hasLoans =
                 loansSnap.data != null && loansSnap.data!.docs.isNotEmpty;
-            final todayEvents = _extractEventsFromSnapshots(
-              [eventsSnap.data],
-              [primaryClubId],
-              userData,
-              onlyNeedingAction: false,
-            );
-            final hasEvents = todayEvents.isNotEmpty;
+            return FutureBuilder<List<Map<String, dynamic>>>(
+              future: _extractEventsFromSnapshots(
+                [eventsSnap.data],
+                [primaryClubId],
+                userData,
+                onlyNeedingAction: false,
+              ),
+              builder: (context, todaySnap) {
+                final todayEvents = todaySnap.data ?? [];
+                final hasEvents = todayEvents.isNotEmpty;
 
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildSectionTitleLarge("Aujourd'hui"),
-                if (!hasLoans && !hasEvents) ...[
-                  _buildTodayEmptyStateCard(clubId),
-                ] else ...[
-                  _buildTodayLoansFromSnapshot(loansSnap.data, clubId),
-                  const SizedBox(height: 12),
-                  _buildTodayEventsFromEventList(todayEvents),
-                ],
-              ],
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildSectionTitleLarge("Aujourd'hui"),
+                    if (!hasLoans && !hasEvents) ...[
+                      _buildTodayEmptyStateCard(clubId),
+                    ] else ...[
+                      _buildTodayLoansFromSnapshot(loansSnap.data, clubId),
+                      const SizedBox(height: 12),
+                      _buildTodayEventsFromEventList(todayEvents),
+                    ],
+                  ],
+                );
+              },
             );
           },
         );

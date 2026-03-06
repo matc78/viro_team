@@ -283,11 +283,10 @@ class _AuthPageState extends State<AuthPage> {
     final activeRole = activeContext?['role'] as String?;
     final hasPendingRequest = data['hasPendingRequest'] == true;
     final profileCompleted = data['profileCompleted'] != false; // défaut true pour rétrocompatibilité
-    final roles = data['roles'] as Map<String, dynamic>? ?? {};
-    final hasAdminOrCoach = _hasRoleIn(roles, 'admin_fondateur') ||
-        _hasRoleIn(roles, 'admin') ||
-        _hasRoleIn(roles, 'coach');
-    final hasPlayer = roles['player'] != null;
+    final summaries = (data['profileSummaries'] as List?)?.whereType<Map>().toList() ?? [];
+    final hasAdminOrCoach = summaries.any((e) =>
+        e['role'] == 'admin_fondateur' || e['role'] == 'admin' || e['role'] == 'coach');
+    final hasPlayer = summaries.any((e) => e['role'] == 'player');
 
     // Profil non complété (ex. nouveau compte Google) → Compléter le profil en premier
     if (profileCompleted == false) {
@@ -323,16 +322,6 @@ class _AuthPageState extends State<AuthPage> {
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(builder: (_) => const OnboardingPage()),
     );
-  }
-
-  bool _hasRoleIn(Map<String, dynamic> roles, String roleKey) {
-    final val = roles[roleKey] ??
-        (roleKey == 'admin_fondateur' ? roles['adminFondateur'] : null);
-    if (val == null) return false;
-    if (val is List) return val.isNotEmpty;
-    if (val is Map) return val.isNotEmpty;
-    if (val is String) return val.isNotEmpty;
-    return false;
   }
 
   @override

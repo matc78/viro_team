@@ -81,31 +81,17 @@ class _OnboardingPageState extends State<OnboardingPage> {
       return;
     }
 
-    // 2. Pas d'activeContext mais au moins un club dans roles → créer activeContext sur le premier club
-    final roles = data['roles'] as Map<String, dynamic>? ?? {};
+    // 2. Pas d'activeContext mais au moins un club dans profileSummaries → créer activeContext sur le premier club
+    final summaries = (data['profileSummaries'] as List?)?.whereType<Map>().toList() ?? [];
     String? firstClubId;
     String? firstRole;
-
-    final playerData = roles['player'] as Map<String, dynamic>?;
-    if (playerData != null && playerData['clubs'] is List) {
-      final clubs = (playerData['clubs'] as List).whereType<Map>().toList();
-      if (clubs.isNotEmpty) {
-        firstClubId = clubs.first['clubId'] as String?;
-        firstRole = 'player';
-      }
-    }
-    if (firstClubId == null && roles['coach'] is List) {
-      final coaches = (roles['coach'] as List).whereType<Map>().toList();
-      if (coaches.isNotEmpty) {
-        firstClubId = coaches.first['clubId'] as String?;
-        firstRole = 'coach';
-      }
-    }
-    if (firstClubId == null && roles['admin'] is List) {
-      final adminIds = (roles['admin'] as List).whereType<String>().toList();
-      if (adminIds.isNotEmpty) {
-        firstClubId = adminIds.first;
-        firstRole = 'admin';
+    for (final e in summaries) {
+      final cid = e['clubId'] as String?;
+      final role = e['role'] as String?;
+      if (cid != null && cid.isNotEmpty && role != null) {
+        firstClubId = cid;
+        firstRole = role;
+        break;
       }
     }
 
@@ -117,7 +103,6 @@ class _OnboardingPageState extends State<OnboardingPage> {
 
       await appFirestore.collection(FirebaseCollections.users).doc(user.uid).set({
         'activeContext': newActiveContext,
-        'clubId': firstClubId,
       }, SetOptions(merge: true));
 
       if (!mounted) return;

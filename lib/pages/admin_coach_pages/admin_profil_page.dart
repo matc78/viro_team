@@ -9,6 +9,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:viro_team/constants/app_urls.dart';
@@ -20,6 +21,7 @@ import '../../theme/viro_theme.dart';
 import '../../widget/viro_loader.dart';
 import '../../utils/app_logger.dart';
 import '../../utils/auth_helper.dart';
+import '../../services/membership_service.dart';
 import '../../utils/firebase_helpers.dart';
 import '../../utils/firebase_error_handler.dart';
 import '../../utils/avatar_moderation.dart';
@@ -69,6 +71,11 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
         }
 
         final userData = snapshot.data?.data();
+        final dataForModeration = userData != null ? Map<String, dynamic>.from(userData) : <String, dynamic>{};
+        final profile = context.read<UserSession>().currentUser;
+        if (profile != null && profile.uid == user.uid) {
+          dataForModeration.addAll(profile.toAvatarMergeMap());
+        }
         final String firstName = userData?['firstName'] ?? "Admin";
         final String lastName = userData?['lastName'] ?? "";
         final String displayFirst = _formatFirst(firstName);
@@ -82,12 +89,12 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
 
         // Extraire tous les clubIds depuis roles
         final List<String> clubIds = _extractAllClubIds(userData);
-        final avatarUrl = effectiveAvatarUrl(userData);
+        final avatarUrl = effectiveAvatarUrl(dataForModeration);
         if (avatarUrl != null && avatarUrl.isNotEmpty)
           _lastAvatarUrl = avatarUrl;
 
-        _showAvatarModerationRejectedIfNeeded(context, user.uid, userData);
-        _clearStaleAvatarModerationPendingIfNeeded(context, user.uid, userData);
+        _showAvatarModerationRejectedIfNeeded(context, user.uid, dataForModeration);
+        _clearStaleAvatarModerationPendingIfNeeded(context, user.uid, dataForModeration);
 
         return Scaffold(
           backgroundColor: const Color(0xFFF8F9FA),
@@ -104,12 +111,12 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
                   builder: (context, logosSnap) {
                     final clubLogos = logosSnap.data ?? [];
                     final avatarModerationPending =
-                        userData?['avatarModerationPending'] == true;
+                        dataForModeration['avatarModerationPending'] == true;
                     return _buildProfileHeader(
                       displayFirst,
                       displayLast,
                       role,
-                      effectiveAvatarUrl(userData),
+                      effectiveAvatarUrl(dataForModeration),
                       () => _pickAvatar(user.uid),
                       clubLogos,
                       avatarModerationPending: avatarModerationPending,
@@ -939,115 +946,20 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
     );
   }
 
-  /// Retourne le premier (role, clubId) autre que [excludeClubId] depuis [userData].
+  /// Retourne le premier (role, clubId) autre que [excludeClubId] depuis profileSummaries.
   ({String role, String clubId})? _getFirstOtherProfile(
     Map<String, dynamic> userData,
     String excludeClubId,
   ) {
-    final roles = userData['roles'] as Map<String, dynamic>? ?? {};
-    // Admin
-    if (roles['admin'] is List) {
-      for (final cid in (roles['admin'] as List).whereType<String>()) {
-        if (cid != excludeClubId && cid.isNotEmpty) {
-          return (role: 'admin', clubId: cid);
-        }
+    final summaries = (userData['profileSummaries'] as List?)?.whereType<Map>().toList() ?? [];
+    for (final e in summaries) {
+      final cid = e['clubId'] as String?;
+      final r = e['role'] as String?;
+      if (cid != null && cid != excludeClubId && cid.isNotEmpty && r != null && r.isNotEmpty) {
+        return (role: r, clubId: cid);
       }
-    }
-    // Coach
-    if (roles['coach'] is List) {
-      for (final e in (roles['coach'] as List)) {
-        if (e is Map) {
-          final cid = e['clubId'] as String?;
-          if (cid != null && cid != excludeClubId && cid.isNotEmpty) {
-            return (role: 'coach', clubId: cid);
-          }
-        }
-      }
-    }
-    if (roles['coach'] is List) {
-      for (final cid in (roles['coach'] as List).whereType<String>()) {
-        if (cid != excludeClubId && cid.isNotEmpty) {
-          return (role: 'coach', clubId: cid);
-        }
-      }
-    }
-    // Player
-    if (roles['player'] is Map) {
-      final pd = roles['player'] as Map;
-      if (pd['clubs'] is List) {
-        for (final c in (pd['clubs'] as List).whereType<Map>()) {
-          final cid = c['clubId'] as String?;
-          if (cid != null && cid != excludeClubId && cid.isNotEmpty) {
-            return (role: 'player', clubId: cid);
-          }
-        }
-      }
-      final legacy = pd['clubId'] as String?;
-      if (legacy != null && legacy != excludeClubId && legacy.isNotEmpty) {
-        return (role: 'player', clubId: legacy);
-      }
-    }
-    final legacyClubId = userData['clubId'] as String?;
-    if (legacyClubId != null &&
-        legacyClubId != excludeClubId &&
-        legacyClubId.isNotEmpty) {
-      final r = userData['role'] as String?;
-      return (
-        role: r == 'admin_fondateur' ? 'admin' : (r ?? 'admin'),
-        clubId: legacyClubId,
-      );
     }
     return null;
-  }
-
-  /// Retourne les [roles] mis à jour après retrait de [clubId].
-  Map<String, dynamic> _buildRolesAfterRemoveClub(
-    Map<String, dynamic>? roles,
-    String clubId,
-  ) {
-    final r = Map<String, dynamic>.from(roles ?? {});
-    if (r['admin'] is List) {
-      final list = (r['admin'] as List)
-          .whereType<String>()
-          .where((c) => c != clubId)
-          .toList();
-      r['admin'] = list;
-    }
-    if (r['admin_fondateur'] is List) {
-      final list = (r['admin_fondateur'] as List)
-          .whereType<String>()
-          .where((c) => c != clubId)
-          .toList();
-      r['admin_fondateur'] = list;
-    }
-    if (r['coach'] is List) {
-      final list = (r['coach'] as List).toList();
-      final filtered = <dynamic>[];
-      for (final e in list) {
-        if (e is Map) {
-          final cid = e['clubId'] as String?;
-          if (cid != clubId) filtered.add(e);
-        } else if (e is String && e != clubId) {
-          filtered.add(e);
-        }
-      }
-      r['coach'] = filtered;
-    }
-    if (r['player'] is Map) {
-      final pd = Map<String, dynamic>.from(r['player'] as Map);
-      if (pd['clubs'] is List) {
-        final clubs = (pd['clubs'] as List)
-            .whereType<Map>()
-            .where((c) => (c['clubId'] as String?) != clubId)
-            .toList();
-        pd['clubs'] = clubs;
-        r['player'] = pd;
-      } else if (pd['clubId'] == clubId) {
-        pd.remove('clubId');
-        r['player'] = pd;
-      }
-    }
-    return r;
   }
 
   Future<void> _deleteClub(BuildContext context, String clubId) async {
@@ -1091,10 +1003,6 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
       final batch = _firestore.batch();
       for (final doc in affected) {
         final data = doc.data();
-        final updatedRoles = _buildRolesAfterRemoveClub(
-          data['roles'] as Map<String, dynamic>?,
-          clubId,
-        );
         final isCurrent = doc.id == userId;
         final other = isCurrent
             ? otherProfile
@@ -1111,29 +1019,18 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
         }
 
         final updates = <String, dynamic>{
-          'roles': updatedRoles,
           if (newActiveContext != null) 'activeContext': newActiveContext,
         };
-        final legacyClubId = data['clubId'] as String?;
-        if (legacyClubId == clubId) {
-          if (other != null) {
-            updates['clubId'] = other.clubId;
-            final clubDoc = await _firestore
-                .collection(FirebaseCollections.clubs)
-                .doc(other.clubId)
-                .get();
-            final name = clubDoc.data()?['name'] as String?;
-            if (name != null) updates['clubName'] = name;
-          } else {
-            updates['clubId'] = FieldValue.delete();
-            updates['clubName'] = FieldValue.delete();
-          }
+        if (updates.isNotEmpty) {
+          batch.set(doc.reference, updates, SetOptions(merge: true));
         }
-
-        batch.set(doc.reference, updates, SetOptions(merge: true));
       }
 
       await batch.commit();
+
+      for (final doc in affected) {
+        await MembershipService.instance.removeMemberAndProfileSummary(doc.id, clubId);
+      }
 
       final joinRequests = await _firestore
           .collection(FirebaseCollections.joinRequests)
@@ -1408,16 +1305,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
           .doc(newOwnerId);
       final newOwnerSnap = await newOwnerRef.get();
       final newOwnerData = newOwnerSnap.data() ?? {};
-      final roles = Map<String, dynamic>.from(
-        newOwnerData['roles'] as Map<String, dynamic>? ?? {},
-      );
-      final adminList = List<String>.from(
-        (roles['admin'] as List?)?.whereType<String>() ?? [],
-      );
-      if (!adminList.contains(clubId)) adminList.add(clubId);
-      roles['admin'] = adminList;
       await newOwnerRef.set({
-        'roles': roles,
         '_adminClubId': clubId,
       }, SetOptions(merge: true));
 
@@ -1426,34 +1314,22 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
           .doc(userId);
       final currentSnap = await currentUserRef.get();
       final currentData = currentSnap.data() ?? {};
-      final updatedRoles = _buildRolesAfterRemoveClub(
-        currentData['roles'] as Map<String, dynamic>?,
-        clubId,
-      );
       final other = _getFirstOtherProfile(currentData, clubId);
       final newActiveContext = other != null
           ? {'role': other.role, 'clubId': other.clubId}
           : FieldValue.delete();
-      final updates = <String, dynamic>{
-        'roles': updatedRoles,
+      await currentUserRef.set({
         'activeContext': newActiveContext,
-      };
-      final legacyClubId = currentData['clubId'] as String?;
-      if (legacyClubId == clubId) {
-        if (other != null) {
-          updates['clubId'] = other.clubId;
-          final clubDoc = await _firestore
-              .collection(FirebaseCollections.clubs)
-              .doc(other.clubId)
-              .get();
-          final name = clubDoc.data()?['name'] as String?;
-          if (name != null) updates['clubName'] = name;
-        } else {
-          updates['clubId'] = FieldValue.delete();
-          updates['clubName'] = FieldValue.delete();
-        }
-      }
-      await currentUserRef.set(updates, SetOptions(merge: true));
+      }, SetOptions(merge: true));
+
+      await MembershipService.instance.removeMemberAndProfileSummary(userId, clubId);
+      await MembershipService.instance.ensureMemberAndProfileSummary(
+        uid: newOwnerId,
+        clubId: clubId,
+        role: 'admin_fondateur',
+        isFounderAdmin: true,
+        userDataOverride: newOwnerData,
+      );
 
       if (!mounted) return;
       Navigator.of(context).pop();
@@ -2090,7 +1966,12 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
 
     setState(() => _isUploadingAvatar = true);
     try {
-      await _firestore.collection(FirebaseCollections.users).doc(uid).set({
+      await _firestore
+          .collection(FirebaseCollections.users)
+          .doc(uid)
+          .collection(FirebaseCollections.avatarModeration)
+          .doc(FirebaseCollections.avatarModerationStateDocId)
+          .set({
         'avatarModerationPending': true,
       }, SetOptions(merge: true));
       final file = File(picked.path);
@@ -2107,7 +1988,12 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(FirebaseErrorHandler.getErrorMessage(e))),
         );
-        await _firestore.collection(FirebaseCollections.users).doc(uid).set({
+        await _firestore
+            .collection(FirebaseCollections.users)
+            .doc(uid)
+            .collection(FirebaseCollections.avatarModeration)
+            .doc(FirebaseCollections.avatarModerationStateDocId)
+            .set({
           'avatarModerationPending': false,
         }, SetOptions(merge: true));
       }
@@ -2130,7 +2016,12 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
       try {
-        await _firestore.collection(FirebaseCollections.users).doc(uid).set({
+        await _firestore
+            .collection(FirebaseCollections.users)
+            .doc(uid)
+            .collection(FirebaseCollections.avatarModeration)
+            .doc(FirebaseCollections.avatarModerationStateDocId)
+            .set({
           'avatarModerationPending': FieldValue.delete(),
         }, SetOptions(merge: true));
       } catch (e) {
@@ -2172,7 +2063,12 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
 
   Future<void> _clearAvatarModerationRejected(String uid) async {
     try {
-      await _firestore.collection(FirebaseCollections.users).doc(uid).set({
+      await _firestore
+          .collection(FirebaseCollections.users)
+          .doc(uid)
+          .collection(FirebaseCollections.avatarModeration)
+          .doc(FirebaseCollections.avatarModerationStateDocId)
+          .set({
         'avatarModerationRejected': false,
         'avatarModerationRejectedAt': FieldValue.delete(),
         'avatarModerationReason': FieldValue.delete(),
@@ -2541,86 +2437,30 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
     String userId,
   ) async {
     final Map<String, Map<String, dynamic>> clubsMap = {};
-    final roles = data['roles'] as Map<String, dynamic>? ?? {};
-
-    // 1. Extraire les rôles ADMIN (liste de clubIds)
-    if (roles['admin'] is List) {
-      for (var clubId in (roles['admin'] as List).whereType<String>()) {
+    final summaries = (data['profileSummaries'] as List?)?.whereType<Map>().toList() ?? [];
+    for (final e in summaries) {
+      final clubId = e['clubId'] as String?;
+      final role = e['role'] as String?;
+      if (clubId == null || clubId.isEmpty || role == null) continue;
+      if (!clubsMap.containsKey(clubId)) {
         clubsMap[clubId] = {'clubId': clubId, 'roles': <String>[]};
-        clubsMap[clubId]!['roles'].add('admin');
+      }
+      if (!(clubsMap[clubId]!['roles'] as List<String>).contains(role)) {
+        (clubsMap[clubId]!['roles'] as List<String>).add(role);
       }
     }
-
-    // 2. Extraire les rôles PLAYER (structure avec clubs)
-    if (roles['player'] is Map) {
-      final playerData = roles['player'] as Map;
-      if (playerData['clubs'] is List) {
-        for (var clubEntry in (playerData['clubs'] as List).whereType<Map>()) {
-          final clubId = clubEntry['clubId'] as String?;
-          if (clubId == null) continue;
-
-          if (!clubsMap.containsKey(clubId)) {
-            clubsMap[clubId] = {'clubId': clubId, 'roles': <String>[]};
-          }
-          clubsMap[clubId]!['roles'].add('player');
-
-          // Ajouter la licence si disponible pour ce club
-          final license = clubEntry['license'] as String?;
-          if (license != null && license.isNotEmpty) {
-            clubsMap[clubId]!['license'] = license;
-          }
-        }
-      }
-      // Compatibilité avec l'ancienne structure (clubId direct)
-      else {
-        final legacyClubId = playerData['clubId'] as String?;
-        if (legacyClubId != null) {
-          if (!clubsMap.containsKey(legacyClubId)) {
-            clubsMap[legacyClubId] = {
-              'clubId': legacyClubId,
-              'roles': <String>[],
-            };
-          }
-          clubsMap[legacyClubId]!['roles'].add('player');
+    for (final clubId in clubsMap.keys) {
+      final roles = clubsMap[clubId]!['roles'] as List<String>;
+      if (roles.contains('player')) {
+        final member = await getMemberData(appFirestore, userId, clubId);
+        final license = (member?['player'] as Map?)?['license'] as String?;
+        if (license != null && license.isNotEmpty) {
+          clubsMap[clubId]!['license'] = license;
         }
       }
     }
 
-    // 3. Extraire les rôles COACH
-    if (roles['coach'] is Map) {
-      final coachData = roles['coach'] as Map;
-      if (coachData['clubs'] is List) {
-        for (var clubEntry in (coachData['clubs'] as List).whereType<Map>()) {
-          final clubId = clubEntry['clubId'] as String?;
-          if (clubId == null) continue;
-
-          if (!clubsMap.containsKey(clubId)) {
-            clubsMap[clubId] = {'clubId': clubId, 'roles': <String>[]};
-          }
-          clubsMap[clubId]!['roles'].add('coach');
-        }
-      }
-    } else if (roles['coach'] is List) {
-      // Ancienne structure : liste de clubIds
-      for (var clubId in (roles['coach'] as List).whereType<String>()) {
-        if (!clubsMap.containsKey(clubId)) {
-          clubsMap[clubId] = {'clubId': clubId, 'roles': <String>[]};
-        }
-        clubsMap[clubId]!['roles'].add('coach');
-      }
-    }
-
-    // 4. Compatibilité avec l'ancienne structure (clubId direct)
-    final legacyClubId = data['clubId'] as String?;
-    if (legacyClubId != null && !clubsMap.containsKey(legacyClubId)) {
-      final legacyRole = data['role'] as String?;
-      clubsMap[legacyClubId] = {
-        'clubId': legacyClubId,
-        'roles': legacyRole != null ? [legacyRole] : [],
-      };
-    }
-
-    // 5. Récupérer les infos des clubs (nom, logo) et les équipes
+    // Récupérer les infos des clubs (nom, logo) et les équipes
     final List<Map<String, dynamic>> result = [];
     for (var entry in clubsMap.entries) {
       final clubId = entry.key;
@@ -2794,53 +2634,14 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
     );
   }
 
-  // Extraire tous les clubIds depuis roles
+  // Extraire tous les clubIds depuis profileSummaries
   List<String> _extractAllClubIds(Map<String, dynamic>? userData) {
     final Set<String> clubIdsSet = {};
-    final roles = userData?['roles'] as Map<String, dynamic>? ?? {};
-
-    // Player
-    if (roles['player'] is Map) {
-      final playerData = roles['player'] as Map;
-      // Nouvelle structure : liste de clubs
-      if (playerData['clubs'] is List) {
-        final clubs = (playerData['clubs'] as List).whereType<Map>();
-        for (var club in clubs) {
-          final clubId = club['clubId'] as String?;
-          if (clubId != null) clubIdsSet.add(clubId);
-        }
-      }
-      // Ancienne structure : clubId direct (compatibilité)
-      else {
-        final playerClubId = playerData['clubId'] as String?;
-        if (playerClubId != null) clubIdsSet.add(playerClubId);
-      }
+    final summaries = (userData?['profileSummaries'] as List?)?.whereType<Map>().toList() ?? [];
+    for (final e in summaries) {
+      final cid = e['clubId'] as String?;
+      if (cid != null && cid.isNotEmpty) clubIdsSet.add(cid);
     }
-
-    // Coach
-    if (roles['coach'] is Map) {
-      final coachData = roles['coach'] as Map;
-      if (coachData['clubs'] is List) {
-        final clubs = (coachData['clubs'] as List).whereType<Map>();
-        for (var club in clubs) {
-          final clubId = club['clubId'] as String?;
-          if (clubId != null) clubIdsSet.add(clubId);
-        }
-      }
-    } else if (roles['coach'] is List) {
-      // Ancienne structure : liste de clubIds
-      clubIdsSet.addAll((roles['coach'] as List).whereType<String>());
-    }
-
-    // Admin
-    if (roles['admin'] is List) {
-      clubIdsSet.addAll((roles['admin'] as List).whereType<String>());
-    }
-
-    // Fallback pour compatibilité
-    final legacyClubId = userData?['clubId'] as String?;
-    if (legacyClubId != null) clubIdsSet.add(legacyClubId);
-
     return clubIdsSet.toList();
   }
 

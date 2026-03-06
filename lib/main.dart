@@ -6,6 +6,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:app_links/app_links.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -32,6 +33,7 @@ import 'theme/viro_theme.dart';
 import 'utils/app_logger.dart';
 import 'utils/auth_helper.dart';
 import 'utils/connectivity_checker.dart';
+import 'utils/migration_user_to_memberships.dart';
 import 'widget/fatal_error_app.dart';
 import 'widget/viro_loader.dart';
 
@@ -40,6 +42,21 @@ import 'widget/viro_loader.dart';
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   // La notif est affichée par le système ; le tap est géré par getInitialMessage / onMessageOpenedApp
+}
+
+bool _migrationRan = false;
+
+Future<void> _runMigrationOnce() async {
+  if (_migrationRan) return;
+  _migrationRan = true;
+  try {
+    await runMigrationUserToMemberships(
+      dryRun: false,
+      onProgress: (msg) => AppLogger.instance.info('Migration', {'step': msg}),
+    );
+  } catch (e, st) {
+    AppLogger.instance.error('Migration échouée', error: e, stackTrace: st);
+  }
 }
 
 void main() {
@@ -100,6 +117,11 @@ void main() {
         // 4. Initialiser le formatage de date en arrière-plan pour ne pas bloquer le démarrage
         // La première utilisation attendra que l'initialisation soit terminée
         unawaited(initializeDateFormatting('fr_FR', null));
+
+        // 4.5. Migration one-shot (base test uniquement) : roles → members + profileSummaries + avatar_moderation
+        if (!kReleaseMode) {
+          unawaited(_runMigrationOnce());
+        }
 
         // 5. Initialiser FCM (notifications push)
         unawaited(NotificationService.instance.init());

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:viro_team/constants/firebase_collections.dart';
 import '../../theme/viro_theme.dart';
 import '../../utils/app_logger.dart';
+import '../../services/membership_service.dart';
 import '../../utils/firebase_helpers.dart';
 import '../../utils/firebase_error_handler.dart';
 import '../../utils/avatar_moderation.dart';
@@ -311,19 +312,39 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
                   teamCategory: teamCategory,
                 );
               } else {
-                final userUpdate = <String, dynamic>{
-                  'coachedTeams': FieldValue.arrayUnion([
-                    {
-                      'teamId': widget.teamDoc.id,
-                      'teamName': teamName,
-                    },
-                  ]),
-                  '_adminClubId': widget.clubId,
-                };
                 await appFirestore
                     .collection(FirebaseCollections.users)
                     .doc(userId)
-                    .set(userUpdate, SetOptions(merge: true));
+                    .set({'_adminClubId': widget.clubId}, SetOptions(merge: true));
+                final memberRef = appFirestore
+                    .collection(FirebaseCollections.clubs)
+                    .doc(widget.clubId)
+                    .collection(FirebaseCollections.members)
+                    .doc(userId);
+                final memberSnap = await memberRef.get();
+                if (memberSnap.exists) {
+                  final coach = (memberSnap.data()?['coach'] as Map?) ?? {};
+                  final tIds = List<String>.from((coach['teamIds'] as List?)?.whereType<String>() ?? []);
+                  final tNames = List<String>.from((coach['teamNames'] as List?)?.whereType<String>() ?? tIds);
+                  if (!tIds.contains(widget.teamDoc.id)) {
+                    tIds.add(widget.teamDoc.id);
+                    tNames.add(teamName);
+                    await MembershipService.instance.updateMemberCoach(
+                      uid: userId,
+                      clubId: widget.clubId,
+                      teamIds: tIds,
+                      teamNames: tNames,
+                    );
+                  }
+                } else {
+                  await MembershipService.instance.ensureMemberAndProfileSummary(
+                    uid: userId,
+                    clubId: widget.clubId,
+                    role: 'coach',
+                    coachTeamIds: [widget.teamDoc.id],
+                    coachTeamNames: [teamName],
+                  );
+                }
               }
               if (role == 'player') {
                 await _updateEventsAttendanceForPlayer(
@@ -800,19 +821,32 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
                       teamCategory: teamCategory,
                     );
                   } else {
-                    final userUpdate = <String, dynamic>{
-                      'coachedTeams': FieldValue.arrayRemove([
-                        {
-                          'teamId': widget.teamDoc.id,
-                          'teamName': teamName,
-                        },
-                      ]),
-                      '_adminClubId': widget.clubId,
-                    };
                     await appFirestore
                         .collection(FirebaseCollections.users)
                         .doc(userId)
-                        .set(userUpdate, SetOptions(merge: true));
+                        .set({'_adminClubId': widget.clubId}, SetOptions(merge: true));
+                    final memberRef = appFirestore
+                        .collection(FirebaseCollections.clubs)
+                        .doc(widget.clubId)
+                        .collection(FirebaseCollections.members)
+                        .doc(userId);
+                    final memberSnap = await memberRef.get();
+                    if (memberSnap.exists) {
+                      final coach = (memberSnap.data()?['coach'] as Map?) ?? {};
+                      final tIds = List<String>.from((coach['teamIds'] as List?)?.whereType<String>() ?? []);
+                      final tNames = List<String>.from((coach['teamNames'] as List?)?.whereType<String>() ?? tIds);
+                      final idx = tIds.indexOf(widget.teamDoc.id);
+                      if (idx >= 0) {
+                        tIds.removeAt(idx);
+                        if (idx < tNames.length) tNames.removeAt(idx);
+                        await MembershipService.instance.updateMemberCoach(
+                          uid: userId,
+                          clubId: widget.clubId,
+                          teamIds: tIds,
+                          teamNames: tNames,
+                        );
+                      }
+                    }
                   }
                   if (role == 'player') {
                     await _updateEventsAttendanceForPlayer(

@@ -4,6 +4,7 @@ import 'package:viro_team/utils/firestore_instance.dart';
 import 'package:viro_team/utils/firebase_helpers.dart';
 import 'package:viro_team/utils/firebase_error_handler.dart';
 import 'package:viro_team/utils/app_logger.dart';
+import 'package:viro_team/services/membership_service.dart';
 import 'pending_member_merge_service.dart';
 
 /// Applique un lien d'invitation à un utilisateur déjà connecté :
@@ -76,31 +77,25 @@ class InviteApplyService {
         );
       }
 
-      // Si l'invite n'a aucune équipe, écrire quand même roles.player avec le club (sans équipes)
+      // Si l'invite n'a aucune équipe, créer quand même le member + profileSummary (sans équipes)
       if (teams.isEmpty) {
-        final userSnap = await userRef.get();
-        final userData = userSnap.data() ?? {};
-        final roles = Map<String, dynamic>.from(userData['roles'] as Map? ?? {});
-        final playerData = Map<String, dynamic>.from(roles['player'] as Map? ?? {});
-        List<Map<String, dynamic>> clubsList = [];
-        if (playerData['clubs'] is List) {
-          clubsList = (playerData['clubs'] as List)
-              .map((e) => Map<String, dynamic>.from(e as Map))
-              .toList();
-        }
-        final hasClub = clubsList.any((c) => c['clubId'] == clubId);
-        if (!hasClub) {
-          clubsList.add({
-            'clubId': clubId,
-            'teamIds': <String>[],
-            'teamNames': <String>[],
-            'categories': <String>[],
-            'joinedAt': Timestamp.fromDate(DateTime.now()),
-          });
-          playerData['clubs'] = clubsList;
-          roles['player'] = playerData;
-          await userRef.set({'roles': roles}, SetOptions(merge: true));
-        }
+        await MembershipService.instance.ensureMemberAndProfileSummary(
+          uid: userId,
+          clubId: clubId,
+          role: 'player',
+        );
+      } else {
+        final teamIds = teams.map((t) => t['teamId'] as String? ?? '').where((s) => s.isNotEmpty).toList();
+        final teamNames = teams.map((t) => t['teamName'] as String? ?? '').where((s) => s.isNotEmpty).toList();
+        final categories = teams.map((t) => t['category'] as String? ?? '').where((s) => s.isNotEmpty).toList();
+        await MembershipService.instance.ensureMemberAndProfileSummary(
+          uid: userId,
+          clubId: clubId,
+          role: 'player',
+          playerTeamIds: teamIds,
+          playerTeamNames: teamNames,
+          playerCategories: categories,
+        );
       }
 
       await userRef.set({

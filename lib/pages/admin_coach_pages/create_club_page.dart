@@ -7,6 +7,7 @@ import '../../theme/viro_theme.dart';
 import '../../widget/viro_loader.dart';
 import '../../utils/app_logger.dart';
 import '../../utils/firebase_error_handler.dart';
+import '../../services/membership_service.dart';
 import 'admin_home_page.dart';
 
 class CreateClubPage extends StatefulWidget {
@@ -79,57 +80,36 @@ class _CreateClubPageState extends State<CreateClubPage> {
         'phone': _phoneController.text.trim(),
         'description': _descriptionController.text.trim(),
         'adminId': user.uid,
-        'admins': [user.uid], // Ajouter l'admin_fondateur à la liste des admins
+        'admins': [user.uid],
+        'members': [user.uid],
         'createdAt': FieldValue.serverTimestamp(),
         'memberCount': 1,
         'seasonEndDate': Timestamp.fromDate(defaultSeasonEnd),
       });
 
-      // 2. Mise à jour de l'utilisateur avec la nouvelle structure multi-tenant
-      // Récupérer les données existantes pour ne pas écraser
+      // 2. Mise à jour de l'utilisateur : activeContext + member/profileSummaries via ensureMemberAndProfileSummary
       final userDoc = await appFirestore
           .collection(FirebaseCollections.users)
           .doc(user.uid)
           .get();
       final existingData = userDoc.data() ?? {};
-      final existingRoles =
-          existingData['roles'] as Map<String, dynamic>? ?? {};
 
-      // Ajouter le clubId à la liste des admins (sans écraser)
-      final existingAdmins =
-          (existingRoles['admin'] as List?)?.whereType<String>().toList() ?? [];
-      if (!existingAdmins.contains(clubRef.id)) {
-        existingAdmins.add(clubRef.id);
-      }
-
-      // Créateur du club = admin_fondateur : ajouter l'id du club dans roles.admin_fondateur
-      final existingAdminFondateur =
-          (existingRoles['admin_fondateur'] as List?)?.whereType<String>().toList() ?? [];
-      if (!existingAdminFondateur.contains(clubRef.id)) {
-        existingAdminFondateur.add(clubRef.id);
-      }
-
-      // Construire la nouvelle structure roles (admin + admin_fondateur)
-      final updatedRoles = {
-        ...existingRoles,
-        'admin': existingAdmins,
-        'admin_fondateur': existingAdminFondateur,
-      };
-
-      // Toujours basculer vers le club venant d'être créé (rôle fondateur)
       final Map<String, dynamic> newActiveContext = {
         'role': 'admin_fondateur',
         'clubId': clubRef.id,
       };
 
-      // Mettre à jour le document utilisateur avec la nouvelle structure
       await appFirestore.collection(FirebaseCollections.users).doc(user.uid).set({
-        'roles': updatedRoles,
         'activeContext': newActiveContext,
-        // Garder clubId et clubName pour compatibilité avec l'ancien système
-        'clubId': clubRef.id,
-        'clubName': _nameController.text.trim(),
       }, SetOptions(merge: true));
+
+      await MembershipService.instance.ensureMemberAndProfileSummary(
+        uid: user.uid,
+        clubId: clubRef.id,
+        role: 'admin_fondateur',
+        isFounderAdmin: true,
+        userDataOverride: existingData,
+      );
 
       AppLogger.instance.info(
         'Club créé',

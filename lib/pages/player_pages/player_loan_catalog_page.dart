@@ -39,30 +39,14 @@ class _PlayerLoanCatalogPageState extends State<PlayerLoanCatalogPage>
   Map<String, String> _clubNamesCache = {};
   Map<String, String> _clubSportsCache = {};
 
-  // Extraire tous les clubIds du joueur depuis roles
+  // Extraire tous les clubIds du joueur depuis profileSummaries
   List<String> _extractClubIds(Map<String, dynamic>? userData) {
     final Set<String> clubIdsSet = {};
-    final roles = userData?['roles'] as Map<String, dynamic>? ?? {};
-
-    // Player
-    if (roles['player'] is Map) {
-      final playerData = roles['player'] as Map;
-      // Nouvelle structure : liste de clubs
-      if (playerData['clubs'] is List) {
-        final clubs = (playerData['clubs'] as List).whereType<Map>();
-        for (var club in clubs) {
-          final clubId = club['clubId'] as String?;
-          if (clubId != null) clubIdsSet.add(clubId);
-        }
-      }
-      // Ancienne structure : clubId direct (compatibilité)
-      else {
-        final playerClubId = playerData['clubId'] as String?;
-        if (playerClubId != null) clubIdsSet.add(playerClubId);
-      }
+    final summaries = (userData?['profileSummaries'] as List?)?.whereType<Map>().toList() ?? [];
+    for (final e in summaries) {
+      final cid = e['clubId'] as String?;
+      if (cid != null && cid.isNotEmpty) clubIdsSet.add(cid);
     }
-
-    // Priorité contexte actif, puis fallback legacy
     final activeContext = userData?['activeContext'] as Map<String, dynamic>?;
     final activeClubId = activeContext?['clubId'] as String?;
     if (activeClubId != null && activeClubId.isNotEmpty) {

@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 
 import '../../constants/firebase_collections.dart';
 import '../../theme/viro_theme.dart';
+import '../../utils/firebase_helpers.dart';
 import '../../utils/firebase_error_handler.dart';
 import '../../widget/admin_loans/loans_summary_card.dart';
 import '../../widget/slide_to_confirm.dart';
@@ -33,29 +34,8 @@ class AdminLoansPage extends StatefulWidget {
 /// True si l'utilisateur est admin (ou admin_fondateur) du club, false pour coach.
 bool _isAdminForClub(Map<String, dynamic>? userData, String clubId) {
   if (userData == null) return false;
-  final roles = userData['roles'] as Map<String, dynamic>? ?? {};
-  if (roles['admin_fondateur'] is List) {
-    final fondateurIds =
-        (roles['admin_fondateur'] as List).whereType<String>();
-    if (fondateurIds.contains(clubId)) return true;
-  }
-  if (roles['admin'] is List) {
-    final adminClubIds = (roles['admin'] as List).whereType<String>();
-    if (adminClubIds.contains(clubId)) return true;
-  }
-  final activeContext = userData['activeContext'] as Map<String, dynamic>?;
-  final activeRole = activeContext?['role'] as String?;
-  final activeClubId = activeContext?['clubId'] as String?;
-  if (activeClubId == clubId &&
-      (activeRole == 'admin' || activeRole == 'admin_fondateur')) {
-    return true;
-  }
-  final legacyRole = userData['role'] as String?;
-  final legacyClubId = userData['clubId'] as String?;
-  if (legacyClubId == clubId &&
-      (legacyRole == 'admin' || legacyRole == 'admin_fondateur')) {
-    return true;
-  }
+  final role = getUserRoleInClub(userData, clubId);
+  if (role == 'admin_fondateur' || role == 'admin') return true;
   return false;
 }
 

@@ -15,6 +15,7 @@ import 'admin_members_page.dart';
 import 'admin_profil_page.dart';
 import 'package:intl/intl.dart';
 import '../../constants/firebase_collections.dart';
+import '../../services/membership_service.dart';
 import '../../services/notification_service.dart';
 import '../../services/pending_member_merge_service.dart';
 import '../../theme/viro_theme.dart';
@@ -797,128 +798,37 @@ class _AdminHomePageState extends State<AdminHomePage> {
           'respondedAt': FieldValue.serverTimestamp(),
         });
 
+        final requestData = (await requestRef.get()).data() ?? {};
+        final licenseFromRequest = requestData['license'] as String?;
+
         // Récupérer les données utilisateur existantes
         final userDoc = await appFirestore
             .collection(FirebaseCollections.users)
             .doc(userId)
             .get();
         final userData = userDoc.data() ?? {};
-        final roles = userData['roles'] as Map<String, dynamic>? ?? {};
-
-        // Déterminer le rôle réel (normaliser admin_fondateur en admin)
         final normalizedRole = (role == 'admin_fondateur')
             ? 'admin'
             : (role ?? 'player');
 
-        // Construire la nouvelle structure roles sans écraser
-        final Map<String, dynamic> updatedRoles = Map<String, dynamic>.from(
-          roles,
-        );
-
-        if (normalizedRole == 'player') {
-          // Player : ajouter le club à la liste des clubs (peut avoir plusieurs clubs)
-          final existingPlayer = roles['player'] as Map<String, dynamic>?;
-
-          if (existingPlayer == null) {
-            // Premier club : créer la structure avec liste de clubs
-            // Récupérer la licence depuis les données de la demande si disponible
-            final requestDoc = await appFirestore
-                .collection(FirebaseCollections.joinRequests)
-                .doc(requestId)
-                .get();
-            final requestData = requestDoc.data() ?? {};
-            final license = requestData['license'] as String?;
-
-            updatedRoles['player'] = {
-              'clubs': [
-                {
-                  'clubId': clubId,
-                  'teamIds': [],
-                  if (license != null && license.isNotEmpty) 'license': license,
-                },
-              ],
-            };
-          } else {
-            // Ajouter le club à la liste existante
-            List<Map<String, dynamic>> clubsList;
-
-            // Vérifier si c'est la nouvelle structure avec "clubs"
-            if (existingPlayer['clubs'] is List) {
-              clubsList = (existingPlayer['clubs'] as List)
-                  .map((e) => e as Map<String, dynamic>)
-                  .toList();
-            }
-            // Migration depuis l'ancienne structure (clubId direct)
-            else if (existingPlayer['clubId'] != null) {
-              clubsList = [
-                {
-                  'clubId': existingPlayer['clubId'],
-                  'teamIds': existingPlayer['teamIds'] ?? [],
-                  if (existingPlayer['license'] != null)
-                    'license': existingPlayer['license'],
-                },
-              ];
-            } else {
-              clubsList = [];
-            }
-
-            // Vérifier qu'on n'ajoute pas un doublon
-            if (!clubsList.any((c) => c['clubId'] == clubId)) {
-              // Récupérer la licence depuis les données de la demande si disponible
-              final requestDoc = await appFirestore
-                  .collection(FirebaseCollections.joinRequests)
-                  .doc(requestId)
-                  .get();
-              final requestData = requestDoc.data() ?? {};
-              final license = requestData['license'] as String?;
-
-              clubsList.add({
-                'clubId': clubId,
-                'teamIds': [],
-                if (license != null && license.isNotEmpty) 'license': license,
-              });
-            }
-
-            // Préserver les autres champs (comme license)
-            updatedRoles['player'] = {...existingPlayer, 'clubs': clubsList};
-          }
-        } else if (normalizedRole == 'coach') {
-          // Coach : ajouter à la liste
-          final existingCoaches =
-              (roles['coach'] as List?)
-                  ?.map((e) => e as Map<String, dynamic>)
-                  .toList() ??
-              [];
-          // Vérifier qu'on n'ajoute pas un doublon
-          if (!existingCoaches.any((c) => c['clubId'] == clubId)) {
-            existingCoaches.add({'clubId': clubId, 'teams': []});
-            updatedRoles['coach'] = existingCoaches;
-          }
-        } else if (normalizedRole == 'admin') {
-          // Admin : ajouter à la liste de clubIds
-          final existingAdmins =
-              (roles['admin'] as List?)?.whereType<String>().toList() ?? [];
-          if (!existingAdmins.contains(clubId)) {
-            existingAdmins.add(clubId!);
-            updatedRoles['admin'] = existingAdmins;
-          }
-        }
-
-        // Toujours définir activeContext sur le club et le rôle acceptés
         final newActiveContext = <String, dynamic>{
           'role': normalizedRole,
           'clubId': clubId,
         };
 
-        // Mettre à jour le document utilisateur
         await appFirestore.collection(FirebaseCollections.users).doc(userId).set({
           'hasPendingRequest': false,
-          'roles': updatedRoles,
           'activeContext': newActiveContext,
         }, SetOptions(merge: true));
 
-        // Ajouter l'utilisateur dans la liste des membres ou coachs du club
         if (clubId != null) {
+          await MembershipService.instance.ensureMemberAndProfileSummary(
+            uid: userId,
+            clubId: clubId,
+            role: normalizedRole,
+            playerLicense: normalizedRole == 'player' ? licenseFromRequest : null,
+            userDataOverride: userData,
+          );
           final field = (normalizedRole == 'admin' || normalizedRole == 'coach')
               ? 'coaches'
               : 'members';

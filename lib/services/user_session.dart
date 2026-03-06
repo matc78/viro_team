@@ -8,20 +8,25 @@ import '../utils/app_logger.dart';
 
 /// Service de gestion de la session utilisateur
 /// Gère le contexte actif et les changements de profil
+/// Utilise UserProfile (profileSummaries) et fusionne avatar_moderation depuis la sous-collection
 class UserSession extends ChangeNotifier {
   static final UserSession _instance = UserSession._internal();
   factory UserSession() => _instance;
   UserSession._internal();
 
-  UserModel? _currentUser;
+  UserProfile? _currentUser;
   bool _isLoading = false;
   bool _hasServerSnapshot = false;
 
-  UserModel? get currentUser => _currentUser;
+  /// Cache du dernier doc user et modération pour fusion lors des doubles abonnements
+  Map<String, dynamic>? _lastUserData;
+  Map<String, dynamic>? _lastModerationData;
+  String? _listeningUid;
+
+  UserProfile? get currentUser => _currentUser;
   bool get isLoading => _isLoading;
 
   /// True après le premier snapshot venu du serveur (pas du cache).
-  /// Évite de restaurer activeContext sur des données Firestore en cache obsolètes.
   bool get hasServerSnapshot => _hasServerSnapshot;
 
   /// Rôle actuel basé sur activeContext
@@ -33,21 +38,51 @@ class UserSession extends ChangeNotifier {
   /// Vérifie si le contexte actif est valide
   bool get hasValidContext => _currentUser?.activeContext?.isValid ?? false;
 
-  /// Charge l'utilisateur depuis Firestore
+  void _applyMerge(String uid) {
+    final userData = _lastUserData;
+    if (userData == null) return;
+    final merged = Map<String, dynamic>.from(userData);
+    final mod = _lastModerationData;
+    if (mod != null) {
+      merged['avatarModerationRejected'] = mod['avatarModerationRejected'];
+      merged['avatarModerationPending'] = mod['avatarModerationPending'];
+      merged['avatarModerationReason'] = mod['avatarModerationReason'];
+      merged['avatarModerationRejectedAt'] = mod['avatarModerationRejectedAt'];
+      merged['avatarModerationOk'] = mod['avatarModerationOk'];
+    } else {
+      merged['avatarModerationRejected'] = false;
+      merged['avatarModerationPending'] = false;
+      merged['avatarModerationReason'] = null;
+      merged['avatarModerationRejectedAt'] = null;
+      merged['avatarModerationOk'] = false;
+    }
+    _currentUser = UserProfile.fromMergedData(uid, merged);
+  }
+
+  /// Charge l'utilisateur depuis Firestore (user doc + avatar_moderation/state)
   Future<void> loadUser(String uid) async {
     _isLoading = true;
     notifyListeners();
 
     try {
-      final doc = await appFirestore
+      final userRef = appFirestore
           .collection(FirebaseCollections.users)
-          .doc(uid)
-          .get();
+          .doc(uid);
+      final modRef = userRef
+          .collection(FirebaseCollections.avatarModeration)
+          .doc(FirebaseCollections.avatarModerationStateDocId);
 
-      if (doc.exists) {
-        _currentUser = UserModel.fromFirestore(doc);
-      } else {
+      final userSnap = await userRef.get();
+      final modSnap = await modRef.get();
+
+      if (!userSnap.exists) {
         _currentUser = null;
+        _lastUserData = null;
+        _lastModerationData = null;
+      } else {
+        _lastUserData = userSnap.data();
+        _lastModerationData = modSnap.exists ? modSnap.data() : null;
+        _applyMerge(uid);
       }
     } catch (e) {
       AppLogger.instance.error(
@@ -56,103 +91,150 @@ class UserSession extends ChangeNotifier {
         context: {'userId': uid},
       );
       _currentUser = null;
+      _lastUserData = null;
+      _lastModerationData = null;
     } finally {
       _isLoading = false;
       notifyListeners();
     }
   }
 
-  /// Écoute les changements du document utilisateur en temps réel
-  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _subscription;
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _subUser;
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _subModeration;
 
-  /// Démarre l'écoute en temps réel des changements utilisateur
+  /// Démarre l'écoute en temps réel (user doc + avatar_moderation/state)
   void startListening(String uid) {
-    _subscription?.cancel();
+    _subUser?.cancel();
+    _subModeration?.cancel();
     _isLoading = true;
     _hasServerSnapshot = false;
+    _listeningUid = uid;
+    _lastUserData = null;
+    _lastModerationData = null;
     notifyListeners();
 
-    _subscription = appFirestore
+    final userRef = appFirestore
         .collection(FirebaseCollections.users)
-        .doc(uid)
-        .snapshots()
-        .listen(
-          (doc) {
-            try {
-              if (!doc.metadata.isFromCache) _hasServerSnapshot = true;
-              if (doc.exists) {
-                _currentUser = UserModel.fromFirestore(doc);
-                final u = _currentUser;
-                if (u != null &&
-                    !doc.metadata.isFromCache &&
-                    u.hasAnyRole &&
-                    !u.isActiveContextCoherent) {
-                  restoreActiveContextIfNeeded();
-                }
-              } else {
-                _currentUser = null;
-              }
-            } catch (e, st) {
-              AppLogger.instance.error('Erreur parsing UserModel', error: e, stackTrace: st, context: {'userId': uid});
-              _currentUser = null;
-            }
-            _isLoading = false;
-            notifyListeners();
-          },
-          onError: (error) {
-            AppLogger.instance.error(
-              'Erreur lors de l\'écoute utilisateur',
-              error: error,
-              context: {'userId': uid},
-            );
-            _isLoading = false;
-            notifyListeners();
-          },
+        .doc(uid);
+    final modRef = userRef
+        .collection(FirebaseCollections.avatarModeration)
+        .doc(FirebaseCollections.avatarModerationStateDocId);
+
+    void onUpdate() {
+      if (_lastUserData == null) {
+        _currentUser = null;
+      } else {
+        _applyMerge(uid);
+        final u = _currentUser;
+        if (u != null &&
+            u.hasAnyRole &&
+            !u.isActiveContextCoherent) {
+          restoreActiveContextIfNeeded();
+        }
+      }
+      _isLoading = false;
+      notifyListeners();
+    }
+
+    _subUser = userRef.snapshots().listen((doc) {
+      try {
+        if (!doc.metadata.isFromCache) _hasServerSnapshot = true;
+        if (doc.exists) {
+          _lastUserData = doc.data();
+        } else {
+          _lastUserData = null;
+          _lastModerationData = null;
+          _currentUser = null;
+        }
+        onUpdate();
+      } catch (e, st) {
+        AppLogger.instance.error(
+          'Erreur parsing user doc',
+          error: e,
+          stackTrace: st,
+          context: {'userId': uid},
         );
+        _currentUser = null;
+        _isLoading = false;
+        notifyListeners();
+      }
+    }, onError: (error) {
+      AppLogger.instance.error(
+        'Erreur écoute user',
+        error: error,
+        context: {'userId': uid},
+      );
+      _isLoading = false;
+      notifyListeners();
+    });
+
+    _subModeration = modRef.snapshots().listen((doc) {
+      _lastModerationData = doc.exists ? doc.data() : null;
+      if (_listeningUid == uid && _lastUserData != null) {
+        _applyMerge(uid);
+        _isLoading = false;
+        notifyListeners();
+      }
+    }, onError: (_) {
+      if (_listeningUid == uid) {
+        _lastModerationData = null;
+        if (_lastUserData != null) {
+          _applyMerge(uid);
+        }
+        _isLoading = false;
+        notifyListeners();
+      }
+    });
   }
 
   /// Arrête l'écoute
   void stopListening() {
-    _subscription?.cancel();
-    _subscription = null;
+    _subUser?.cancel();
+    _subModeration?.cancel();
+    _subUser = null;
+    _subModeration = null;
     _currentUser = null;
+    _lastUserData = null;
+    _lastModerationData = null;
+    _listeningUid = null;
     _hasServerSnapshot = false;
     notifyListeners();
   }
 
   /// Annule uniquement l'abonnement Firestore sans effacer [currentUser].
-  /// À utiliser pendant la suppression de compte pour éviter PERMISSION_DENIED
-  /// et pour ne pas déclencher la redirection AuthPage via currentUser == null.
   void cancelListeningOnly() {
-    _subscription?.cancel();
-    _subscription = null;
+    _subUser?.cancel();
+    _subModeration?.cancel();
+    _subUser = null;
+    _subModeration = null;
   }
 
-  /// Restaure activeContext si celui-ci est manquant, invalide, ou obsolète
-  /// (l'utilisateur n'a plus le rôle/club indiqué).
-  /// Priorité : admin_fondateur > admin > coach > player.
-  /// À appeler après reconnexion pour éviter d'afficher la mauvaise home.
+  /// Restaure activeContext à partir de profileSummaries (priorité : admin_fondateur > admin > coach > player)
   Future<bool> restoreActiveContextIfNeeded() async {
     final u = _currentUser;
     if (u == null) return false;
-
-    // Ne rien faire si le contexte actuel est valide ET correspond aux rôles réels
     if (u.isActiveContextCoherent) return false;
 
     String? role;
     String? clubId;
-    if (u.roles.adminFondateur.isNotEmpty) {
+    final summaries = u.profileSummaries;
+    final fondateur = summaries.where((s) => s.role == 'admin_fondateur').toList();
+    final admin = summaries.where((s) => s.role == 'admin').toList();
+    final coach = summaries.where((s) => s.role == 'coach').toList();
+    final player = summaries.where((s) => s.role == 'player').toList();
+
+    if (fondateur.isNotEmpty) {
       role = 'admin_fondateur';
-      clubId = u.roles.adminFondateur.first;
-    } else if (u.roles.admin.isNotEmpty) {
+      clubId = fondateur.first.clubId;
+    } else if (admin.isNotEmpty) {
       role = 'admin';
-      clubId = u.roles.admin.first;
-    } else if (u.roles.coach.isNotEmpty) {
+      clubId = admin.first.clubId;
+    } else if (coach.isNotEmpty) {
       role = 'coach';
-      clubId = u.roles.coach.first.clubId;
-    } else if (u.roles.player != null && u.roles.player!.clubs.isNotEmpty) {
+      clubId = coach.first.clubId;
+    } else if (player.isNotEmpty) {
       role = 'player';
-      clubId = u.roles.player!.clubs.first.clubId;
+      clubId = player.first.clubId;
     }
     if (role == null || clubId == null || clubId.isEmpty) return false;
 
@@ -179,8 +261,6 @@ class UserSession extends ChangeNotifier {
     }
   }
 
-  /// Change le contexte actif (role + clubId)
-  /// Met à jour activeContext dans Firestore
   Future<bool> switchContext(String role, String clubId) async {
     final u = _currentUser;
     if (u == null) return false;
@@ -190,10 +270,8 @@ class UserSession extends ChangeNotifier {
           .collection(FirebaseCollections.users)
           .doc(u.uid)
           .update({
-            'activeContext': {'role': role, 'clubId': clubId},
-          });
-
-      // Le listener mettra à jour _currentUser automatiquement
+        'activeContext': {'role': role, 'clubId': clubId},
+      });
       AppLogger.instance.info('Changement de contexte actif', {
         'userId': u.uid,
         'role': role,
@@ -210,74 +288,50 @@ class UserSession extends ChangeNotifier {
     }
   }
 
-  /// Vérifie si l'utilisateur peut changer vers un contexte spécifique
   bool canSwitchTo(String role, String clubId) {
     final u = _currentUser;
     if (u == null) return false;
     return u.hasRoleInClub(role, clubId);
   }
 
-  /// Retourne tous les profils disponibles pour le switcher
+  /// Profils disponibles pour le switcher (depuis profileSummaries)
   List<ProfileOption> getAvailableProfiles() {
     final u = _currentUser;
     if (u == null) return [];
 
-    final List<ProfileOption> profiles = [];
-
-    // Profil Player (peut avoir plusieurs clubs)
-    final player = u.roles.player;
-    if (player != null) {
-      for (var club in player.clubs) {
-        profiles.add(
-          ProfileOption(
-            role: 'player',
-            clubId: club.clubId ?? '',
-            clubName: null, // Sera chargé depuis Firestore si nécessaire
-            displayName: 'Joueur',
-          ),
-        );
+    String displayNameFor(String role) {
+      switch (role) {
+        case 'player':
+          return 'Joueur';
+        case 'coach':
+          return 'Coach';
+        case 'admin_fondateur':
+          return 'Administrateur fondateur';
+        case 'admin':
+          return 'Administrateur';
+        default:
+          return role;
       }
     }
 
-    // Profils Coach
-    for (var coach in u.roles.coach) {
-      profiles.add(
-        ProfileOption(
-          role: 'coach',
-          clubId: coach.clubId ?? '',
-          clubName: null,
-          displayName: 'Coach',
-        ),
-      );
-    }
-
-    // Profils Admin fondateur (priorité : afficher "Administrateur fondateur" pour les clubs fondés)
-    for (var clubId in u.roles.adminFondateur) {
-      profiles.add(
-        ProfileOption(
-          role: 'admin_fondateur',
-          clubId: clubId,
-          clubName: null,
-          displayName: 'Administrateur fondateur',
-        ),
-      );
-    }
-
-    // Profils Admin (uniquement les clubs où il n'est pas fondateur, pour éviter doublons)
-    final fondateurClubIds = u.roles.adminFondateur.toSet();
-    for (var clubId in u.roles.admin) {
-      if (fondateurClubIds.contains(clubId)) continue;
-      profiles.add(
-        ProfileOption(
-          role: 'admin',
-          clubId: clubId,
-          clubName: null,
-          displayName: 'Administrateur',
-        ),
-      );
-    }
-
-    return profiles;
+    final fondateurClubIds = u.profileSummaries
+        .where((s) => s.role == 'admin_fondateur')
+        .map((s) => s.clubId)
+        .toSet();
+    return u.profileSummaries
+        .where((s) {
+          if (s.role == 'admin' && fondateurClubIds.contains(s.clubId)) {
+            return false;
+          }
+          return true;
+        })
+        .map((s) => ProfileOption(
+              role: s.role,
+              clubId: s.clubId,
+              clubName: null,
+              displayName: displayNameFor(s.role),
+            ))
+        .toList();
   }
 
   @override

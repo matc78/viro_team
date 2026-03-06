@@ -10,6 +10,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:viro_team/utils/club_emoji_utils.dart';
 import 'package:viro_team/utils/firestore_instance.dart';
 import '../../constants/firebase_collections.dart';
+import '../../services/membership_service.dart';
 import '../../theme/viro_theme.dart';
 import '../../utils/app_logger.dart';
 import '../../utils/firebase_helpers.dart';
@@ -429,35 +430,44 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
         entries.add({'doc': doc, 'role': role});
       }
     }
-    final filtered =
-        entries.where((entry) {
-          final doc = entry['doc'] as DocumentSnapshot;
-          final role = entry['role'] as String;
-          final data = doc.data() as Map<String, dynamic>?;
-          if (data == null) return false;
-          final first = (data['firstName'] as String? ?? "").toLowerCase();
-          final last = (data['lastName'] as String? ?? "").toLowerCase();
-          final email = (data['email'] as String? ?? "").toLowerCase();
-          final userCats = getUserCategories(data);
-          final userTeams = getUserTeamNames(data);
-          final isPlayer = role == 'player';
-          final catOk =
-              !isPlayer ||
-              _selectedCategory == null ||
-              userCats.any(
-                (c) => _normalize(c) == _normalize(_selectedCategory!),
-              );
-          final teamOk =
-              !isPlayer ||
-              _selectedTeam == null ||
-              userTeams.any((t) => _normalize(t) == _normalize(_selectedTeam!));
-          final matchesSearch =
-              _search.isEmpty ||
-              first.contains(_search) ||
-              last.contains(_search) ||
-              email.contains(_search);
-          return matchesSearch && catOk && teamOk;
-        }).toList()..sort((a, b) {
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _enrichMemberEntries(entries),
+      builder: (context, enrichSnap) {
+        if (!enrichSnap.hasData) {
+          return const SliverToBoxAdapter(
+            child: SizedBox(height: 120, child: Center(child: CircularProgressIndicator())),
+          );
+        }
+        final enrichedEntries = enrichSnap.data!;
+        final filtered =
+            enrichedEntries.where((entry) {
+              final doc = entry['doc'] as DocumentSnapshot;
+              final role = entry['role'] as String;
+              final data = doc.data() as Map<String, dynamic>?;
+              if (data == null) return false;
+              final first = (data['firstName'] as String? ?? "").toLowerCase();
+              final last = (data['lastName'] as String? ?? "").toLowerCase();
+              final email = (data['email'] as String? ?? "").toLowerCase();
+              final userCats = (entry['categories'] as List<String>?) ?? [];
+              final userTeams = (entry['teamNames'] as List<String>?) ?? [];
+              final isPlayer = role == 'player';
+              final catOk =
+                  !isPlayer ||
+                  _selectedCategory == null ||
+                  userCats.any(
+                    (c) => _normalize(c) == _normalize(_selectedCategory!),
+                  );
+              final teamOk =
+                  !isPlayer ||
+                  _selectedTeam == null ||
+                  userTeams.any((t) => _normalize(t) == _normalize(_selectedTeam!));
+              final matchesSearch =
+                  _search.isEmpty ||
+                  first.contains(_search) ||
+                  last.contains(_search) ||
+                  email.contains(_search);
+              return matchesSearch && catOk && teamOk;
+            }).toList()..sort((a, b) {
           final aDoc = a['doc'] as DocumentSnapshot;
           final bDoc = b['doc'] as DocumentSnapshot;
           final aRole = a['role'] as String;
@@ -478,68 +488,68 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
           final bFirst = (bData?['firstName'] as String? ?? "").toLowerCase();
           return aFirst.compareTo(bFirst);
         });
-    if (filtered.isEmpty) {
-      return SliverToBoxAdapter(
-        child: const SizedBox(
-          height: 120,
-          child: Center(child: Text("Aucun membre trouvé.")),
-        ),
-      );
-    }
-    final bool canEdit =
-        widget.currentViewerRole == 'admin' ||
-        widget.currentViewerRole == 'admin_fondateur';
-    final List<int> slots = [];
-    for (int i = 0; i < filtered.length; i++) {
-      if (i > 0) {
-        final prevRole = filtered[i - 1]['role'] as String;
-        final currRole = filtered[i]['role'] as String;
-        final prevStaff =
-            prevRole == 'admin_fondateur' ||
-            prevRole == 'coach' ||
-            prevRole == 'admin';
-        final currPlayer = currRole == 'player';
-        if (prevStaff && currPlayer) slots.add(-1);
-      }
-      slots.add(i);
-    }
-    return SliverList(
-      delegate: SliverChildBuilderDelegate((context, index) {
-        if (slots[index] == -1) {
-          return const Divider(
-            height: 1,
-            color: Colors.black,
-            indent: 50,
-            endIndent: 50,
+        if (filtered.isEmpty) {
+          return SliverToBoxAdapter(
+            child: const SizedBox(
+              height: 120,
+              child: Center(child: Text("Aucun membre trouvé.")),
+            ),
           );
         }
-        final entryIndex = slots[index];
-        final entry = filtered[entryIndex];
-        final doc = entry['doc'] as DocumentSnapshot;
-        final role = entry['role'] as String;
-        final rawData = doc.data();
-        final data = rawData as Map<String, dynamic>?;
-        if (data == null) return const SizedBox.shrink();
-        final userId = doc.id;
-        final firstName = data['firstName'] as String? ?? "";
-        final lastName = data['lastName'] as String? ?? "";
-        final avatarUrl = effectiveAvatarUrl(data);
-        final isPlayer = role == 'player';
-        final userCategories = getUserCategories(data);
-        final isStaff =
-            role == 'admin_fondateur' || role == 'coach' || role == 'admin';
-        final roleLabel = role
-            .replaceAll('_', ' ')
-            .split(' ')
-            .map((word) {
-              if (word.isEmpty) return word;
-              return word[0].toUpperCase() + word.substring(1);
-            })
-            .join(' ');
-        final bool showDelete =
-            canEdit &&
-            _editMode &&
-            role != 'admin_fondateur' &&
+        final bool canEdit =
+            widget.currentViewerRole == 'admin' ||
+            widget.currentViewerRole == 'admin_fondateur';
+        final List<int> slots = [];
+        for (int i = 0; i < filtered.length; i++) {
+          if (i > 0) {
+            final prevRole = filtered[i - 1]['role'] as String;
+            final currRole = filtered[i]['role'] as String;
+            final prevStaff =
+                prevRole == 'admin_fondateur' ||
+                prevRole == 'coach' ||
+                prevRole == 'admin';
+            final currPlayer = currRole == 'player';
+            if (prevStaff && currPlayer) slots.add(-1);
+          }
+          slots.add(i);
+        }
+        return SliverList(
+          delegate: SliverChildBuilderDelegate((context, index) {
+            if (slots[index] == -1) {
+              return const Divider(
+                height: 1,
+                color: Colors.black,
+                indent: 50,
+                endIndent: 50,
+              );
+            }
+            final entryIndex = slots[index];
+            final entry = filtered[entryIndex];
+            final doc = entry['doc'] as DocumentSnapshot;
+            final role = entry['role'] as String;
+            final rawData = doc.data();
+            final data = rawData as Map<String, dynamic>?;
+            if (data == null) return const SizedBox.shrink();
+            final userId = doc.id;
+            final firstName = data['firstName'] as String? ?? "";
+            final lastName = data['lastName'] as String? ?? "";
+            final avatarUrl = effectiveAvatarUrl(data);
+            final isPlayer = role == 'player';
+            final userCategories = (entry['categories'] as List<String>?) ?? [];
+            final isStaff =
+                role == 'admin_fondateur' || role == 'coach' || role == 'admin';
+            final roleLabel = role
+                .replaceAll('_', ' ')
+                .split(' ')
+                .map((word) {
+                  if (word.isEmpty) return word;
+                  return word[0].toUpperCase() + word.substring(1);
+                })
+                .join(' ');
+            final bool showDelete =
+                canEdit &&
+                _editMode &&
+                role != 'admin_fondateur' &&
             (widget.currentViewerRole == 'admin_fondateur' ||
                 (widget.currentViewerRole == 'admin' &&
                     (role == 'player' || role == 'coach')));
@@ -553,11 +563,13 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
             _editMode &&
             widget.currentViewerRole == 'admin_fondateur' &&
             role == 'admin';
+        final hasLicense = entry['hasLicense'] as bool? ?? false;
         final trailing =
             _editMode && (showDelete || showPasserAdmin || showPasserCoach)
             ? _buildEditTrailing(
                 roleLabel: roleLabel,
                 isPlayer: isPlayer,
+                hasLicense: hasLicense,
                 data: data,
                 showDelete: showDelete,
                 showPasserAdmin: showPasserAdmin,
@@ -577,8 +589,8 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
           isPlayer: isPlayer,
           isStaff: isStaff,
           categories: userCategories,
-          teamNames: getUserTeamNames(data),
-          hasLicense: playerHasLicense(data, widget.clubId),
+          teamNames: (entry['teamNames'] as List<String>?) ?? [],
+          hasLicense: entry['hasLicense'] as bool? ?? false,
           trailing: trailing,
           onTap: () {
             if (!_editMode) {
@@ -591,7 +603,27 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
           },
         );
       }, childCount: slots.length),
+        );
+      },
     );
+  }
+
+  Future<List<Map<String, dynamic>>> _enrichMemberEntries(
+    List<Map<String, dynamic>> entries,
+  ) async {
+    final firestore = appFirestore;
+    return Future.wait(entries.map((e) async {
+      final doc = e['doc'] as DocumentSnapshot;
+      final role = e['role'] as String;
+      final uid = doc.id;
+      if (role != 'player') {
+        return {...e, 'teamNames': <String>[], 'categories': <String>[], 'hasLicense': false};
+      }
+      final teams = await getUserTeamNames(firestore, uid, clubId: widget.clubId);
+      final cats = await getUserCategories(firestore, uid, clubId: widget.clubId);
+      final hasLicense = await playerHasLicense(firestore, uid, widget.clubId);
+      return {...e, 'teamNames': teams, 'categories': cats, 'hasLicense': hasLicense};
+    }));
   }
 
   /// Contenu des cartes "En attente de création de compte" et "Refus d'invitation".
@@ -1483,6 +1515,7 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
   Widget _buildEditTrailing({
     required String roleLabel,
     required bool isPlayer,
+    required bool hasLicense,
     required Map<String, dynamic> data,
     required bool showDelete,
     required bool showPasserAdmin,
@@ -1540,9 +1573,7 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
       children: [
         Text(
           isPlayer
-              ? (playerHasLicense(data, widget.clubId)
-                    ? "Licencié"
-                    : "Non Licencié")
+              ? (hasLicense ? "Licencié" : "Non Licencié")
               : roleLabel,
           style: const TextStyle(color: Colors.grey, fontSize: 12),
         ),
@@ -1777,40 +1808,26 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
       }
     }
     // 3. Club members : retirer seulement si pas d'autre rôle (coach, admin) dans ce club
-    final roles = data['roles'] as Map<String, dynamic>? ?? {};
-    bool hasOtherRoleInClub = false;
-    if (roles['coach'] is List) {
-      for (var c in (roles['coach'] as List)) {
-        if (c is Map && c['clubId'] == clubId) {
-          hasOtherRoleInClub = true;
-          break;
-        }
-      }
-    }
-    if (!hasOtherRoleInClub &&
-        (roles['admin'] is List) &&
-        (roles['admin'] as List).contains(clubId)) {
-      hasOtherRoleInClub = true;
-    }
+    final summaries = (data['profileSummaries'] as List?)?.whereType<Map>().toList() ?? [];
+    bool hasOtherRoleInClub = summaries.any((e) =>
+        (e['clubId'] == clubId) &&
+        ((e['role'] == 'coach') || (e['role'] == 'admin') || (e['role'] == 'admin_fondateur')));
     if (!hasOtherRoleInClub) {
       await firestore.collection(FirebaseCollections.clubs).doc(clubId).update({
         'members': FieldValue.arrayRemove([uid]),
       });
       try {
-        // Infos pour les stats : équipes, date d'adhésion (si disponible)
-        final rolesPlayer = roles['player'] as Map<String, dynamic>?;
-        Map<String, dynamic>? leaveClubEntry;
-        if (rolesPlayer != null && rolesPlayer['clubs'] is List) {
-          for (var c in (rolesPlayer['clubs'] as List)) {
-            if (c is Map<String, dynamic> && c['clubId'] == clubId) {
-              leaveClubEntry = Map<String, dynamic>.from(c);
-              break;
-            }
-          }
-        }
-        final teamIds = (leaveClubEntry?['teamIds'] as List<dynamic>?)?.whereType<String>().toList() ?? <String>[];
-        final teamNames = (leaveClubEntry?['teamNames'] as List<dynamic>?)?.whereType<String>().toList() ?? <String>[];
-        final joinedAt = leaveClubEntry?['joinedAt'];
+        final memberSnap = await firestore
+            .collection(FirebaseCollections.clubs)
+            .doc(clubId)
+            .collection(FirebaseCollections.members)
+            .doc(uid)
+            .get();
+        final memberData = memberSnap.data();
+        final player = memberData?['player'] as Map<String, dynamic>?;
+        final teamIds = (player?['teamIds'] as List<dynamic>?)?.whereType<String>().toList() ?? <String>[];
+        final teamNames = (player?['teamNames'] as List<dynamic>?)?.whereType<String>().toList() ?? <String>[];
+        final joinedAt = player?['joinedAt'];
         await firestore
             .collection(FirebaseCollections.clubs)
             .doc(clubId)
@@ -1833,63 +1850,34 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
         );
       }
     }
-    // 4. User roles + activeContext
-    final rolesData = Map<String, dynamic>.from(roles);
-    final playerData = rolesData['player'] as Map?;
-    List<dynamic> newPlayerClubs = [];
-    if (playerData != null && playerData['clubs'] is List) {
-      final clubs = (playerData['clubs'] as List).whereType<Map>().toList();
-      newPlayerClubs = clubs
-          .where((c) => (c['clubId'] as String?) != clubId)
-          .toList();
-    }
-    if (newPlayerClubs.isEmpty) {
-      rolesData.remove('player');
-    } else {
-      rolesData['player'] = {'clubs': newPlayerClubs};
-    }
+    // 4. User : activeContext uniquement (profileSummaries/member gérés par removeRoleFromClub)
+    final otherPlayerClubs = summaries.where((e) => e['role'] == 'player' && e['clubId'] != clubId).toList();
     final activeContext = data['activeContext'] as Map<String, dynamic>?;
     final activeClubId = activeContext?['clubId'] as String?;
     final activeRole = activeContext?['role'] as String?;
     Map<String, dynamic>? newActiveContext;
     if (activeClubId == clubId && activeRole == 'player') {
-      if (newPlayerClubs.isEmpty) {
+      if (otherPlayerClubs.isEmpty) {
         newActiveContext = null;
       } else {
-        final first = newPlayerClubs.first as Map<String, dynamic>;
-        newActiveContext = {'role': 'player', 'clubId': first['clubId']};
+        newActiveContext = {'role': 'player', 'clubId': otherPlayerClubs.first['clubId']};
       }
     }
     final updates = <String, dynamic>{};
-    updates['roles'] = rolesData;
-    if (newPlayerClubs.isEmpty) {
-      updates['roles.player'] = FieldValue.delete();
-    }
     if (newActiveContext == null && activeClubId == clubId) {
       updates['activeContext'] = FieldValue.delete();
-      updates['clubId'] = FieldValue.delete();
-      updates['clubName'] = FieldValue.delete();
     } else if (newActiveContext != null) {
       updates['activeContext'] = newActiveContext;
-      if (activeClubId == clubId) {
-        final newClubId = newActiveContext['clubId'] as String?;
-        updates['clubId'] = newClubId;
-        if (newClubId != null) {
-          final clubDoc = await firestore
-              .collection(FirebaseCollections.clubs)
-              .doc(newClubId)
-              .get();
-          updates['clubName'] = clubDoc.data()?['name'] ?? '';
-        } else {
-          updates['clubName'] = FieldValue.delete();
-        }
-      }
     }
     updates['_adminClubId'] = clubId;
-    await firestore
-        .collection(FirebaseCollections.users)
-        .doc(uid)
-        .update(updates);
+    if (updates.isNotEmpty) {
+      await firestore
+          .collection(FirebaseCollections.users)
+          .doc(uid)
+          .update(updates);
+    }
+
+    await MembershipService.instance.removeRoleFromClub(uid, clubId, 'player');
   }
 
   Future<void> _removeCoachFromClub(
@@ -1901,59 +1889,33 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
     await firestore.collection(FirebaseCollections.clubs).doc(clubId).update({
       'coaches': FieldValue.arrayRemove([uid]),
     });
-    final roles = Map<String, dynamic>.from(data['roles'] as Map? ?? {});
-    final coachList =
-        (roles['coach'] as List?)
-            ?.map((e) => e as Map<String, dynamic>)
-            .toList() ??
-        [];
-    final newCoachList = coachList.where((c) => c['clubId'] != clubId).toList();
-    if (newCoachList.isEmpty) {
-      roles.remove('coach');
-    } else {
-      roles['coach'] = newCoachList;
-    }
+    final summaries = (data['profileSummaries'] as List?)?.whereType<Map>().toList() ?? [];
+    final otherCoachClubs = summaries.where((e) => e['role'] == 'coach' && e['clubId'] != clubId).toList();
     final activeContext = data['activeContext'] as Map<String, dynamic>?;
     final activeClubId = activeContext?['clubId'] as String?;
     final activeRole = activeContext?['role'] as String?;
     Map<String, dynamic>? newActiveContext;
     if (activeClubId == clubId && activeRole == 'coach') {
-      if (newCoachList.isEmpty) {
+      if (otherCoachClubs.isEmpty) {
         newActiveContext = null;
       } else {
-        final first = newCoachList.first;
-        newActiveContext = {'role': 'coach', 'clubId': first['clubId']};
+        newActiveContext = {'role': 'coach', 'clubId': otherCoachClubs.first['clubId']};
       }
     }
-    final updates = <String, dynamic>{'roles': roles};
-    if (newCoachList.isEmpty) {
-      updates['roles.coach'] = FieldValue.delete();
-    }
+    final updates = <String, dynamic>{};
     if (newActiveContext == null && activeClubId == clubId) {
       updates['activeContext'] = FieldValue.delete();
-      updates['clubId'] = FieldValue.delete();
-      updates['clubName'] = FieldValue.delete();
     } else if (newActiveContext != null) {
       updates['activeContext'] = newActiveContext;
-      if (activeClubId == clubId) {
-        final newClubId = newActiveContext['clubId'] as String?;
-        updates['clubId'] = newClubId;
-        if (newClubId != null) {
-          final clubDoc = await firestore
-              .collection(FirebaseCollections.clubs)
-              .doc(newClubId)
-              .get();
-          updates['clubName'] = clubDoc.data()?['name'] ?? '';
-        } else {
-          updates['clubName'] = FieldValue.delete();
-        }
-      }
     }
     updates['_adminClubId'] = clubId;
-    await firestore
-        .collection(FirebaseCollections.users)
-        .doc(uid)
-        .update(updates);
+    if (updates.isNotEmpty) {
+      await firestore
+          .collection(FirebaseCollections.users)
+          .doc(uid)
+          .update(updates);
+    }
+    await MembershipService.instance.removeRoleFromClub(uid, clubId, 'coach');
   }
 
   Future<void> _removeAdminFromClub(
@@ -1965,56 +1927,37 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
     await firestore.collection(FirebaseCollections.clubs).doc(clubId).update({
       'admins': FieldValue.arrayRemove([uid]),
     });
-    final roles = Map<String, dynamic>.from(data['roles'] as Map? ?? {});
-    final adminList =
-        (roles['admin'] as List?)?.whereType<String>().toList() ?? [];
-    final newAdminList = adminList.where((id) => id != clubId).toList();
-    if (newAdminList.isEmpty) {
-      roles.remove('admin');
-    } else {
-      roles['admin'] = newAdminList;
-    }
+    final summaries = (data['profileSummaries'] as List?)?.whereType<Map>().toList() ?? [];
+    final otherAdminClubs = summaries
+        .where((e) => (e['role'] == 'admin' || e['role'] == 'admin_fondateur') && e['clubId'] != clubId)
+        .toList();
     final activeContext = data['activeContext'] as Map<String, dynamic>?;
     final activeClubId = activeContext?['clubId'] as String?;
     final activeRole = activeContext?['role'] as String?;
     Map<String, dynamic>? newActiveContext;
     if (activeClubId == clubId &&
         (activeRole == 'admin' || activeRole == 'admin_fondateur')) {
-      if (newAdminList.isEmpty) {
+      if (otherAdminClubs.isEmpty) {
         newActiveContext = null;
       } else {
-        newActiveContext = {'role': 'admin', 'clubId': newAdminList.first};
+        newActiveContext = {'role': 'admin', 'clubId': otherAdminClubs.first['clubId']};
       }
     }
-    final updates = <String, dynamic>{'roles': roles};
-    if (newAdminList.isEmpty) {
-      updates['roles.admin'] = FieldValue.delete();
-    }
+    final updates = <String, dynamic>{};
     if (newActiveContext == null && activeClubId == clubId) {
       updates['activeContext'] = FieldValue.delete();
-      updates['clubId'] = FieldValue.delete();
-      updates['clubName'] = FieldValue.delete();
     } else if (newActiveContext != null) {
       updates['activeContext'] = newActiveContext;
-      if (activeClubId == clubId) {
-        final newClubId = newActiveContext['clubId'] as String?;
-        updates['clubId'] = newClubId;
-        if (newClubId != null) {
-          final clubDoc = await firestore
-              .collection(FirebaseCollections.clubs)
-              .doc(newClubId)
-              .get();
-          updates['clubName'] = clubDoc.data()?['name'] ?? '';
-        } else {
-          updates['clubName'] = FieldValue.delete();
-        }
-      }
     }
     updates['_adminClubId'] = clubId;
-    await firestore
-        .collection(FirebaseCollections.users)
-        .doc(uid)
-        .update(updates);
+    if (updates.isNotEmpty) {
+      await firestore
+          .collection(FirebaseCollections.users)
+          .doc(uid)
+          .update(updates);
+    }
+    await MembershipService.instance.removeRoleFromClub(uid, clubId, 'admin');
+    await MembershipService.instance.removeRoleFromClub(uid, clubId, 'admin_fondateur');
   }
 
   Future<void> _changeRole(
@@ -2026,63 +1969,30 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
     try {
       final firestore = appFirestore;
       final clubId = widget.clubId;
-      final roles = Map<String, dynamic>.from(data['roles'] as Map? ?? {});
 
       if (toAdmin) {
-        // Coach -> Admin : retirer de roles.coach, ajouter à roles.admin
-        final coachList =
-            (roles['coach'] as List?)
-                ?.map((e) => e as Map<String, dynamic>)
-                .toList() ??
-            [];
-        final newCoachList = coachList
-            .where((c) => c['clubId'] != clubId)
-            .toList();
-        if (newCoachList.isEmpty) {
-          roles.remove('coach');
-        } else {
-          roles['coach'] = newCoachList;
-        }
-        final adminList =
-            (roles['admin'] as List?)?.whereType<String>().toList() ?? [];
-        if (!adminList.contains(clubId)) {
-          adminList.add(clubId);
-          roles['admin'] = adminList;
-        }
+        await MembershipService.instance.removeRoleFromClub(userId, clubId, 'coach');
+        await MembershipService.instance.ensureMemberAndProfileSummary(
+          uid: userId,
+          clubId: clubId,
+          role: 'admin',
+          userDataOverride: data,
+        );
       } else {
-        // Admin -> Coach : retirer de roles.admin, ajouter à roles.coach
-        final adminList =
-            (roles['admin'] as List?)?.whereType<String>().toList() ?? [];
-        final newAdminList = adminList.where((id) => id != clubId).toList();
-        if (newAdminList.isEmpty) {
-          roles.remove('admin');
-        } else {
-          roles['admin'] = newAdminList;
-        }
-        final coachList =
-            (roles['coach'] as List?)
-                ?.map((e) => e as Map<String, dynamic>)
-                .toList() ??
-            [];
-        if (!coachList.any((c) => c['clubId'] == clubId)) {
-          coachList.add({'clubId': clubId, 'teams': []});
-          roles['coach'] = coachList;
-        }
+        await MembershipService.instance.removeRoleFromClub(userId, clubId, 'admin');
+        await MembershipService.instance.removeRoleFromClub(userId, clubId, 'admin_fondateur');
+        await MembershipService.instance.ensureMemberAndProfileSummary(
+          uid: userId,
+          clubId: clubId,
+          role: 'coach',
+          userDataOverride: data,
+        );
       }
 
       final activeContext = data['activeContext'] as Map<String, dynamic>?;
       final activeClubId = activeContext?['clubId'] as String?;
-      Map<String, dynamic>? newActiveContext;
-      if (activeClubId == clubId) {
-        newActiveContext = {
-          'role': toAdmin ? 'admin' : 'coach',
-          'clubId': clubId,
-        };
-      }
-
       final updates = <String, dynamic>{
-        'roles': roles,
-        if (newActiveContext != null) 'activeContext': newActiveContext,
+        if (activeClubId == clubId) 'activeContext': {'role': toAdmin ? 'admin' : 'coach', 'clubId': clubId},
         '_adminClubId': clubId,
       };
       await firestore

@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:viro_team/constants/firebase_collections.dart';
 import 'package:viro_team/utils/firestore_instance.dart';
 import 'package:viro_team/utils/app_logger.dart';
+import 'package:viro_team/services/membership_service.dart';
 
 /// Lorsqu'un utilisateur rejoint un club (join request acceptée ou inscription via invite),
 /// on vérifie s'il existe des [pending_members] (dans n'importe quel club) avec le même email.
@@ -77,75 +78,28 @@ class PendingMemberMergeService {
         });
       }
 
-      // Fusionner le club et les équipes dans le profil joueur
-      final userRef = _db.collection(FirebaseCollections.users).doc(userId);
-      final userSnap = await userRef.get();
-      final userData = userSnap.data() ?? {};
-      final roles = userData['roles'] as Map<String, dynamic>? ?? {};
-      final playerData = roles['player'] as Map<String, dynamic>? ?? {};
+      // Fusionner le club et les équipes : member + profileSummaries (plus d'écriture roles sur le user)
+      final teamIds = teamInfos
+          .map((t) => t['teamId'] as String? ?? '')
+          .where((s) => s.isNotEmpty)
+          .toList();
+      final teamNames = teamInfos
+          .map((t) => t['teamName'] as String? ?? '')
+          .where((s) => s.isNotEmpty)
+          .toList();
+      final categories = teamInfos
+          .map((t) => t['teamCategory'] as String? ?? '')
+          .where((s) => s.isNotEmpty)
+          .toList();
 
-      List<Map<String, dynamic>> clubsList;
-      if (playerData['clubs'] is List) {
-        clubsList = (playerData['clubs'] as List)
-            .map((e) => Map<String, dynamic>.from(e as Map))
-            .toList();
-      } else if (playerData['clubId'] != null) {
-        clubsList = [
-          {
-            'clubId': playerData['clubId'],
-            'teamIds': (playerData['teamIds'] as List?)?.toList() ?? [],
-            'teamNames': (playerData['teamNames'] as List?)?.toList() ?? [],
-            'categories': (playerData['categories'] as List?)?.toList() ?? [],
-            if (playerData['license'] != null) 'license': playerData['license'],
-          },
-        ];
-      } else {
-        clubsList = [];
-      }
-
-      Map<String, dynamic>? clubEntry;
-      for (var c in clubsList) {
-        if (c['clubId'] == clubId) {
-          clubEntry = c;
-          break;
-        }
-      }
-
-      if (clubEntry == null) {
-        clubEntry = {
-          'clubId': clubId,
-          'teamIds': <String>[],
-          'teamNames': <String>[],
-          'categories': <String>[],
-          'joinedAt': FieldValue.serverTimestamp(),
-        };
-        clubsList.add(clubEntry);
-      }
-
-      final teamIds = List<String>.from((clubEntry['teamIds'] as List?)?.whereType<String>() ?? []);
-      final teamNames = List<String>.from((clubEntry['teamNames'] as List?)?.whereType<String>() ?? []);
-      final categories = List<String>.from((clubEntry['categories'] as List?)?.whereType<String>() ?? []);
-
-      for (final t in teamInfos) {
-        final tid = t['teamId'] as String? ?? '';
-        final tname = t['teamName'] as String? ?? '';
-        final tcat = t['teamCategory'] as String? ?? '';
-        if (tid.isEmpty) continue;
-        if (!teamIds.contains(tid)) teamIds.add(tid);
-        if (tname.isNotEmpty && !teamNames.contains(tname)) teamNames.add(tname);
-        if (tcat.isNotEmpty && !categories.contains(tcat)) categories.add(tcat);
-      }
-
-      clubEntry['teamIds'] = teamIds;
-      clubEntry['teamNames'] = teamNames;
-      clubEntry['categories'] = categories;
-
-      final updatedRoles = Map<String, dynamic>.from(roles);
-      updatedRoles['player'] = {...playerData, 'clubs': clubsList};
-
-      await userRef.set({
-        'roles': updatedRoles,
-      }, SetOptions(merge: true));
+      await MembershipService.instance.ensureMemberAndProfileSummary(
+        uid: userId,
+        clubId: clubId,
+        role: 'player',
+        playerTeamIds: teamIds,
+        playerTeamNames: teamNames,
+        playerCategories: categories,
+      );
 
       // Ajouter l'utilisateur aux members du club
       await _db.collection(FirebaseCollections.clubs).doc(clubId).update({

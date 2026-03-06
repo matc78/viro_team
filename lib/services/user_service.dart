@@ -9,39 +9,79 @@ import '../utils/firebase_helpers.dart';
 class UserService {
   final FirebaseFirestore _db = appFirestore;
 
-  /// Récupère un utilisateur par son ID
+  /// Charge les documents member pour un utilisateur (clubs/{clubId}/members/{uid}) à partir de profileSummaries.
+  Future<Map<String, Map<String, dynamic>>> _loadMembersByClub(
+    String uid,
+    List<dynamic> profileSummariesRaw,
+  ) async {
+    final clubIds = profileSummariesRaw
+        .whereType<Map>()
+        .map((m) => m['clubId'] as String?)
+        .whereType<String>()
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList();
+    if (clubIds.isEmpty) return {};
+
+    final membersByClub = <String, Map<String, dynamic>>{};
+    await Future.wait(clubIds.map((clubId) async {
+      final snap = await _db
+          .collection(FirebaseCollections.clubs)
+          .doc(clubId)
+          .collection(FirebaseCollections.members)
+          .doc(uid)
+          .get();
+      final d = snap.data();
+      if (d != null) membersByClub[clubId] = d;
+    }));
+    return membersByClub;
+  }
+
+  /// Récupère un utilisateur par son ID (user doc + members pour construire UserModel).
   Future<UserModel?> getUserById(String userId) async {
     try {
       final doc = await _db
           .collection(FirebaseCollections.users)
           .doc(userId)
           .get();
-      
+
       if (!doc.exists) return null;
-      return UserModel.fromFirestore(doc);
+      final data = doc.data() ?? {};
+      final summariesRaw = data['profileSummaries'] as List? ?? [];
+      final membersByClub = await _loadMembersByClub(doc.id, summariesRaw);
+      return UserModel.fromUserDocAndMembers(doc, membersByClub);
     } catch (e) {
       return null;
     }
   }
 
-  /// Écoute les changements d'un utilisateur en temps réel
+  /// Écoute les changements d'un utilisateur en temps réel (recharge les members à chaque snapshot).
   Stream<UserModel?> watchUser(String userId) {
     return _db
         .collection(FirebaseCollections.users)
         .doc(userId)
         .snapshots()
-        .map((doc) => doc.exists ? UserModel.fromFirestore(doc) : null);
+        .asyncMap((doc) async {
+          if (!doc.exists) return null;
+          final data = doc.data() ?? {};
+          final summariesRaw = data['profileSummaries'] as List? ?? [];
+          final membersByClub = await _loadMembersByClub(doc.id, summariesRaw);
+          return UserModel.fromUserDocAndMembers(doc, membersByClub);
+        });
   }
 
-  /// Récupère plusieurs utilisateurs en batch (évite N+1 queries)
+  /// Récupère plusieurs utilisateurs en batch (charge user docs puis members pour chacun).
   Future<List<UserModel>> getUsersByIds(List<String> userIds) async {
     if (userIds.isEmpty) return [];
-    
+
     final docs = await fetchUsersBatch(userIds);
-    return docs
-        .where((doc) => doc.exists)
-        .map((doc) => UserModel.fromFirestore(doc))
-        .toList();
+    final futures = docs.where((doc) => doc.exists).map((doc) async {
+      final data = doc.data() ?? {};
+      final summariesRaw = data['profileSummaries'] as List? ?? [];
+      final membersByClub = await _loadMembersByClub(doc.id, summariesRaw);
+      return UserModel.fromUserDocAndMembers(doc, membersByClub);
+    });
+    return Future.wait(futures);
   }
 
   /// Met à jour le contexte actif d'un utilisateur

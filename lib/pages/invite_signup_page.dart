@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:viro_team/constants/firebase_collections.dart';
+import 'package:viro_team/services/membership_service.dart';
 import 'package:viro_team/services/pending_member_merge_service.dart';
 import 'package:viro_team/services/user_session.dart';
 import 'package:viro_team/utils/firestore_instance.dart';
@@ -145,29 +146,31 @@ class _InviteSignUpPageState extends State<InviteSignUpPage> {
       final teamNames = teams.map((t) => t['teamName'] as String? ?? '').where((s) => s.isNotEmpty).toList();
       final categories = teams.map((t) => t['category'] as String? ?? '').where((s) => s.isNotEmpty).toList();
 
-      final playerClubEntry = <String, dynamic>{
-        'clubId': clubId,
-        'teamIds': teamIds,
-        'teamNames': teamNames,
-        'categories': categories,
-      };
-
       await appFirestore.collection(FirebaseCollections.users).doc(uid).set({
         'firstName': firstName,
         'lastName': lastName,
         'email': email,
         'createdAt': FieldValue.serverTimestamp(),
         'profileCompleted': true,
-        'roles': {
-          'player': {
-            'clubs': [playerClubEntry],
-          },
-        },
         'activeContext': {
           'role': 'player',
           'clubId': clubId,
         },
       }, SetOptions(merge: true));
+
+      await MembershipService.instance.ensureMemberAndProfileSummary(
+        uid: uid,
+        clubId: clubId,
+        role: 'player',
+        playerTeamIds: teamIds,
+        playerTeamNames: teamNames,
+        playerCategories: categories,
+        userDataOverride: {
+          'firstName': firstName,
+          'lastName': lastName,
+          'email': email,
+        },
+      );
 
       context.read<UserSession>().startListening(uid);
 
