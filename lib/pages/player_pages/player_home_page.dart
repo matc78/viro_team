@@ -71,6 +71,13 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
     final Set<String> clubIdsSet = {};
     final roles = userData?['roles'] as Map<String, dynamic>? ?? {};
 
+    // Priorité : contexte actif, puis roles, puis legacy
+    final activeContext = userData?['activeContext'] as Map<String, dynamic>?;
+    final activeClubId = activeContext?['clubId'] as String?;
+    if (activeClubId != null && activeClubId.isNotEmpty) {
+      clubIdsSet.add(activeClubId);
+    }
+
     if (roles['player'] is Map) {
       final playerData = roles['player'] as Map;
       // Nouvelle structure : liste de clubs
@@ -88,6 +95,11 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
           clubIdsSet.add(playerClubId);
         }
       }
+    }
+
+    final legacyClubId = userData?['clubId'] as String?;
+    if (legacyClubId != null && legacyClubId.isNotEmpty) {
+      clubIdsSet.add(legacyClubId);
     }
 
     return clubIdsSet.toList();
@@ -152,21 +164,29 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
 
         // 2. SI MEMBRE D'UN CLUB (VUE NORMALE)
         if (finalClubId != null && finalClubId.isNotEmpty) {
-          final String clubName =
-              userData?['clubName'] as String? ?? "Mon Club";
-
           final allClubIds = _extractPlayerClubIds(userData);
-          // Utiliser le premier clubId pour la compatibilité avec les paramètres existants
           final primaryClubId = finalClubId.isNotEmpty
               ? finalClubId
               : (allClubIds.isNotEmpty ? allClubIds.first : "");
 
-          return _buildClubMemberView(
-            firstName,
-            primaryClubId,
-            clubName,
-            userData,
-            allClubIds,
+          // Nom du club depuis le document club (contexte actif), pas userData
+          return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+            stream: appFirestore
+                .collection(FirebaseCollections.clubs)
+                .doc(primaryClubId)
+                .snapshots(),
+            builder: (context, clubSnap) {
+              final clubName = clubSnap.data?.data()?['name'] as String? ??
+                  userData?['clubName'] as String? ??
+                  "Mon Club";
+              return _buildClubMemberView(
+                firstName,
+                primaryClubId,
+                clubName,
+                userData,
+                allClubIds,
+              );
+            },
           );
         }
 

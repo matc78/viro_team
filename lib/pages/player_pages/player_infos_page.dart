@@ -119,6 +119,14 @@ class _PlayerInfosPageState extends State<PlayerInfosPage> {
           final Set<String> clubIdsSet = {};
           final roles = userData['roles'] as Map<String, dynamic>? ?? {};
 
+          // Priorité : contexte actif, puis roles, puis legacy
+          final activeContext =
+              userData['activeContext'] as Map<String, dynamic>?;
+          final activeClubId = activeContext?['clubId'] as String?;
+          if (activeClubId != null && activeClubId.isNotEmpty) {
+            clubIdsSet.add(activeClubId);
+          }
+
           if (roles['player'] is Map) {
             final playerData = roles['player'] as Map;
             if (playerData['clubs'] is List) {

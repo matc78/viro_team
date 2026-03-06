@@ -78,6 +78,7 @@ flutter:
     - assets/logo/logo.png
     - assets/logo/logo_long.png
     - assets/logo/logo_seul.png
+    - assets/logo/logo_seul_launcher_icons.png
     - assets/sons/son_sifflet.mp3
     - assets/sons/son_buzzer.mp3
     - assets/icons/icon_sifflet.png
@@ -106,7 +107,7 @@ flutter:
   # see https://flutter.dev/to/font-from-package
 
 flutter_launcher_icons:
-  image_path: "assets/logo/logo_seul.png"
+  image_path: "assets/logo/logo_seul_launcher_icons.png"
   android: true
   ios: true
   remove_alpha_ios: true

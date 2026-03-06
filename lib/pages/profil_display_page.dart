@@ -69,6 +69,11 @@ class ProfilDisplayPage extends StatelessWidget {
   /// Club IDs auxquels le viewer appartient en tant que joueur
   List<String> _getViewerPlayerClubIds(Map<String, dynamic> userData) {
     final ids = <String>{};
+    // Priorité : contexte actif, puis roles, puis legacy
+    final activeContext = userData['activeContext'] as Map<String, dynamic>?;
+    final activeClubId = activeContext?['clubId'] as String?;
+    if (activeClubId != null && activeClubId.isNotEmpty) ids.add(activeClubId);
+
     final roles = userData['roles'] as Map<String, dynamic>?;
     if (roles != null && roles['player'] is Map) {
       final playerData = roles['player'] as Map;
@@ -915,7 +920,20 @@ class ProfilDisplayPage extends StatelessWidget {
       }
     }
 
-    // 4. Compatibilité avec l'ancienne structure (clubId direct)
+    // 4. Contexte actif (priorité sur legacy)
+    final activeContext = userData['activeContext'] as Map<String, dynamic>?;
+    final activeClubId = activeContext?['clubId'] as String?;
+    final activeRole = activeContext?['role'] as String?;
+    if (activeClubId != null &&
+        activeClubId.isNotEmpty &&
+        !clubsMap.containsKey(activeClubId)) {
+      clubsMap[activeClubId] = {
+        'clubId': activeClubId,
+        'roles': activeRole != null ? [activeRole] : [],
+      };
+    }
+
+    // 5. Compatibilité avec l'ancienne structure (clubId direct)
     final legacyClubId = userData['clubId'] as String?;
     if (legacyClubId != null && !clubsMap.containsKey(legacyClubId)) {
       final legacyRole = userData['role'] as String?;
@@ -925,7 +943,7 @@ class ProfilDisplayPage extends StatelessWidget {
       };
     }
 
-    // 5. Récupérer les infos des clubs (nom, logo)
+    // 6. Récupérer les infos des clubs (nom, logo)
     final List<Map<String, dynamic>> result = [];
     for (var entry in clubsMap.entries) {
       final clubId = entry.key;

@@ -86,7 +86,13 @@ bool userBelongsToClub(Map<String, dynamic> userData, String clubId, {String? ro
       }
     }
   }
-  
+
+  // Contexte actif (priorité sur legacy)
+  final activeContext = userData['activeContext'] as Map<String, dynamic>?;
+  if (activeContext != null && activeContext['clubId'] == clubId) {
+    if (role == null || role == activeContext['role']) return true;
+  }
+
   // Ancienne structure (fallback pour compatibilité)
   final legacyClubId = userData['clubId'] as String?;
   if (legacyClubId == clubId) {
@@ -99,7 +105,7 @@ bool userBelongsToClub(Map<String, dynamic> userData, String clubId, {String? ro
     }
     return true;
   }
-  
+
   return false;
 }
 
@@ -158,13 +164,19 @@ String? getUserRoleInClub(Map<String, dynamic> userData, String clubId) {
       if (adminClubIds.contains(clubId)) return 'admin';
     }
   }
-  
+
+  // Contexte actif (priorité sur legacy)
+  final activeContext = userData['activeContext'] as Map<String, dynamic>?;
+  if (activeContext != null && activeContext['clubId'] == clubId) {
+    return activeContext['role'] as String?;
+  }
+
   // Fallback ancienne structure
   final legacyClubId = userData['clubId'] as String?;
   if (legacyClubId == clubId) {
     return userData['role'] as String?;
   }
-  
+
   return null;
 }
 
@@ -218,7 +230,18 @@ List<String> getAllUserRolesInClub(Map<String, dynamic> userData, String clubId)
         result.add('admin');
       }
     }
-  } else {
+  }
+
+  // Contexte actif (priorité sur legacy)
+  final activeContext = userData['activeContext'] as Map<String, dynamic>?;
+  if (activeContext != null && activeContext['clubId'] == clubId) {
+    final activeRole = activeContext['role'] as String?;
+    if (activeRole != null && activeRole.isNotEmpty && !result.contains(activeRole)) {
+      result.add(activeRole);
+    }
+  }
+
+  if (result.isEmpty) {
     // Fallback ancienne structure
     final legacyClubId = userData['clubId'] as String?;
     if (legacyClubId == clubId) {
@@ -228,7 +251,7 @@ List<String> getAllUserRolesInClub(Map<String, dynamic> userData, String clubId)
       }
     }
   }
-  
+
   return result;
 }
 

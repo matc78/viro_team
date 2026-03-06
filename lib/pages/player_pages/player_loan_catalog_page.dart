@@ -62,7 +62,12 @@ class _PlayerLoanCatalogPageState extends State<PlayerLoanCatalogPage>
       }
     }
 
-    // Fallback pour compatibilité
+    // Priorité contexte actif, puis fallback legacy
+    final activeContext = userData?['activeContext'] as Map<String, dynamic>?;
+    final activeClubId = activeContext?['clubId'] as String?;
+    if (activeClubId != null && activeClubId.isNotEmpty) {
+      clubIdsSet.add(activeClubId);
+    }
     final legacyClubId = userData?['clubId'] as String?;
     if (legacyClubId != null) clubIdsSet.add(legacyClubId);
 

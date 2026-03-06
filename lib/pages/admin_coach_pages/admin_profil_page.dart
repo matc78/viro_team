@@ -73,9 +73,12 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
         final String lastName = userData?['lastName'] ?? "";
         final String displayFirst = _formatFirst(firstName);
         final String displayLast = _formatLast(lastName);
-        final String clubName = userData?['clubName'] ?? "Club non défini";
-        final String clubId = userData?['clubId'] ?? "";
-        final String role = userData?['role'] ?? "admin_fondateur";
+        // Club actif = contexte actuel (priorité), fallback legacy pour rétrocompatibilité
+        final activeContext = userData?['activeContext'] as Map<String, dynamic>?;
+        final String clubId =
+            activeContext?['clubId'] as String? ?? userData?['clubId'] as String? ?? "";
+        final String role =
+            activeContext?['role'] as String? ?? userData?['role'] as String? ?? "admin_fondateur";
 
         // Extraire tous les clubIds depuis roles
         final List<String> clubIds = _extractAllClubIds(userData);
@@ -165,7 +168,10 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
                         .doc(clubId)
                         .snapshots(),
                     builder: (context, clubSnap) {
-                      final sport = clubSnap.data?.data()?['sport'] as String?;
+                      final clubData = clubSnap.data?.data();
+                      final sport = clubData?['sport'] as String?;
+                      final clubName =
+                          clubData?['name'] as String? ?? "Club non défini";
                       return ProfilMenuCard(
                         icon: Icons.edit_location_alt_outlined,
                         title: "Changer Nom du Club",
@@ -179,8 +185,8 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
                   ProfilMenuCard(
                     icon: Icons.edit_location_alt_outlined,
                     title: "Changer Nom du Club",
-                    subtitle: clubName,
-                    onTap: () => _showEditClubName(clubId, clubName),
+                    subtitle: "Club non défini",
+                    onTap: () => _showEditClubName(clubId, "Club non défini"),
                     disabled: _isSaving,
                   ),
                 ProfilMenuCard(
