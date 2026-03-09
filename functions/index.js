@@ -1004,6 +1004,20 @@ exports.onEventCreatedProd = functions.firestore
   .onCreate(makeOnEventCreated(dbProd));
 
 /**
+ * Format la date en français (ex: "lundi 9 mars")
+ */
+function formatEventDate(dateObj) {
+  if (!dateObj) return "";
+  const d = dateObj.toDate ? dateObj.toDate() : new Date(dateObj);
+  return new Intl.DateTimeFormat("fr-FR", {
+    timeZone: "Europe/Paris",
+    weekday: "long",
+    day: "numeric",
+    month: "long"
+  }).format(d);
+}
+
+/**
  * Envoie une notification FCM aux membres concernés lorsqu'un événement
  * est modifié (date, heure, titre, lieu ou liste des participants).
  */
@@ -1012,96 +1026,171 @@ const makeOnEventUpdated = (db) => async (change, context) => {
   const before = change.before.data();
   const after = change.after.data();
 
-    const relevantFields = [
-      "date",
-      "dateId",
-      "startTime",
-      "endTime",
-      "title",
-      "type",
-      "location",
-      "teamMemberIds",
-    ];
-    const changed = relevantFields.some(
-      (f) => JSON.stringify(after?.[f]) !== JSON.stringify(before?.[f])
-    );
-    if (!changed) {
-      return null;
-    }
+  // 1. Détection de modification d'attendance
+  const attendanceBefore = before.attendance || {};
+  const attendanceAfter = after.attendance || {};
+  const attendanceChanged = JSON.stringify(attendanceBefore) !== JSON.stringify(attendanceAfter);
 
-    const teamMemberIds = Array.isArray(after.teamMemberIds)
-      ? after.teamMemberIds.filter((id) => id && String(id).trim())
-      : [];
-    if (teamMemberIds.length === 0) {
-      return null;
-    }
+  // 2. Détection de modification des autres champs (joueurs)
+  const relevantFields = [
+    "date",
+    "startTime",
+    "endTime",
+    "title",
+    "type",
+    "location",
+    "canceled",
+  ];
+  const eventDetailsChanged = relevantFields.some(
+    (f) => JSON.stringify(after?.[f]) !== JSON.stringify(before?.[f])
+  );
 
-    const title = String(after.title || "").trim() || null;
-    const eventType = String(after.type || "Événement").trim();
-    const teamName = String(after.teamName || "").trim();
-    const dateId = String(after.dateId || "");
-    const startTime = String(after.startTime || "");
-    const location = String(after.location || "").trim();
-    const clubName = String(after.clubName || "").trim();
-    const displayTitle = title || eventType;
+  if (!attendanceChanged && !eventDetailsChanged) {
+    return null;
+  }
 
-    const notifTitle = "Événement modifié";
-    const notifBody =
-      (clubName ? clubName + " - " : "") +
-      displayTitle +
-      (teamName ? " (" + teamName + ")" : "") +
-      (startTime ? " à " + startTime : "");
+  const teamMemberIds = Array.isArray(after.teamMemberIds)
+    ? after.teamMemberIds.filter((id) => id && String(id).trim())
+    : [];
 
-    const tokens = [];
-    for (const uid of teamMemberIds) {
-      const userDoc = await db.collection("users").doc(uid).get();
-      const token = userDoc.exists && userDoc.data()?.fcmToken;
-      if (token) {
-        tokens.push(token);
+  const title = String(after.title || "").trim() || null;
+  const eventType = String(after.type || "Événement").trim();
+  const displayTitle = title || eventType;
+  const teamName = String(after.teamName || "").trim();
+  const startTime = String(after.startTime || "");
+  const clubName = String(after.clubName || "").trim();
+  const dateStr = formatEventDate(after.date);
+
+  const messaging = admin.messaging();
+
+  // ----- NOTIFICATION COACH (Présences) -----
+  if (attendanceChanged) {
+    let coachIds = [];
+    if (teamName && teamName !== "Tout le club" && teamName !== "Multi-équipes") {
+      const teamsSnap = await db.collection("clubs").doc(clubId).collection("teams").where("name", "==", teamName).limit(1).get();
+      if (!teamsSnap.empty) {
+        coachIds = teamsSnap.docs[0].data().coachIds || [];
+      }
+    } else {
+      const teamNames = Array.isArray(after.teamNames) ? after.teamNames : [];
+      if (teamNames.length > 0) {
+        // Firestore 'in' query supports up to 30 elements
+        const chunks = [];
+        for (let i = 0; i < teamNames.length; i += 30) {
+          chunks.push(teamNames.slice(i, i + 30));
+        }
+        for (const chunk of chunks) {
+          const tSnap = await db.collection("clubs").doc(clubId).collection("teams").where("name", "in", chunk).get();
+          tSnap.forEach(doc => {
+            const cIds = doc.data().coachIds || [];
+            coachIds.push(...cIds);
+          });
+        }
       }
     }
 
-    if (tokens.length === 0) {
-      return null;
+    coachIds = [...new Set(coachIds)];
+
+    if (coachIds.length > 0) {
+      const attendanceValues = Object.values(attendanceAfter);
+      const presentCount = attendanceValues.filter(v => v === "present").length;
+      const absentCount = attendanceValues.filter(v => v === "absent").length;
+      
+      // Calculate total players logic. Pending is total invited minus responded.
+      let totalConvoqued = teamMemberIds.length;
+      if (teamName && teamName !== "Tout le club" && teamName !== "Multi-équipes") {
+         const teamsSnap = await db.collection("clubs").doc(clubId).collection("teams").where("name", "==", teamName).limit(1).get();
+         if (!teamsSnap.empty) {
+            const pendingIds = teamsSnap.docs[0].data().pendingPlayerIds || [];
+            totalConvoqued += pendingIds.length;
+         }
+      }
+      
+      const pendingCount = Math.max(0, totalConvoqued - presentCount - absentCount);
+
+      const coachTokens = [];
+      for (const uid of coachIds) {
+        const userDoc = await db.collection("users").doc(uid).get();
+        const token = userDoc.exists && userDoc.data()?.fcmToken;
+        if (token) coachTokens.push(token);
+      }
+
+      if (coachTokens.length > 0) {
+        const notifTitle = "Mise à jour des présences";
+        const notifBody = `${displayTitle} du ${dateStr} : ${presentCount} Oui, ${absentCount} Non, ${pendingCount} En attente.`;
+
+        const payload = {
+          notification: { title: notifTitle, body: notifBody },
+          data: {
+            type: "event_presence",
+            clubId: String(clubId),
+            eventId: String(eventId),
+            isReminder: "",
+          },
+          android: { priority: "high" },
+          apns: { payload: { aps: { sound: "default", badge: 1 } } },
+        };
+
+        try {
+          await messaging.sendEachForMulticast({ ...payload, tokens: coachTokens });
+        } catch (err) {
+          console.error("onEventUpdated: erreur FCM Coach", err);
+        }
+      }
+    }
+  }
+
+  // ----- NOTIFICATION JOUEURS (Modif/Annulation) -----
+  if (eventDetailsChanged && teamMemberIds.length > 0) {
+    const isCanceled = after.canceled === true && before.canceled !== true;
+    
+    let notifTitle = "";
+    let notifBody = "";
+
+    if (isCanceled) {
+      notifTitle = "Événement annulé";
+      notifBody = `L'événement ${displayTitle} du ${dateStr} a été annulé.`;
+    } else {
+      notifTitle = "Événement modifié";
+      notifBody = `Événement modifié : ${displayTitle} aura lieu le ${dateStr} à ${startTime}.`;
     }
 
-    const payload = {
-      notification: { title: notifTitle, body: notifBody },
-      data: {
-        type: "event",
-        clubId: String(clubId),
-        eventId: String(eventId),
-        title: displayTitle || "",
-        eventType,
-        dateId,
-        startTime,
-        location,
-        clubName,
-        isReminder: "",
-      },
-      android: { priority: "high" },
-      apns: {
-        payload: {
-          aps: { sound: "default", badge: 1 },
+    const playerTokens = [];
+    for (const uid of teamMemberIds) {
+      const userDoc = await db.collection("users").doc(uid).get();
+      const token = userDoc.exists && userDoc.data()?.fcmToken;
+      if (token) playerTokens.push(token);
+    }
+
+    if (playerTokens.length > 0) {
+      const payload = {
+        notification: { title: notifTitle, body: notifBody },
+        data: {
+          type: "event_update",
+          clubId: String(clubId),
+          eventId: String(eventId),
+          title: displayTitle || "",
+          eventType,
+          dateId: String(after.dateId || ""),
+          startTime,
+          location: String(after.location || "").trim(),
+          clubName,
+          isReminder: "",
         },
-      },
-    };
+        android: { priority: "high" },
+        apns: { payload: { aps: { sound: "default", badge: 1 } } },
+      };
 
-    const messaging = admin.messaging();
-    try {
-      await messaging.sendEachForMulticast({
-        tokens,
-        notification: payload.notification,
-        data: payload.data,
-        android: payload.android,
-        apns: payload.apns,
-      });
-      return null;
-    } catch (err) {
-      console.error("onEventUpdated: erreur FCM", err);
-      throw err;
+      try {
+        await messaging.sendEachForMulticast({ ...payload, tokens: playerTokens });
+      } catch (err) {
+        console.error("onEventUpdated: erreur FCM Joueurs", err);
+      }
     }
-  };
+  }
+
+  return null;
+};
 exports.onEventUpdatedTest = functions.firestore
   .database("test")
   .document("clubs/{clubId}/events/{eventId}")
@@ -1110,6 +1199,64 @@ exports.onEventUpdatedProd = functions.firestore
   .database("prod")
   .document("clubs/{clubId}/events/{eventId}")
   .onUpdate(makeOnEventUpdated(dbProd));
+
+/**
+ * Envoie une notification lorsqu'un événement est supprimé.
+ */
+const makeOnEventDeleted = (db) => async (snap, context) => {
+  const { clubId, eventId } = context.params;
+  const data = snap.data();
+
+  const teamMemberIds = Array.isArray(data.teamMemberIds)
+    ? data.teamMemberIds.filter((id) => id && String(id).trim())
+    : [];
+  
+  if (teamMemberIds.length === 0) return null;
+
+  const title = String(data.title || "").trim() || null;
+  const eventType = String(data.type || "Événement").trim();
+  const displayTitle = title || eventType;
+  const dateStr = formatEventDate(data.date);
+
+  const notifTitle = "Événement supprimé";
+  const notifBody = `L'événement ${displayTitle} du ${dateStr} a été supprimé.`;
+
+  const tokens = [];
+  for (const uid of teamMemberIds) {
+    const userDoc = await db.collection("users").doc(uid).get();
+    const token = userDoc.exists && userDoc.data()?.fcmToken;
+    if (token) tokens.push(token);
+  }
+
+  if (tokens.length === 0) return null;
+
+  const payload = {
+    notification: { title: notifTitle, body: notifBody },
+    data: {
+      type: "event_deleted",
+      clubId: String(clubId),
+      eventId: String(eventId),
+    },
+    android: { priority: "high" },
+    apns: { payload: { aps: { sound: "default", badge: 1 } } },
+  };
+
+  try {
+    await admin.messaging().sendEachForMulticast({ ...payload, tokens });
+  } catch (err) {
+    console.error("onEventDeleted: erreur FCM", err);
+  }
+  return null;
+};
+
+exports.onEventDeletedTest = functions.firestore
+  .database("test")
+  .document("clubs/{clubId}/events/{eventId}")
+  .onDelete(makeOnEventDeleted(dbTest));
+exports.onEventDeletedProd = functions.firestore
+  .database("prod")
+  .document("clubs/{clubId}/events/{eventId}")
+  .onDelete(makeOnEventDeleted(dbProd));
 
 /**
  * Parse startTime string "HH:mm" or "H:mm" into { hours, minutes }.
@@ -1133,19 +1280,11 @@ function parseStartTime(startTimeStr) {
 
 /**
  * Rappel événement : envoie une notification FCM aux participants
- * pour les événements qui commencent dans 1 à 2 heures (fenêtre 1h).
- * Exécuté toutes les heures.
+ * pour les événements configurés via reminderConfig.
+ * Exécuté toutes les 15 minutes.
  */
 async function runEventReminderForDb(db) {
   const now = new Date();
-  const inOneHour = new Date(now.getTime() + 60 * 60 * 1000);
-  const inTwoHours = new Date(now.getTime() + 2 * 60 * 60 * 1000);
-
-  const year = now.getUTCFullYear();
-  const month = now.getUTCMonth();
-  const day = now.getUTCDate();
-  const todayStart = new Date(Date.UTC(year, month, day, 0, 0, 0, 0));
-  const tomorrowEnd = new Date(Date.UTC(year, month, day + 2, 0, 0, 0, 0));
 
   const clubsSnap = await db.collection("clubs").get();
   const messaging = admin.messaging();
@@ -1156,124 +1295,142 @@ async function runEventReminderForDb(db) {
     const clubData = clubDoc.data();
     const clubName = String(clubData?.name || "").trim();
 
+    // On cherche les événements futurs (date de l'événement > maintenant)
+    // On prend une marge large (-1 jour) pour être sûr de rattraper des notifs.
+    const searchStart = new Date(now.getTime() - 24 * 60 * 60 * 1000);
     const eventsSnap = await db
       .collection("clubs")
       .doc(clubId)
       .collection("events")
-      .where("date", ">=", todayStart)
-      .where("date", "<=", tomorrowEnd)
+      .where("date", ">=", searchStart)
       .get();
 
-      for (const eventDoc of eventsSnap.docs) {
-        const eventId = eventDoc.id;
-        const data = eventDoc.data();
-        const date = data.date;
-        if (!date || !date.toDate) {
+    for (const eventDoc of eventsSnap.docs) {
+      const eventId = eventDoc.id;
+      const data = eventDoc.data();
+      const date = data.date;
+      if (!date || !date.toDate) continue;
+      
+      const eventDate = date.toDate();
+      const reminderConfig = data.reminderConfig;
+      if (!reminderConfig || !Array.isArray(reminderConfig.reminders)) continue;
+
+      const remindersSent = data.remindersSent || [];
+      const teamMemberIds = Array.isArray(data.teamMemberIds)
+        ? data.teamMemberIds.filter((id) => id && String(id).trim())
+        : [];
+      if (teamMemberIds.length === 0) continue;
+
+      let hasSentSomething = false;
+
+      for (let i = 0; i < reminderConfig.reminders.length; i++) {
+        const reminder = reminderConfig.reminders[i];
+        const reminderId = `reminder_${i}`;
+
+        if (remindersSent.includes(reminderId)) continue; // Déjà envoyé
+
+        // Calcul de la date cible
+        // Mettre à minuit en UTC pour le calcul
+        const targetUtc = new Date(Date.UTC(eventDate.getUTCFullYear(), eventDate.getUTCMonth(), eventDate.getUTCDate()));
+
+        if (reminder.weekday !== undefined) {
+          let jsDay = targetUtc.getUTCDay();
+          let isoDay = jsDay === 0 ? 7 : jsDay;
+          let diff = isoDay - reminder.weekday;
+          if (diff <= 0) diff += 7;
+          targetUtc.setUTCDate(targetUtc.getUTCDate() - diff);
+        } else if (reminder.daysBefore !== undefined) {
+          targetUtc.setUTCDate(targetUtc.getUTCDate() - reminder.daysBefore);
+        } else {
           continue;
         }
-        const dayStart = date.toDate();
-        const startTimeStr = String(data.startTime || "").trim();
-        const { hours, minutes } = parseStartTime(startTimeStr);
-        const eventStart = new Date(
-          Date.UTC(
-            dayStart.getUTCFullYear(),
-            dayStart.getUTCMonth(),
-            dayStart.getUTCDate(),
-            hours,
-            minutes,
-            0,
-            0
-          )
-        );
 
-        if (eventStart <= inOneHour || eventStart > inTwoHours) {
-          continue;
+        const { hours, minutes } = parseStartTime(reminder.time || "12:00");
+        targetUtc.setUTCHours(hours, minutes, 0, 0);
+        
+        // On estime que l'heure configurée est locale (Europe/Paris).
+        // On doit donc soustraire l'offset de Paris pour avoir l'UTC réel de la cible.
+        const isoStr = now.toLocaleString('en-US', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+        const parts = isoStr.match(/(\d+)\/(\d+)\/(\d+), (\d+):(\d+):(\d+)/);
+        if (parts) {
+            const parisDate = new Date(Date.UTC(parts[3], parts[1]-1, parts[2], parts[4], parts[5], parts[6]));
+            const offsetHours = Math.round((parisDate.getTime() - now.getTime()) / (60 * 60 * 1000));
+            targetUtc.setUTCHours(targetUtc.getUTCHours() - offsetHours);
         }
 
-        const teamMemberIds = Array.isArray(data.teamMemberIds)
-          ? data.teamMemberIds.filter((id) => id && String(id).trim())
-          : [];
-        if (teamMemberIds.length === 0) {
-          continue;
-        }
+        const timeDiff = now.getTime() - targetUtc.getTime();
+        
+        // Fenêtre d'envoi : si l'heure actuelle a dépassé la cible (timeDiff >= 0)
+        // et qu'on ne dépasse pas 12h (pour éviter l'envoi de très vieux rappels)
+        if (timeDiff >= 0 && timeDiff <= 12 * 60 * 60 * 1000) {
+          const title = String(data.title || "").trim() || null;
+          const eventType = String(data.type || "Événement").trim();
+          const displayTitle = title || eventType;
+          const startTime = String(data.startTime || "");
 
-        const title = String(data.title || "").trim() || null;
-        const eventType = String(data.type || "Événement").trim();
-        const teamName = String(data.teamName || "").trim();
-        const dateId = String(data.dateId || "");
-        const startTime = String(data.startTime || "");
-        const location = String(data.location || "").trim();
-        const displayTitle = title || eventType;
+          const notifTitle = "Rappel : " + displayTitle;
+          let notifBody = reminder.message;
+          
+          if (!notifBody || notifBody.trim() === "") {
+             const dateStr = formatEventDate(eventDate);
+             notifBody = `Rappel : ${displayTitle} le ${dateStr} à ${startTime}.`;
+          }
 
-        const notifTitle = "Rappel : " + displayTitle;
-        const notifBody =
-          (clubName ? clubName + " - " : "") +
-          displayTitle +
-          (teamName ? " (" + teamName + ")" : "") +
-          (startTime ? " à " + startTime : "");
+          const tokens = [];
+          for (const uid of teamMemberIds) {
+            const userDoc = await db.collection("users").doc(uid).get();
+            const token = userDoc.exists && userDoc.data()?.fcmToken;
+            if (token) tokens.push(token);
+          }
 
-        const tokens = [];
-        for (const uid of teamMemberIds) {
-          const userDoc = await db.collection("users").doc(uid).get();
-          const token = userDoc.exists && userDoc.data()?.fcmToken;
-          if (token) {
-            tokens.push(token);
+          if (tokens.length > 0) {
+            const payload = {
+              notification: { title: notifTitle, body: notifBody },
+              data: {
+                type: "event",
+                clubId: String(clubId),
+                eventId: String(eventId),
+                title: displayTitle || "",
+                eventType,
+                dateId: String(data.dateId || ""),
+                startTime,
+                location: String(data.location || "").trim(),
+                clubName,
+                isReminder: "true",
+              },
+              android: { priority: "high" },
+              apns: { payload: { aps: { sound: "default", badge: 1 } } },
+            };
+
+            try {
+              const result = await messaging.sendEachForMulticast({ ...payload, tokens });
+              sent += result.successCount;
+              console.log(`scheduledEventReminder: rappel envoyé eventId=${eventId} reminderId=${reminderId} à ${result.successCount} dest.`);
+              
+              remindersSent.push(reminderId);
+              hasSentSomething = true;
+            } catch (err) {
+              console.error("scheduledEventReminder: erreur FCM eventId=", eventId, err);
+            }
+          } else {
+             // Marquer comme envoyé même si aucun token pour ne pas réessayer sans fin
+             remindersSent.push(reminderId);
+             hasSentSomething = true;
           }
         }
+      }
 
-        if (tokens.length === 0) {
-          continue;
-        }
-
-        const payload = {
-          notification: { title: notifTitle, body: notifBody },
-          data: {
-            type: "event",
-            clubId: String(clubId),
-            eventId: String(eventId),
-            title: displayTitle || "",
-            eventType,
-            dateId,
-            startTime,
-            location,
-            clubName,
-            isReminder: "true",
-          },
-          android: { priority: "high" },
-          apns: {
-            payload: {
-              aps: { sound: "default", badge: 1 },
-            },
-          },
-        };
-
-        try {
-          const result = await messaging.sendEachForMulticast({
-            tokens,
-            notification: payload.notification,
-            data: payload.data,
-            android: payload.android,
-            apns: payload.apns,
-          });
-          sent += result.successCount;
-          console.log(
-            "scheduledEventReminder: rappel envoyé eventId=",
-            eventId,
-            "à",
-            result.successCount,
-            "destinataire(s)",
-          );
-        } catch (err) {
-          console.error("scheduledEventReminder: erreur FCM eventId=", eventId, err);
-        }
+      if (hasSentSomething) {
+        await eventDoc.ref.update({ remindersSent });
       }
     }
+  }
 
   return sent;
 }
 
 exports.scheduledEventReminder = functions.pubsub
-  .schedule("every 1 hours")
+  .schedule("every 15 minutes")
   .timeZone("Europe/Paris")
   .onRun(async (context) => {
     const totalSent =

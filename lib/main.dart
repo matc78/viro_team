@@ -17,6 +17,7 @@ import 'firebase_options.dart';
 import 'pages/admin_coach_pages/admin_club_communication_page.dart';
 import 'pages/admin_coach_pages/admin_home_page.dart';
 import 'pages/admin_coach_pages/admin_loans_page.dart';
+import 'pages/admin_coach_pages/admin_event_details_page.dart';
 import 'pages/auth_page.dart';
 import 'pages/complete_profile_page.dart';
 import 'package:viro_team/pages/player_confirm_club_invitation_page.dart';
@@ -261,6 +262,49 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           ),
         );
       }
+    };
+    EventUpdateNotification.onOpen = (payload) {
+      final clubId = payload['clubId'];
+      final eventId = payload['eventId'];
+      if (clubId != null &&
+          clubId.isNotEmpty &&
+          eventId != null &&
+          eventId.isNotEmpty) {
+        _navigatorKey.currentState?.push(
+          MaterialPageRoute<void>(
+            builder: (_) => PlayerEventDetailsPage(
+              clubId: clubId,
+              eventId: eventId,
+            ),
+          ),
+        );
+      }
+    };
+    EventPresenceNotification.onOpen = (payload) {
+      final clubId = payload['clubId'];
+      final eventId = payload['eventId'];
+      if (clubId != null &&
+          clubId.isNotEmpty &&
+          eventId != null &&
+          eventId.isNotEmpty) {
+        _navigatorKey.currentState?.push(
+          MaterialPageRoute<void>(
+            builder: (_) => AdminEventDetailsPage(
+              clubId: clubId,
+              eventId: eventId,
+            ),
+          ),
+        );
+      }
+    };
+    EventDeletedNotification.onOpen = (payload) {
+      // Événement supprimé, on pourrait juste aller sur le planning.
+      _navigatorKey.currentState?.pushAndRemoveUntil(
+        MaterialPageRoute<void>(
+          builder: (_) => const PlayerHomePage(),
+        ),
+        (route) => false,
+      );
     };
     AnnouncementNotification.onOpen = (payload) {
       final clubId = payload['clubId'];

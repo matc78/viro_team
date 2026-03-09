@@ -181,6 +181,27 @@ final class NotificationService {
           );
         }
         break;
+      case EventUpdateNotification.type:
+        if (EventUpdateNotification.onOpen != null) {
+          EventUpdateNotification.onOpen!(
+            EventUpdateNotification.payloadFromData(data),
+          );
+        }
+        break;
+      case EventPresenceNotification.type:
+        if (EventPresenceNotification.onOpen != null) {
+          EventPresenceNotification.onOpen!(
+            EventPresenceNotification.payloadFromData(data),
+          );
+        }
+        break;
+      case EventDeletedNotification.type:
+        if (EventDeletedNotification.onOpen != null) {
+          EventDeletedNotification.onOpen!(
+            EventDeletedNotification.payloadFromData(data),
+          );
+        }
+        break;
       case LoanReturnNotification.type:
         if (LoanReturnNotification.onOpen != null) {
           LoanReturnNotification.onOpen!(
