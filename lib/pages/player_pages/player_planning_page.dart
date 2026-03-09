@@ -525,6 +525,7 @@ class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
     final type = data['title'] ?? data['type'] ?? "Événement";
     final isAllDay = data['startTime'] == null && data['endTime'] == null;
     final time = isAllDay ? "ALL DAY" : (data['startTime'] ?? "--:--");
+    final String? endTimeStr = data['endTime']?.toString();
     final teamName = data['teamName'] ?? "Club";
     final location = data['location'] ?? "Lieu non défini";
     final bool canceled = data['canceled'] == true;
@@ -740,6 +741,35 @@ class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
                             ],
                           ),
                         ),
+                        if (endTimeStr != null) ...[
+                          const SizedBox(width: 12),
+                          Container(
+                            width: 50,
+                            decoration: BoxDecoration(
+                              color: clubColor.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.access_time,
+                                  size: 16,
+                                  color: clubColor,
+                                ),
+                                Text(
+                                  endTimeStr,
+                                  style: TextStyle(
+                                    color: clubColor,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                     if (hasNotResponded && !canceled) ...[

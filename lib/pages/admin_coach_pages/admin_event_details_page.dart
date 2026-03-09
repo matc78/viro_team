@@ -10,6 +10,7 @@ import '../../utils/firestore_instance.dart';
 import '../../utils/avatar_moderation.dart';
 import '../../widget/user_display_tile.dart';
 import '../../widget/viro_loader.dart';
+import 'admin_edit_event_page.dart';
 
 class AdminEventDetailsPage extends StatelessWidget {
   final String clubId;
@@ -366,7 +367,27 @@ class AdminEventDetailsPage extends StatelessWidget {
 
         return Scaffold(
           backgroundColor: ViroColors.background,
-          appBar: AppBar(title: Text(type), elevation: 0),
+          appBar: AppBar(
+            title: Text(type),
+            elevation: 0,
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.edit_outlined),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => AdminEditEventPage(
+                        clubId: clubId,
+                        eventId: eventId,
+                        eventData: event,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
           body: FutureBuilder<List<String>>(
             future: _getPendingPlayerIdsForTeam(clubId, team),
             initialData: const <String>[],
@@ -503,6 +524,9 @@ class AdminEventDetailsPage extends StatelessWidget {
     final endTime = event['endTime'];
     final bool allDay = startTime == null && endTime == null;
 
+    final reminderConfig = event['reminderConfig'] as Map<String, dynamic>?;
+    final List<dynamic> reminders = reminderConfig?['reminders'] ?? [];
+
     if (isMatch) {
       final String matchLocation = event['location']?.toString() ?? "Non défini";
       final String matchTime = startTime?.toString() ?? '--:--';
@@ -543,6 +567,10 @@ class AdminEventDetailsPage extends StatelessWidget {
               "Heure du RDV",
               rdvTime,
             ),
+            if (reminders.isNotEmpty) ...[
+              const Divider(height: 30),
+              _buildRemindersList(reminders),
+            ],
           ],
         ),
       );
@@ -567,8 +595,64 @@ class AdminEventDetailsPage extends StatelessWidget {
           ),
           const Divider(height: 30),
           _infoRow(Icons.location_on_outlined, "Lieu", location),
+          if (reminders.isNotEmpty) ...[
+            const Divider(height: 30),
+            _buildRemindersList(reminders),
+          ],
         ],
       ),
+    );
+  }
+
+  Widget _buildRemindersList(List<dynamic> reminders) {
+    const weekdayLabels = [
+      'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'
+    ];
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.notifications_active_outlined, color: ViroColors.primary, size: 22),
+            const SizedBox(width: 16),
+            const Text(
+              "Notifications",
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Padding(
+          padding: const EdgeInsets.only(left: 38),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: reminders.asMap().entries.map((entry) {
+              final idx = entry.key + 1;
+              final r = entry.value as Map<String, dynamic>;
+              final time = r['time'] ?? '';
+              
+              String text = '';
+              if (r['weekday'] != null) {
+                final w = (r['weekday'] as num).toInt();
+                final dayStr = w >= 1 && w <= 7 ? weekdayLabels[w - 1] : 'Jour inconnu';
+                text = "Le $dayStr avant à $time";
+              } else if (r['daysBefore'] != null) {
+                final d = (r['daysBefore'] as num).toInt();
+                text = d == 1 ? "1 jour avant à $time" : "$d jours avant à $time";
+              }
+              
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text(
+                  "• Notification $idx : $text",
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+      ],
     );
   }
 
@@ -791,12 +875,21 @@ class AdminEventDetailsPage extends StatelessWidget {
                         Widget? tile;
                         if (user.isNotEmpty) {
                           tile = _buildPlayerTile(
+                            context,
+                            clubId,
+                            eventId,
                             id,
                             user,
                             entry.value,
                           );
                         } else if (pendingData != null && pendingData.isNotEmpty) {
-                          tile = _buildPendingPlayerTile(id, pendingData);
+                          tile = _buildPendingPlayerTile(
+                            context,
+                            clubId,
+                            eventId,
+                            id,
+                            pendingData,
+                          );
                         }
                         if (tile != null) {
                           if (tiles.isNotEmpty) tiles.add(const SizedBox(height: 8));
@@ -830,7 +923,13 @@ class AdminEventDetailsPage extends StatelessWidget {
                         if (notConvoquedTiles.isNotEmpty) {
                           notConvoquedTiles.add(const SizedBox(height: 8));
                         }
-                        notConvoquedTiles.add(_buildPendingPlayerTile(id, data));
+                        notConvoquedTiles.add(_buildPendingPlayerTile(
+                          context,
+                          clubId,
+                          eventId,
+                          id,
+                          data,
+                        ));
                       }
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -865,7 +964,62 @@ class AdminEventDetailsPage extends StatelessWidget {
     return snaps.cast<DocumentSnapshot<Map<String, dynamic>>>().toList();
   }
 
+  static Future<void> _removePlayerFromEvent(
+    BuildContext context,
+    String clubId,
+    String eventId,
+    String playerId,
+  ) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Déconvoquer le joueur"),
+        content: const Text("Voulez-vous vraiment retirer ce joueur de l'événement ?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text("Annuler"),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text("Retirer"),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      await appFirestore
+          .collection(FirebaseCollections.clubs)
+          .doc(clubId)
+          .collection(FirebaseCollections.events)
+          .doc(eventId)
+          .update({
+        'teamMemberIds': FieldValue.arrayRemove([playerId]),
+        'attendance.$playerId': FieldValue.delete(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Joueur retiré de l'événement")),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Erreur lors de la déconvocation : $e")),
+        );
+      }
+    }
+  }
+
   Widget _buildPendingPlayerTile(
+    BuildContext context,
+    String clubId,
+    String eventId,
     String pendingId,
     Map<String, dynamic> data,
   ) {
@@ -935,6 +1089,12 @@ class AdminEventDetailsPage extends StatelessWidget {
               ),
             ),
           ),
+          IconButton(
+            icon: const Icon(Icons.remove_circle_outline, color: Colors.redAccent, size: 20),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+            onPressed: () => _removePlayerFromEvent(context, clubId, eventId, pendingId),
+          ),
         ],
       ),
     );
@@ -948,6 +1108,9 @@ class AdminEventDetailsPage extends StatelessWidget {
   }
 
   Widget _buildPlayerTile(
+    BuildContext context,
+    String clubId,
+    String eventId,
     String userId,
     Map<String, dynamic> user,
     dynamic status,
@@ -976,6 +1139,7 @@ class AdminEventDetailsPage extends StatelessWidget {
           ),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            margin: const EdgeInsets.only(right: 8),
             decoration: BoxDecoration(
               color: statusColor.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(20),
@@ -990,6 +1154,12 @@ class AdminEventDetailsPage extends StatelessWidget {
                 fontWeight: FontWeight.bold,
               ),
             ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.remove_circle_outline, color: Colors.redAccent, size: 20),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+            onPressed: () => _removePlayerFromEvent(context, clubId, eventId, userId),
           ),
         ],
       ),

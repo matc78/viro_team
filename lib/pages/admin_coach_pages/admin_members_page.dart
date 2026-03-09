@@ -936,14 +936,15 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
       }, SetOptions(merge: true));
       final inviteUrl = 'viroteam://invite?t=$token&c=$clubId';
       final first = firstName.trim();
+      final clubName = widget.clubName;
       final bodyLong =
-          'Bonjour $first,\n\n'
-          'Votre club vous invite à rejoindre ViroTeam. Téléchargez l\'application puis ouvrez ce lien pour créer votre compte :\n\n'
+          'Salut $first,\n\n'
+          'Ton club $clubName t\'invite à rejoindre ViroTeam. Télécharge l\'application puis ouvre ce lien pour créer ton compte :\n\n'
           '$inviteUrl\n\n'
           'Ce lien est valide 7 jours.';
       final bodyShort =
-          'Bonjour $first,\n\n'
-          'Ouvrez ce lien pour créer votre compte ViroTeam (valide 7 jours) :\n\n$inviteUrl';
+          'Salut $first,\n\n'
+          'Ouvre ce lien pour créer ton compte ViroTeam (valide 7 jours) :\n\n$inviteUrl';
       AppLogger.instance.info('Lien d\'invite créé', {
         'clubId': clubId,
         'pendingMemberId': pendingMemberId,
@@ -989,7 +990,7 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
     final toAddress = email.trim().toLowerCase();
     final subject = 'Invitation ViroTeam - Créer votre compte';
     final subjectEnc = Uri.encodeComponent(subject);
-    final bodyEnc = Uri.encodeComponent(result.bodyShort);
+    final bodyEnc = Uri.encodeComponent(result.bodyLong);
     final mailtoString =
         'mailto:$toAddress?subject=$subjectEnc&body=$bodyEnc';
     final mailto = Uri.parse(mailtoString);
@@ -1010,14 +1011,10 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
     } catch (_) {
       mailOpened = false;
     }
-    if (context.mounted) {
+    if (context.mounted && !mailOpened) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            mailOpened
-                ? "Lien copié. Le client mail s'ouvre avec le message."
-                : "Lien copié. Collez le message depuis le presse-papier si besoin.",
-          ),
+        const SnackBar(
+          content: Text("Impossible d'ouvrir le client mail. Le lien a été copié dans le presse-papier."),
         ),
       );
     }

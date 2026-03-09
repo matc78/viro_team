@@ -364,8 +364,8 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
           .collection(FirebaseCollections.teams)
           .snapshots(),
       builder: (context, snapshot) {
-        final teamNames = <String>{"Choisir une équipe"};
-        final categories = <String>{"Choisir une catégorie"};
+        final teamNamesSet = <String>{};
+        final categoriesSet = <String>{};
 
         if (snapshot.hasData) {
           for (final doc in snapshot.data!.docs) {
@@ -373,16 +373,19 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
             final teamName = data['name'] as String?;
             final category = data['category'] as String?;
             if (teamName != null && teamName.isNotEmpty) {
-              teamNames.add(teamName);
+              teamNamesSet.add(teamName);
             }
             if (category != null && category.isNotEmpty) {
-              categories.add(category);
+              categoriesSet.add(category);
             }
           }
         }
 
-        final teamsList = teamNames.toList();
-        final catList = categories.toList();
+        final sortedTeams = teamNamesSet.toList()..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+        final sortedCategories = categoriesSet.toList()..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+
+        final teamsList = ["Choisir une équipe", ...sortedTeams];
+        final catList = ["Choisir une catégorie", ...sortedCategories];
 
         final teamValue = teamsList.contains(_filterTeam)
             ? _filterTeam
@@ -665,6 +668,7 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
     final String time = isMatch
         ? (data['meetingTime']?.toString() ?? data['startTime']?.toString() ?? "--:--")
         : (allDay ? "ALL DAY" : (data['startTime']?.toString() ?? "--:--"));
+    final String? endTimeStr = data['endTime']?.toString();
     final String type = (data['title'] ?? data['type'] ?? "Événement").toString();
     final String teamName = _audienceText(data);
     final String? meetingLoc = data['meetingLocation']?.toString().trim();
@@ -840,6 +844,35 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
                         ],
                       ),
                     ),
+                    if (endTimeStr != null) ...[
+                      const SizedBox(width: 12),
+                      Container(
+                        width: 50,
+                        decoration: BoxDecoration(
+                          color: teamColor.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.access_time,
+                              size: 16,
+                              color: teamColor,
+                            ),
+                            Text(
+                              endTimeStr,
+                              style: TextStyle(
+                                color: teamColor,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ],
                 ),
                 const SizedBox(height: 10),
@@ -968,12 +1001,21 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
             ],
             ListTile(
               leading: const Icon(Icons.delete_forever, color: Colors.red),
-              title: const Text("Supprimer définitivement"),
+              title: const Text("Supprimer cet évènement"),
               onTap: () async {
                 Navigator.pop(ctx);
                 await _deleteEvent(docId);
               },
             ),
+            if (canCancelAll)
+              ListTile(
+                leading: const Icon(Icons.delete_sweep, color: Colors.red),
+                title: const Text("Supprimer toutes les occurrences"),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  await _deleteRecurring(data);
+                },
+              ),
           ],
         ),
       ),
@@ -1047,12 +1089,49 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
         .delete();
   }
 
+  Future<void> _deleteRecurring(Map<String, dynamic> data) async {
+    final team = data['teamName'];
+    final type = data['type'];
+    final startTime = data['startTime'];
+    
+    // Si on a le seriesId (nouvelle méthode), on l'utilise
+    final seriesId = data['seriesId'] as String?;
+    
+    Query query;
+    if (seriesId != null && seriesId.isNotEmpty) {
+      query = appFirestore
+          .collection(FirebaseCollections.clubs)
+          .doc(widget.clubId)
+          .collection(FirebaseCollections.events)
+          .where('seriesId', isEqualTo: seriesId);
+    } else {
+      // Ancienne méthode de rapprochement
+      query = appFirestore
+          .collection(FirebaseCollections.clubs)
+          .doc(widget.clubId)
+          .collection(FirebaseCollections.events)
+          .where('teamName', isEqualTo: team)
+          .where('type', isEqualTo: type)
+          .where('startTime', isEqualTo: startTime);
+    }
+
+    final querySnap = await query.get();
+    final batch = appFirestore.batch();
+    for (final doc in querySnap.docs) {
+      batch.delete(doc.reference);
+    }
+    await batch.commit();
+  }
+
   // --- LOGIQUE AJOUT ÉVÉNEMENT ---
   void _showAddEventDialog() {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => AdminAddEventPage(clubId: widget.clubId),
+        builder: (_) => AdminAddEventPage(
+          clubId: widget.clubId,
+          initialDate: _selectedDate,
+        ),
       ),
     );
   }

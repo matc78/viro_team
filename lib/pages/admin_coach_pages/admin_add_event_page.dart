@@ -12,7 +12,9 @@ import '../../utils/avatar_moderation.dart';
 
 class AdminAddEventPage extends StatefulWidget {
   final String clubId;
-  const AdminAddEventPage({super.key, required this.clubId});
+  final DateTime? initialDate;
+
+  const AdminAddEventPage({super.key, required this.clubId, this.initialDate});
 
   @override
   State<AdminAddEventPage> createState() => _AdminAddEventPageState();
@@ -49,7 +51,8 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
 
   // Rappels de présence (Match / Entraînement uniquement)
   int _reminderCount = 2; // 0 = aucun, 1 = un rappel, 2 = deux rappels
-  bool _reminder1UseWeekday = true; // true = jour de la semaine avant, false = X jours avant
+  bool _reminder1UseWeekday =
+      true; // true = jour de la semaine avant, false = X jours avant
   int _reminder1Weekday = 7; // 1 = lundi, 7 = dimanche (défaut : dimanche 16h)
   int _reminder1DaysBefore = 1;
   TimeOfDay _reminder1Time = const TimeOfDay(hour: 16, minute: 0);
@@ -63,6 +66,9 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
   @override
   void initState() {
     super.initState();
+    if (widget.initialDate != null) {
+      _date = widget.initialDate!;
+    }
     _loadClubSport();
   }
 
@@ -80,6 +86,15 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
 
   Future<void> _saveEvent() async {
     // 1. Validations de base
+    if (!_allDay && _selectedType != 'Match') {
+      final startMinutes = _startTime.hour * 60 + _startTime.minute;
+      final endMinutes = _endTime.hour * 60 + _endTime.minute;
+      if (endMinutes <= startMinutes) {
+        _showError("L'heure de fin doit être après l'heure de début");
+        return;
+      }
+    }
+
     if (_selectedType == 'Entraînement' || _selectedType == 'Match') {
       if (_selectedTeamName == null) {
         _showError("Choisis une équipe pour cet évènement");
@@ -154,7 +169,9 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
           // Calculer le nombre de semaines jusqu'à la fin de saison
           final daysDifference = _seasonEndDate!.difference(_date).inDays;
           if (daysDifference < 0) {
-            _showError("La date de début ne peut pas être après la fin de saison");
+            _showError(
+              "La date de début ne peut pas être après la fin de saison",
+            );
             setState(() => _isLoading = false);
             return;
           }
@@ -168,6 +185,12 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
       }
 
       if (!context.mounted) return;
+
+      // Générer un ID de série unique si c'est un événement récurrent
+      final String? seriesId = iterations > 1
+          ? appFirestore.collection(FirebaseCollections.clubs).doc().id
+          : null;
+
       // 3. Boucle de création (gestion récurrence)
       for (int i = 0; i < iterations; i++) {
         DateTime eventDate = _date.add(Duration(days: i * 7));
@@ -222,13 +245,15 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
           'clubName': clubName,
           'clubSport': clubSport,
         };
+        if (seriesId != null) {
+          eventData['seriesId'] = seriesId;
+        }
         final reminderConfig = _buildReminderConfig();
         if (reminderConfig != null) {
           eventData['reminderConfig'] = reminderConfig;
         }
         if (_selectedType == 'Match') {
-          eventData['meetingLocation'] =
-              _meetingLocationController.text.trim();
+          eventData['meetingLocation'] = _meetingLocationController.text.trim();
           eventData['meetingTime'] = _rdvTime.format(context);
         }
         batch.set(ref, eventData);
@@ -273,12 +298,11 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
     String formatTime(TimeOfDay t) =>
         '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
 
-    final isCustomText = _selectedType != 'Entraînement' && _selectedType != 'Match';
+    final isCustomText =
+        _selectedType != 'Entraînement' && _selectedType != 'Match';
 
     if (_reminderCount >= 1) {
-      final r1 = <String, dynamic>{
-        'time': formatTime(_reminder1Time),
-      };
+      final r1 = <String, dynamic>{'time': formatTime(_reminder1Time)};
       if (_reminder1UseWeekday) {
         r1['weekday'] = _reminder1Weekday;
       } else {
@@ -290,9 +314,7 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
       reminders.add(r1);
     }
     if (_reminderCount >= 2) {
-      final r2 = <String, dynamic>{
-        'time': formatTime(_reminder2Time),
-      };
+      final r2 = <String, dynamic>{'time': formatTime(_reminder2Time)};
       if (_reminder2UseWeekday) {
         r2['weekday'] = _reminder2Weekday;
       } else {
@@ -585,7 +607,7 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
     final data = doc.data();
     final sport = data?['sport'] as String?;
     final clubAddress = data?['address'] as String?;
-    
+
     // Charger la date de fin de saison
     final seasonEndTimestamp = data?['seasonEndDate'] as Timestamp?;
     if (seasonEndTimestamp != null) {
@@ -599,7 +621,7 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
         setState(() => _seasonEndDate = DateTime(now.year, 7, 31, 23, 59));
       }
     }
-    
+
     if (_locationController.text == "Stade du club") {
       if (clubAddress != null && clubAddress.isNotEmpty) {
         if (mounted) {
@@ -679,7 +701,12 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
                         .snapshots(),
                     builder: (context, snap) {
                       if (!snap.hasData) return const SizedBox();
-                      var teams = snap.data!.docs;
+                      var teams = snap.data!.docs.toList()
+                        ..sort((a, b) {
+                          final nameA = (a['name'] as String?) ?? '';
+                          final nameB = (b['name'] as String?) ?? '';
+                          return nameA.toLowerCase().compareTo(nameB.toLowerCase());
+                        });
                       _teamsMeta
                         ..clear()
                         ..addAll(
@@ -695,7 +722,8 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
                           .map((t) => t['category'] ?? '')
                           .where((c) => c.isNotEmpty)
                           .toSet()
-                          .toList();
+                          .toList()
+                        ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
 
                       if (_selectedType == 'Entraînement' ||
                           _selectedType == 'Match') {
@@ -886,17 +914,70 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
                           _recurrenceMode = val!;
                         }),
                       ),
-                      if (_recurrenceMode == 'weeks')
+                      if (_recurrenceMode == 'weeks') ...[
                         Padding(
                           padding: const EdgeInsets.only(left: 16),
                           child: _buildDropdown<int>(
                             label: "Nombre de semaines",
                             value: _weeksCount,
-                            items: [2, 4, 8, 12],
-                            onChanged: (val) => setState(() => _weeksCount = val!),
+                            items: List.generate(24, (i) => i + 2), // 2 à 25
+                            onChanged: (val) =>
+                                setState(() => _weeksCount = val!),
                           ),
                         ),
-                      if (_recurrenceMode == 'season_end' && _seasonEndDate != null) ...[
+                        Padding(
+                          padding: const EdgeInsets.only(
+                            left: 16,
+                            top: 8,
+                            bottom: 8,
+                          ),
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: ViroColors.primary.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: ViroColors.primary.withValues(
+                                  alpha: 0.3,
+                                ),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.info_outline,
+                                  color: ViroColors.primary,
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    () {
+                                      final lastDate = _date.add(
+                                        Duration(days: (_weeksCount - 1) * 7),
+                                      );
+                                      final s = DateFormat(
+                                        'EEEE d MMMM yyyy',
+                                        'fr_FR',
+                                      ).format(lastDate);
+                                      final formattedDate =
+                                          s[0].toUpperCase() + s.substring(1);
+                                      return "Les entraînements seront créés jusqu'au $formattedDate";
+                                    }(),
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: ViroColors.primary,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                      if (_recurrenceMode == 'season_end' &&
+                          _seasonEndDate != null) ...[
                         Padding(
                           padding: const EdgeInsets.only(left: 16, top: 8),
                           child: Container(
@@ -905,7 +986,9 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
                               color: ViroColors.primary.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
-                                color: ViroColors.primary.withValues(alpha: 0.3),
+                                color: ViroColors.primary.withValues(
+                                  alpha: 0.3,
+                                ),
                               ),
                             ),
                             child: Row(
@@ -937,8 +1020,8 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
                   const Divider(height: 40),
                   Text(
                     _selectedType == 'Entraînement' || _selectedType == 'Match'
-                        ? "Rappels de présence"
-                        : "Rappels de l'événement",
+                        ? "Notifications de présence"
+                        : "Notifications de l'événement",
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
@@ -947,19 +1030,16 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
                   const SizedBox(height: 4),
                   Text(
                     _selectedType == 'Entraînement' || _selectedType == 'Match'
-                        ? "0, 1 ou 2 notifs pour rappeler de donner sa présence (max 10 jours avant ou jour de la semaine avant)."
-                        : "0, 1 ou 2 notifs pour rappeler l'événement (max 10 jours avant ou jour de la semaine avant).",
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[600],
-                    ),
+                        ? "0, 1 ou 2 notifications pour demander de donner sa présence (max 10 jours avant ou jour de la semaine avant)."
+                        : "0, 1 ou 2 notifications pour annoncer l'événement (max 10 jours avant ou jour de la semaine avant).",
+                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                   ),
                   const SizedBox(height: 12),
                   SegmentedButton<int>(
                     segments: const [
-                      ButtonSegment(value: 0, label: Text("Aucun")),
-                      ButtonSegment(value: 1, label: Text("1 rappel")),
-                      ButtonSegment(value: 2, label: Text("2 rappels")),
+                      ButtonSegment(value: 0, label: Text("Aucune")),
+                      ButtonSegment(value: 1, label: Text("1 notif")),
+                      ButtonSegment(value: 2, label: Text("2 notifs")),
                     ],
                     selected: {_reminderCount},
                     onSelectionChanged: (s) =>
@@ -1016,7 +1096,15 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
       initialTime: isStart ? _startTime : _endTime,
     );
     if (picked != null) {
-      setState(() => isStart ? _startTime = picked : _endTime = picked);
+      setState(() {
+        if (isStart) {
+          _startTime = picked;
+          int newEndHour = (_startTime.hour + 2) % 24;
+          _endTime = TimeOfDay(hour: newEndHour, minute: _startTime.minute);
+        } else {
+          _endTime = picked;
+        }
+      });
     }
   }
 
@@ -1045,11 +1133,21 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
   }
 
   static const List<String> _weekdayLabels = [
-    'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche',
+    'Lundi',
+    'Mardi',
+    'Mercredi',
+    'Jeudi',
+    'Vendredi',
+    'Samedi',
+    'Dimanche',
   ];
 
   /// Calcule la date d'envoi pour le premier événement (ex. pour afficher un exemple).
-  DateTime _getReminderExampleSendDate(bool useWeekday, int weekday, int daysBefore) {
+  DateTime _getReminderExampleSendDate(
+    bool useWeekday,
+    int weekday,
+    int daysBefore,
+  ) {
     final eventDate = DateTime(_date.year, _date.month, _date.day);
     if (useWeekday) {
       int diff = eventDate.weekday - weekday;
@@ -1061,11 +1159,19 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
 
   /// Texte d'exemple "Exemple : notif X sera envoyée le [jour] [date] à [heure]h".
   String _getReminderExampleText(int reminderIndex) {
-    final useWeekday = reminderIndex == 1 ? _reminder1UseWeekday : _reminder2UseWeekday;
+    final useWeekday = reminderIndex == 1
+        ? _reminder1UseWeekday
+        : _reminder2UseWeekday;
     final weekday = reminderIndex == 1 ? _reminder1Weekday : _reminder2Weekday;
-    final daysBefore = reminderIndex == 1 ? _reminder1DaysBefore : _reminder2DaysBefore;
+    final daysBefore = reminderIndex == 1
+        ? _reminder1DaysBefore
+        : _reminder2DaysBefore;
     final time = reminderIndex == 1 ? _reminder1Time : _reminder2Time;
-    final sendDate = _getReminderExampleSendDate(useWeekday, weekday, daysBefore);
+    final sendDate = _getReminderExampleSendDate(
+      useWeekday,
+      weekday,
+      daysBefore,
+    );
     final dayName = _weekdayLabels[sendDate.weekday - 1];
     final dateStr = DateFormat('d MMMM', 'fr_FR').format(sendDate);
     final timeStr = time.minute > 0
@@ -1079,11 +1185,8 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          "Rappel 1",
-          style: TextStyle(
-            fontWeight: FontWeight.w600,
-            fontSize: 14,
-          ),
+          "Notification 1",
+          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
         ),
         const SizedBox(height: 8),
         Row(
@@ -1106,7 +1209,7 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
           Padding(
             padding: const EdgeInsets.only(bottom: 16),
             child: DropdownButtonFormField<int>(
-              value: _reminder1Weekday,
+              initialValue: _reminder1Weekday,
               decoration: _reminderFieldDecoration(
                 "Le jour avant l'événement",
                 Icons.calendar_today_outlined,
@@ -1118,15 +1221,14 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
                   child: Text(_weekdayLabels[i]),
                 ),
               ),
-              onChanged: (v) =>
-                  setState(() => _reminder1Weekday = v ?? 7),
+              onChanged: (v) => setState(() => _reminder1Weekday = v ?? 7),
             ),
           )
         else
           Padding(
             padding: const EdgeInsets.only(bottom: 16),
             child: DropdownButtonFormField<int>(
-              value: _reminder1DaysBefore,
+              initialValue: _reminder1DaysBefore,
               decoration: _reminderFieldDecoration(
                 "Jours avant l'événement",
                 Icons.layers_outlined,
@@ -1138,8 +1240,7 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
                   child: Text('${i + 1}'),
                 ),
               ),
-              onChanged: (v) =>
-                  setState(() => _reminder1DaysBefore = v ?? 1),
+              onChanged: (v) => setState(() => _reminder1DaysBefore = v ?? 1),
             ),
           ),
         _buildDateTimePicker(
@@ -1148,13 +1249,31 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
           onTap: _pickReminder1Time,
         ),
         Padding(
-          padding: const EdgeInsets.only(top: 6, left: 4),
-          child: Text(
-            _getReminderExampleText(1),
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.grey[600],
-              fontStyle: FontStyle.italic,
+          padding: const EdgeInsets.only(top: 8),
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: ViroColors.primary.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: ViroColors.primary.withValues(alpha: 0.3),
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.info_outline, color: ViroColors.primary, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _getReminderExampleText(1),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: ViroColors.primary,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -1178,11 +1297,8 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          "Rappel 2",
-          style: TextStyle(
-            fontWeight: FontWeight.w600,
-            fontSize: 14,
-          ),
+          "Notification 2",
+          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
         ),
         const SizedBox(height: 8),
         Row(
@@ -1205,7 +1321,7 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
           Padding(
             padding: const EdgeInsets.only(bottom: 16),
             child: DropdownButtonFormField<int>(
-              value: _reminder2Weekday,
+              initialValue: _reminder2Weekday,
               decoration: _reminderFieldDecoration(
                 "Le jour avant l'événement",
                 Icons.calendar_today_outlined,
@@ -1217,15 +1333,14 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
                   child: Text(_weekdayLabels[i]),
                 ),
               ),
-              onChanged: (v) =>
-                  setState(() => _reminder2Weekday = v ?? 7),
+              onChanged: (v) => setState(() => _reminder2Weekday = v ?? 7),
             ),
           )
         else
           Padding(
             padding: const EdgeInsets.only(bottom: 16),
             child: DropdownButtonFormField<int>(
-              value: _reminder2DaysBefore,
+              initialValue: _reminder2DaysBefore,
               decoration: _reminderFieldDecoration(
                 "Jours avant l'événement",
                 Icons.layers_outlined,
@@ -1237,8 +1352,7 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
                   child: Text('${i + 1}'),
                 ),
               ),
-              onChanged: (v) =>
-                  setState(() => _reminder2DaysBefore = v ?? 2),
+              onChanged: (v) => setState(() => _reminder2DaysBefore = v ?? 2),
             ),
           ),
         _buildDateTimePicker(
@@ -1247,13 +1361,31 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
           onTap: _pickReminder2Time,
         ),
         Padding(
-          padding: const EdgeInsets.only(top: 6, left: 4),
-          child: Text(
-            _getReminderExampleText(2),
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.grey[600],
-              fontStyle: FontStyle.italic,
+          padding: const EdgeInsets.only(top: 8),
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: ViroColors.primary.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: ViroColors.primary.withValues(alpha: 0.3),
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.info_outline, color: ViroColors.primary, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _getReminderExampleText(2),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: ViroColors.primary,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
