@@ -47,6 +47,19 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
   String _recurrenceMode = 'weeks'; // 'weeks' ou 'season_end'
   DateTime? _seasonEndDate;
 
+  // Rappels de présence (Match / Entraînement uniquement)
+  int _reminderCount = 2; // 0 = aucun, 1 = un rappel, 2 = deux rappels
+  bool _reminder1UseWeekday = true; // true = jour de la semaine avant, false = X jours avant
+  int _reminder1Weekday = 7; // 1 = lundi, 7 = dimanche (défaut : dimanche 16h)
+  int _reminder1DaysBefore = 1;
+  TimeOfDay _reminder1Time = const TimeOfDay(hour: 16, minute: 0);
+  bool _reminder2UseWeekday = false; // défaut : jours avant
+  int _reminder2Weekday = 7;
+  int _reminder2DaysBefore = 2; // défaut : 2 jours avant à 18h30
+  TimeOfDay _reminder2Time = const TimeOfDay(hour: 18, minute: 30);
+  final _reminder1MessageController = TextEditingController();
+  final _reminder2MessageController = TextEditingController();
+
   @override
   void initState() {
     super.initState();
@@ -58,6 +71,8 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
     _locationController.dispose();
     _titleController.dispose();
     _meetingLocationController.dispose();
+    _reminder1MessageController.dispose();
+    _reminder2MessageController.dispose();
     super.dispose();
   }
 
@@ -207,6 +222,10 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
           'clubName': clubName,
           'clubSport': clubSport,
         };
+        final reminderConfig = _buildReminderConfig();
+        if (reminderConfig != null) {
+          eventData['reminderConfig'] = reminderConfig;
+        }
         if (_selectedType == 'Match') {
           eventData['meetingLocation'] =
               _meetingLocationController.text.trim();
@@ -243,6 +262,48 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  /// Construit reminderConfig pour Firestore (null si 0 rappel).
+  /// Rappel 1 : weekday (1-7) ou daysBefore (1-10) + time.
+  /// Rappel 2 : daysBefore + time.
+  Map<String, dynamic>? _buildReminderConfig() {
+    if (_reminderCount == 0) return null;
+    final reminders = <Map<String, dynamic>>[];
+    String formatTime(TimeOfDay t) =>
+        '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+
+    final isCustomText = _selectedType != 'Entraînement' && _selectedType != 'Match';
+
+    if (_reminderCount >= 1) {
+      final r1 = <String, dynamic>{
+        'time': formatTime(_reminder1Time),
+      };
+      if (_reminder1UseWeekday) {
+        r1['weekday'] = _reminder1Weekday;
+      } else {
+        r1['daysBefore'] = _reminder1DaysBefore;
+      }
+      if (isCustomText && _reminder1MessageController.text.trim().isNotEmpty) {
+        r1['message'] = _reminder1MessageController.text.trim();
+      }
+      reminders.add(r1);
+    }
+    if (_reminderCount >= 2) {
+      final r2 = <String, dynamic>{
+        'time': formatTime(_reminder2Time),
+      };
+      if (_reminder2UseWeekday) {
+        r2['weekday'] = _reminder2Weekday;
+      } else {
+        r2['daysBefore'] = _reminder2DaysBefore;
+      }
+      if (isCustomText && _reminder2MessageController.text.trim().isNotEmpty) {
+        r2['message'] = _reminder2MessageController.text.trim();
+      }
+      reminders.add(r2);
+    }
+    return {'reminders': reminders};
   }
 
   // --- RÉCUPÉRATION DES MEMBRES ---
@@ -719,10 +780,13 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
                           label: _selectedType == 'Match'
                               ? "Jour du match"
                               : "Jour",
-                          value: DateFormat(
-                            'dd/MM/yyyy',
-                            'fr_FR',
-                          ).format(_date),
+                          value: () {
+                            final s = DateFormat(
+                              'EEEE dd/MM/yyyy',
+                              'fr_FR',
+                            ).format(_date);
+                            return s[0].toUpperCase() + s.substring(1);
+                          }(),
                           onTap: _pickDate,
                         ),
                       ),
@@ -870,6 +934,46 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
                     ],
                   ],
 
+                  const Divider(height: 40),
+                  Text(
+                    _selectedType == 'Entraînement' || _selectedType == 'Match'
+                        ? "Rappels de présence"
+                        : "Rappels de l'événement",
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _selectedType == 'Entraînement' || _selectedType == 'Match'
+                        ? "0, 1 ou 2 notifs pour rappeler de donner sa présence (max 10 jours avant ou jour de la semaine avant)."
+                        : "0, 1 ou 2 notifs pour rappeler l'événement (max 10 jours avant ou jour de la semaine avant).",
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  SegmentedButton<int>(
+                    segments: const [
+                      ButtonSegment(value: 0, label: Text("Aucun")),
+                      ButtonSegment(value: 1, label: Text("1 rappel")),
+                      ButtonSegment(value: 2, label: Text("2 rappels")),
+                    ],
+                    selected: {_reminderCount},
+                    onSelectionChanged: (s) =>
+                        setState(() => _reminderCount = s.first),
+                  ),
+                  if (_reminderCount >= 1) ...[
+                    const SizedBox(height: 16),
+                    _buildReminder1Fields(),
+                  ],
+                  if (_reminderCount >= 2) ...[
+                    const SizedBox(height: 12),
+                    _buildReminder2Fields(),
+                  ],
+
                   const SizedBox(height: 30),
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
@@ -922,6 +1026,250 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
       initialTime: _rdvTime,
     );
     if (picked != null) setState(() => _rdvTime = picked);
+  }
+
+  Future<void> _pickReminder1Time() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: _reminder1Time,
+    );
+    if (picked != null) setState(() => _reminder1Time = picked);
+  }
+
+  Future<void> _pickReminder2Time() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: _reminder2Time,
+    );
+    if (picked != null) setState(() => _reminder2Time = picked);
+  }
+
+  static const List<String> _weekdayLabels = [
+    'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche',
+  ];
+
+  /// Calcule la date d'envoi pour le premier événement (ex. pour afficher un exemple).
+  DateTime _getReminderExampleSendDate(bool useWeekday, int weekday, int daysBefore) {
+    final eventDate = DateTime(_date.year, _date.month, _date.day);
+    if (useWeekday) {
+      int diff = eventDate.weekday - weekday;
+      if (diff <= 0) diff += 7;
+      return eventDate.subtract(Duration(days: diff));
+    }
+    return eventDate.subtract(Duration(days: daysBefore));
+  }
+
+  /// Texte d'exemple "Exemple : notif X sera envoyée le [jour] [date] à [heure]h".
+  String _getReminderExampleText(int reminderIndex) {
+    final useWeekday = reminderIndex == 1 ? _reminder1UseWeekday : _reminder2UseWeekday;
+    final weekday = reminderIndex == 1 ? _reminder1Weekday : _reminder2Weekday;
+    final daysBefore = reminderIndex == 1 ? _reminder1DaysBefore : _reminder2DaysBefore;
+    final time = reminderIndex == 1 ? _reminder1Time : _reminder2Time;
+    final sendDate = _getReminderExampleSendDate(useWeekday, weekday, daysBefore);
+    final dayName = _weekdayLabels[sendDate.weekday - 1];
+    final dateStr = DateFormat('d MMMM', 'fr_FR').format(sendDate);
+    final timeStr = time.minute > 0
+        ? '${time.hour}h${time.minute.toString().padLeft(2, '0')}'
+        : '${time.hour}h';
+    return 'Exemple : notif $reminderIndex sera envoyée le $dayName $dateStr à $timeStr';
+  }
+
+  Widget _buildReminder1Fields() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          "Rappel 1",
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+            fontSize: 14,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: SegmentedButton<bool>(
+                segments: const [
+                  ButtonSegment(value: true, label: Text("Jour de la semaine")),
+                  ButtonSegment(value: false, label: Text("Jours avant")),
+                ],
+                selected: {_reminder1UseWeekday},
+                onSelectionChanged: (s) =>
+                    setState(() => _reminder1UseWeekday = s.first),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (_reminder1UseWeekday)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: DropdownButtonFormField<int>(
+              value: _reminder1Weekday,
+              decoration: _reminderFieldDecoration(
+                "Le jour avant l'événement",
+                Icons.calendar_today_outlined,
+              ),
+              items: List.generate(
+                7,
+                (i) => DropdownMenuItem<int>(
+                  value: i + 1,
+                  child: Text(_weekdayLabels[i]),
+                ),
+              ),
+              onChanged: (v) =>
+                  setState(() => _reminder1Weekday = v ?? 7),
+            ),
+          )
+        else
+          Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: DropdownButtonFormField<int>(
+              value: _reminder1DaysBefore,
+              decoration: _reminderFieldDecoration(
+                "Jours avant l'événement",
+                Icons.layers_outlined,
+              ),
+              items: List.generate(
+                10,
+                (i) => DropdownMenuItem<int>(
+                  value: i + 1,
+                  child: Text('${i + 1}'),
+                ),
+              ),
+              onChanged: (v) =>
+                  setState(() => _reminder1DaysBefore = v ?? 1),
+            ),
+          ),
+        _buildDateTimePicker(
+          label: "Heure d'envoi",
+          value: _reminder1Time.format(context),
+          onTap: _pickReminder1Time,
+        ),
+        Padding(
+          padding: const EdgeInsets.only(top: 6, left: 4),
+          child: Text(
+            _getReminderExampleText(1),
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey[600],
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+        ),
+        if (_selectedType == 'Évènement' || _selectedType == 'Autre') ...[
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _reminder1MessageController,
+            decoration: _reminderFieldDecoration(
+              "Texte de la notification (optionnel)",
+              Icons.message_outlined,
+            ),
+            maxLength: 100,
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildReminder2Fields() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          "Rappel 2",
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+            fontSize: 14,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: SegmentedButton<bool>(
+                segments: const [
+                  ButtonSegment(value: true, label: Text("Jour de la semaine")),
+                  ButtonSegment(value: false, label: Text("Jours avant")),
+                ],
+                selected: {_reminder2UseWeekday},
+                onSelectionChanged: (s) =>
+                    setState(() => _reminder2UseWeekday = s.first),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (_reminder2UseWeekday)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: DropdownButtonFormField<int>(
+              value: _reminder2Weekday,
+              decoration: _reminderFieldDecoration(
+                "Le jour avant l'événement",
+                Icons.calendar_today_outlined,
+              ),
+              items: List.generate(
+                7,
+                (i) => DropdownMenuItem<int>(
+                  value: i + 1,
+                  child: Text(_weekdayLabels[i]),
+                ),
+              ),
+              onChanged: (v) =>
+                  setState(() => _reminder2Weekday = v ?? 7),
+            ),
+          )
+        else
+          Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: DropdownButtonFormField<int>(
+              value: _reminder2DaysBefore,
+              decoration: _reminderFieldDecoration(
+                "Jours avant l'événement",
+                Icons.layers_outlined,
+              ),
+              items: List.generate(
+                10,
+                (i) => DropdownMenuItem<int>(
+                  value: i + 1,
+                  child: Text('${i + 1}'),
+                ),
+              ),
+              onChanged: (v) =>
+                  setState(() => _reminder2DaysBefore = v ?? 2),
+            ),
+          ),
+        _buildDateTimePicker(
+          label: "Heure d'envoi",
+          value: _reminder2Time.format(context),
+          onTap: _pickReminder2Time,
+        ),
+        Padding(
+          padding: const EdgeInsets.only(top: 6, left: 4),
+          child: Text(
+            _getReminderExampleText(2),
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey[600],
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+        ),
+        if (_selectedType == 'Évènement' || _selectedType == 'Autre') ...[
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _reminder2MessageController,
+            decoration: _reminderFieldDecoration(
+              "Texte de la notification (optionnel)",
+              Icons.message_outlined,
+            ),
+            maxLength: 100,
+          ),
+        ],
+      ],
+    );
   }
 
   Widget _buildDropdown<T>({
@@ -977,6 +1325,21 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
       labelText: label,
       prefixIcon: Icon(icon, color: ViroColors.primary),
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+    );
+  }
+
+  /// Décoration identique pour tous les champs des rappels (bordures uniformes).
+  InputDecoration _reminderFieldDecoration(String label, IconData icon) {
+    final border = OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: const BorderSide(color: ViroColors.borderColor),
+    );
+    return InputDecoration(
+      labelText: label,
+      prefixIcon: Icon(icon, color: ViroColors.borderColor),
+      enabledBorder: border,
+      focusedBorder: border,
+      border: border,
     );
   }
 }
