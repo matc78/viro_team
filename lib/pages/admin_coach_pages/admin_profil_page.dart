@@ -8,7 +8,6 @@ import 'package:viro_team/utils/firestore_instance.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -1607,12 +1606,8 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
 
   Future<void> _pickClubLogo(String clubId) async {
     try {
-      final picker = ImagePicker();
-      final XFile? file = await picker.pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 80,
-      );
-      if (file == null) return; // annulé par l'utilisateur
+      final file = await pickPhotoWithPermission(context, imageQuality: 80);
+      if (file == null) return;
 
       final storageRef = FirebaseStorage.instance
           .ref()

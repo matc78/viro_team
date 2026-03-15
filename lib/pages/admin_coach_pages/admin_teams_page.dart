@@ -6,7 +6,6 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:viro_team/utils/firestore_instance.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:viro_team/constants/firebase_collections.dart';
 import 'package:viro_team/services/membership_service.dart';
 import 'package:viro_team/services/team_service.dart';
@@ -14,6 +13,8 @@ import '../../theme/viro_theme.dart';
 import '../../utils/app_logger.dart';
 import '../../utils/firebase_error_handler.dart';
 import '../../utils/firebase_helpers.dart';
+import 'package:image_picker/image_picker.dart' show XFile;
+import '../../utils/photo_permission_helper.dart';
 import '../../utils/team_avatar_upload.dart';
 import '../../widget/viro_loader.dart';
 import 'admin_teams_detail_page.dart';
@@ -33,7 +34,6 @@ class _AdminTeamsPageState extends State<AdminTeamsPage> {
   String? _clubLogoUrl;
   String? _deletingTeamId;
   String? _uploadingAvatarTeamId;
-  bool _isEditing = false;
 
   @override
   void initState() {
@@ -147,9 +147,7 @@ class _AdminTeamsPageState extends State<AdminTeamsPage> {
     required String teamId,
     required Map<String, dynamic> data,
     required Color categoryColor,
-    required bool isEditing,
     required bool isUploading,
-    VoidCallback? onTapPickImage,
   }) {
     final String? avatarUrl = (data['avatarUrl'] as String?)?.trim();
     final bool hasCustomAvatar = avatarUrl != null && avatarUrl.isNotEmpty;
@@ -169,7 +167,7 @@ class _AdminTeamsPageState extends State<AdminTeamsPage> {
     );
 
     if (isUploading) {
-      avatar = Stack(
+      return Stack(
         alignment: Alignment.center,
         children: [
           avatar,
@@ -195,26 +193,6 @@ class _AdminTeamsPageState extends State<AdminTeamsPage> {
       );
     }
 
-    if (onTapPickImage != null) {
-      return GestureDetector(
-        onTap: isUploading ? null : onTapPickImage,
-        child: Stack(
-          alignment: Alignment.bottomRight,
-          children: [
-            avatar,
-            Container(
-              padding: const EdgeInsets.all(4),
-              decoration: BoxDecoration(
-                color: ViroColors.primary,
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white, width: 1),
-              ),
-              child: const Icon(Icons.photo_camera, size: 14, color: Colors.white),
-            ),
-          ],
-        ),
-      );
-    }
     return avatar;
   }
 
@@ -223,9 +201,8 @@ class _AdminTeamsPageState extends State<AdminTeamsPage> {
     final data = teamDoc.data() as Map<String, dynamic>? ?? {};
     final teamName = data['name'] as String? ?? 'Équipe';
     try {
-      final picker = ImagePicker();
-      final XFile? file = await picker.pickImage(
-        source: ImageSource.gallery,
+      final XFile? file = await pickPhotoWithPermission(
+        context,
         imageQuality: 80,
       );
       if (file == null || !mounted) return;
@@ -416,15 +393,6 @@ class _AdminTeamsPageState extends State<AdminTeamsPage> {
           appBar: AppBar(
             title: const Text("Gestion des Équipes"),
             centerTitle: true,
-            actions: [
-              if (canCreateOrDelete)
-                IconButton(
-                  icon: Icon(_isEditing ? Icons.close : Icons.edit),
-                  onPressed: () => setState(() {
-                    _isEditing = !_isEditing;
-                  }),
-                ),
-            ],
           ),
           body: AbsorbPointer(
         absorbing: _deletingTeamId != null,
@@ -509,93 +477,119 @@ class _AdminTeamsPageState extends State<AdminTeamsPage> {
                     final Color categoryColor = category.isNotEmpty
                         ? ViroColors.getCategoryColor(category)
                         : ViroColors.primary;
+                    final bool isCoachOfThisTeam = coachIds.contains(userId);
+                    final bool canChangeAvatar =
+                        canCreateOrDelete || isCoachOfThisTeam;
 
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(15),
-                        border: Border.all(
-                          color: categoryColor.withValues(alpha: 0.6),
-                          width: 2,
-                        ),
-                      ),
-                      child: ListTile(
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 8,
-                        ),
-                        leading: _buildTeamAvatar(
-                          teamId: team.id,
-                          data: data,
-                          categoryColor: categoryColor,
-                          isEditing: _isEditing,
-                          isUploading: _uploadingAvatarTeamId == team.id,
-                          onTapPickImage: _isEditing
-                              ? () => _pickTeamAvatar(team)
-                              : null,
-                        ),
-                        title: Text(
-                          data['name'] ?? "Sans nom",
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                        ),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text("Catégorie : ${data['category']}"),
-                            if (playerCount > 0)
-                              Text(
-                                "$playerCount joueur${playerCount > 1 ? 's' : ''}",
+                    return _TeamSlidableTile(
+                      key: Key(team.id),
+                      onCameraTap: canChangeAvatar
+                          ? () => _pickTeamAvatar(team)
+                          : null,
+                      onDeleteTap: canCreateOrDelete
+                          ? () => _confirmDeleteTeam(team)
+                          : null,
+                      builder: (anim) => AnimatedBuilder(
+                        animation: anim,
+                        builder: (context, _) {
+                          final t = anim.value;
+                          final titleSize = 16.0 - 3.0 * t;      // 16 → 13
+                          final subtitleSize = 13.0 - 2.0 * t;   // 13 → 11
+                          final extraRowOpacity =
+                              (1.0 - t * 1.8).clamp(0.0, 1.0);
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 12),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(15),
+                              border: Border.all(
+                                color: categoryColor.withValues(alpha: 0.6),
+                                width: 2,
                               ),
-                            FutureBuilder<List<String>>(
-                              future: _fetchCoachNames(coachIds),
-                              builder: (context, snapshot) {
-                                final coaches = snapshot.data ?? [];
-                                if (coaches.isEmpty) {
-                                  return const Text("Coach(s) : non renseigné");
-                                }
-                                return Text("Coach(s) : ${coaches.join(', ')}");
-                              },
                             ),
-                          ],
-                        ),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            if (_isEditing)
-                              IconButton(
-                                icon: const Icon(
-                                  Icons.delete_outline,
-                                  color: Colors.redAccent,
+                            child: ListTile(
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 8,
+                              ),
+                              leading: _buildTeamAvatar(
+                                teamId: team.id,
+                                data: data,
+                                categoryColor: categoryColor,
+                                isUploading:
+                                    _uploadingAvatarTeamId == team.id,
+                              ),
+                              title: Text(
+                                data['name'] ?? "Sans nom",
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: titleSize,
                                 ),
-                                onPressed: _deletingTeamId == team.id
-                                    ? null
-                                    : () => _confirmDeleteTeam(team),
-                              )
-                            else
-                              const Icon(
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              subtitle: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    "${data['category']}",
+                                    style: TextStyle(fontSize: subtitleSize),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  if (extraRowOpacity > 0)
+                                    Opacity(
+                                      opacity: extraRowOpacity,
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          if (playerCount > 0)
+                                            Text(
+                                              "$playerCount joueur${playerCount > 1 ? 's' : ''}",
+                                              style: TextStyle(
+                                                fontSize: subtitleSize,
+                                              ),
+                                            ),
+                                          FutureBuilder<List<String>>(
+                                            future:
+                                                _fetchCoachNames(coachIds),
+                                            builder: (context, snapshot) {
+                                              final coaches =
+                                                  snapshot.data ?? [];
+                                              return Text(
+                                                coaches.isEmpty
+                                                    ? "Coach(s) : non renseigné"
+                                                    : "Coach(s) : ${coaches.join(', ')}",
+                                                style: TextStyle(
+                                                  fontSize: subtitleSize,
+                                                ),
+                                                overflow:
+                                                    TextOverflow.ellipsis,
+                                              );
+                                            },
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                ],
+                              ),
+                              trailing: const Icon(
                                 Icons.arrow_forward_ios_rounded,
                                 size: 16,
                                 color: ViroColors.borderColor,
                               ),
-                          ],
-                        ),
-                        onTap: _isEditing
-                            ? null
-                            : () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => TeamDetailsPage(
-                                      clubId: widget.clubId,
-                                      teamDoc: team,
-                                    ),
+                              onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => TeamDetailsPage(
+                                    clubId: widget.clubId,
+                                    teamDoc: team,
                                   ),
-                                );
-                              },
+                                ),
+                              ),
+                            ),
+                          );
+                        },
                       ),
                     );
                   },
@@ -614,7 +608,7 @@ class _AdminTeamsPageState extends State<AdminTeamsPage> {
           ],
         ),
       ),
-          floatingActionButton: canCreateOrDelete && !_isEditing
+          floatingActionButton: canCreateOrDelete
               ? FloatingActionButton(
                   onPressed: _showCreateTeamDialog,
                   backgroundColor: ViroColors.primary,
@@ -745,6 +739,7 @@ class _AdminTeamsPageState extends State<AdminTeamsPage> {
   }
 
   Future<void> _cleanupEvents(String teamName, List<String> memberIds) async {
+
     if (teamName.isEmpty) return;
     final eventsRef = _db
         .collection(FirebaseCollections.clubs)
@@ -787,5 +782,163 @@ class _AdminTeamsPageState extends State<AdminTeamsPage> {
         await doc.reference.set(updates, SetOptions(merge: true));
       }
     }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Swipe-to-reveal buttons pour les tiles équipes
+// ---------------------------------------------------------------------------
+
+/// Enveloppe une tile équipe avec un swipe gauche qui révèle 1 ou 2 boutons :
+///   - optionnellement à gauche : bouton appareil photo (changer le logo)
+///   - optionnellement à droite : bouton rouge "supprimer l'équipe"
+class _TeamSlidableTile extends StatefulWidget {
+  final Widget Function(Animation<double> slideAnimation) builder;
+  final Future<void> Function()? onCameraTap;
+  final Future<void> Function()? onDeleteTap;
+
+  const _TeamSlidableTile({
+    required super.key,
+    required this.builder,
+    this.onCameraTap,
+    this.onDeleteTap,
+  });
+
+  @override
+  State<_TeamSlidableTile> createState() => _TeamSlidableTileState();
+}
+
+class _TeamSlidableTileState extends State<_TeamSlidableTile>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  static const double _buttonSize = 48.0;
+  static const double _singleRevealWidth = 70.0;
+  static const double _doubleRevealWidth = 126.0;
+
+  double get _revealWidth {
+    final count =
+        (widget.onCameraTap != null ? 1 : 0) +
+        (widget.onDeleteTap != null ? 1 : 0);
+    if (count >= 2) return _doubleRevealWidth;
+    if (count == 1) return _singleRevealWidth;
+    return 0;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 260),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _open() => _controller.animateTo(1.0, curve: Curves.easeOut);
+  void _close() => _controller.animateTo(0.0, curve: Curves.easeOut);
+
+  void _onDragStart(DragStartDetails _) => _controller.stop();
+
+  void _onDragUpdate(DragUpdateDetails details) {
+    final rw = _revealWidth;
+    if (rw == 0) return;
+    _controller.value =
+        (_controller.value - details.delta.dx / rw).clamp(0.0, 1.0);
+  }
+
+  void _onDragEnd(DragEndDetails details) {
+    if (_revealWidth == 0) return;
+    final vx = details.velocity.pixelsPerSecond.dx;
+    if (vx < -400) {
+      _open();
+    } else if (vx > 400) {
+      _close();
+    } else if (_controller.value >= 0.4) {
+      _open();
+    } else {
+      _close();
+    }
+  }
+
+  Widget _roundButton({
+    required IconData icon,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: color,
+      shape: const CircleBorder(),
+      elevation: 2,
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: onTap,
+        child: SizedBox(
+          width: _buttonSize,
+          height: _buttonSize,
+          child: Icon(icon, color: Colors.white, size: 22),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hasCameraBtn = widget.onCameraTap != null;
+    final hasDeleteBtn = widget.onDeleteTap != null;
+    final hasAnyBtn = hasCameraBtn || hasDeleteBtn;
+
+    if (!hasAnyBtn) return widget.builder(_controller);
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onHorizontalDragStart: _onDragStart,
+      onHorizontalDragUpdate: _onDragUpdate,
+      onHorizontalDragEnd: _onDragEnd,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(child: widget.builder(_controller)),
+          SizeTransition(
+            axis: Axis.horizontal,
+            sizeFactor: _controller,
+            axisAlignment: -1.0,
+            child: Padding(
+              padding: const EdgeInsets.only(left: 10, right: 12),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (hasCameraBtn) ...[
+                    _roundButton(
+                      icon: Icons.photo_camera,
+                      color: Colors.blueGrey.shade400,
+                      onTap: () async {
+                        await widget.onCameraTap!();
+                        if (mounted) _close();
+                      },
+                    ),
+                    if (hasDeleteBtn) const SizedBox(width: 8),
+                  ],
+                  if (hasDeleteBtn)
+                    _roundButton(
+                      icon: Icons.delete_outline,
+                      color: Colors.red.shade400,
+                      onTap: () async {
+                        await widget.onDeleteTap!();
+                        if (mounted) _close();
+                      },
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

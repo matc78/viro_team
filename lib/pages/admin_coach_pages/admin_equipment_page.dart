@@ -1305,11 +1305,7 @@ class _EditEquipmentSheetState extends State<_EditEquipmentSheet> {
   bool _saving = false;
 
   Future<void> _pickImage() async {
-    final picker = ImagePicker();
-    final file = await picker.pickImage(
-      source: ImageSource.gallery,
-      imageQuality: 85,
-    );
+    final file = await pickPhotoWithPermission(context, imageQuality: 85);
     if (file != null) {
       setState(() {
         _newPhotoFile = file;

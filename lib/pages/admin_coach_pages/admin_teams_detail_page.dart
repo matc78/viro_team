@@ -61,10 +61,16 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
                 filterUsersByClub(allDocs, widget.clubId, role: 'coach');
             final admins =
                 filterUsersByClub(allDocs, widget.clubId, role: 'admin');
+            final adminsFondateurs = filterUsersByClub(
+              allDocs,
+              widget.clubId,
+              role: 'admin_fondateur',
+            );
             final seenIds = coaches.map((d) => d.id).toSet();
             clubMembers = [
               ...coaches,
               ...admins.where((doc) => seenIds.add(doc.id)),
+              ...adminsFondateurs.where((doc) => seenIds.add(doc.id)),
             ];
           } else {
             clubMembers =
