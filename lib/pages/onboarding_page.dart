@@ -3,7 +3,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:viro_team/utils/firestore_instance.dart';
 import 'package:viro_team/utils/firebase_error_handler.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:viro_team/constants/firebase_collections.dart';
+import '../services/join_request_service.dart';
+import '../services/user_session.dart';
 import '../theme/viro_theme.dart';
 import '../widget/viro_loader.dart';
 import '../widget/club_search_widget.dart';
@@ -26,11 +29,13 @@ class _OnboardingPageState extends State<OnboardingPage> {
   String? _selectedRole; // 'player' ou 'coach'
   String? _selectedClubId;
   String? _selectedClubName;
+  String? _selectedClubSport;
   String? _sportFilter;
 
   // Contrôleurs
   final _messageController = TextEditingController();
   final _phoneController = TextEditingController();
+  final _scrollController = ScrollController();
 
   @override
   void initState() {
@@ -106,6 +111,9 @@ class _OnboardingPageState extends State<OnboardingPage> {
       }, SetOptions(merge: true));
 
       if (!mounted) return;
+      await context.read<UserSession>().loadUser(user.uid);
+
+      if (!mounted) return;
       if (firstRole == 'admin' ||
           firstRole == 'coach' ||
           firstRole == 'admin_fondateur') {
@@ -144,10 +152,11 @@ class _OnboardingPageState extends State<OnboardingPage> {
   void dispose() {
     _messageController.dispose();
     _phoneController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
-  /// Envoie la demande d'adhésion à Firestore
+  /// Envoie la demande d'adhésion via [JoinRequestService]
   Future<void> _sendJoinRequest() async {
     if (_selectedClubId == null || _selectedRole == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -164,72 +173,27 @@ class _OnboardingPageState extends State<OnboardingPage> {
     try {
       if (user == null) throw Exception("Utilisateur non connecté");
 
-      final requestsRef = appFirestore.collection(
-        'join_requests',
-      );
-
-      // Récupérer les infos utilisateur
       final userDoc = await appFirestore
           .collection(FirebaseCollections.users)
           .doc(user.uid)
           .get();
       final userData = userDoc.data() ?? {};
-      final firstName = userData['firstName'];
-      final lastName = userData['lastName'];
 
-      // Vérifier s'il existe déjà une demande en attente pour ce club/rôle
-      final existing = await requestsRef
-          .where('userId', isEqualTo: user.uid)
-          .where('clubId', isEqualTo: _selectedClubId)
-          .where('roleRequested', isEqualTo: _selectedRole)
-          .where('status', isEqualTo: 'pending')
-          .limit(1)
-          .get();
+      await JoinRequestService.instance.sendRequest(
+        userId: user.uid,
+        clubId: _selectedClubId!,
+        clubName: _selectedClubName ?? '',
+        role: _selectedRole!,
+        message: _messageController.text.trim(),
+        phone: _phoneController.text.trim(),
+        firstName: userData['firstName'] as String? ?? '',
+        lastName: userData['lastName'] as String? ?? '',
+        clubSport: _selectedClubSport,
+      );
 
-      final requestData = {
-        'userId': user.uid,
-        'clubId': _selectedClubId,
-        'clubName': _selectedClubName,
-        'roleRequested': _selectedRole,
-        'message': _messageController.text.trim(),
-        'status': 'pending',
-        'firstName': firstName,
-        'lastName': lastName,
-        if (_phoneController.text.trim().isNotEmpty)
-          'phone': _phoneController.text.trim(),
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      };
-
-      if (existing.docs.isNotEmpty) {
-        // Mettre à jour la demande existante
-        final oldData = existing.docs.first.data();
-        final String oldMessage = oldData['message'] ?? "";
-        final String newMessage = _messageController.text.trim();
-        final String combinedMessage = oldMessage.isEmpty
-            ? newMessage
-            : "$oldMessage\n\n[Relance] : $newMessage";
-
-        await existing.docs.first.reference.update({
-          ...requestData,
-          'message': combinedMessage,
-        });
-      } else {
-        // Créer une nouvelle demande
-        await requestsRef.add(requestData);
+      if (mounted) {
+        await context.read<UserSession>().loadUser(user.uid);
       }
-
-      // Marquer la demande en attente et mettre à jour le téléphone au profil (y compris si modifié ou vidé)
-      final userUpdateData = <String, dynamic>{
-        'hasPendingRequest': true,
-        'lastClubRequested': _selectedClubName,
-        'phone': _phoneController.text.trim(),
-      };
-      await appFirestore
-          .collection(FirebaseCollections.users)
-          .doc(user.uid)
-          .set(userUpdateData, SetOptions(merge: true));
-
       if (mounted) {
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (_) => const PlayerHomePage()),
@@ -256,6 +220,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
       backgroundColor: ViroColors.background,
       body: SafeArea(
         child: SingleChildScrollView(
+          controller: _scrollController,
           padding: const EdgeInsets.all(24.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -321,10 +286,11 @@ class _OnboardingPageState extends State<OnboardingPage> {
           ClubSearchWidget(
             selectedClubId: _selectedClubId,
             selectedClubName: _selectedClubName,
-            onClubSelected: (clubId, clubName) {
+            onClubSelected: (clubId, clubName, clubSport) {
               setState(() {
                 _selectedClubId = clubId;
                 _selectedClubName = clubName;
+                _selectedClubSport = clubSport;
               });
             },
             sportFilter: _sportFilter,
@@ -333,6 +299,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
                 _sportFilter = filter;
                 _selectedClubId = null;
                 _selectedClubName = null;
+                _selectedClubSport = null;
               });
             },
           ),
@@ -420,6 +387,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
             _selectedRole = roleValue;
             _selectedClubId = null;
             _selectedClubName = null;
+            _selectedClubSport = null;
             _messageController.clear();
             // Ne pas vider le téléphone : il est prérempli depuis le profil utilisateur
           }),

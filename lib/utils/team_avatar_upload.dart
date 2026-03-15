@@ -3,11 +3,11 @@ import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:viro_team/constants/firebase_collections.dart';
 import 'package:viro_team/utils/firestore_instance.dart';
 import 'app_logger.dart';
 import 'firebase_error_handler.dart';
+import 'photo_permission_helper.dart';
 
 /// Supprime le fichier Storage correspondant à une URL de téléchargement Firebase
 /// (extrait le chemin entre /o/ et ? puis décode). Ignore les erreurs (URL invalide, fichier absent).
@@ -37,11 +37,7 @@ Future<void> pickAndUploadTeamAvatar(
   String? teamName,
 }) async {
   try {
-    final picker = ImagePicker();
-    final XFile? file = await picker.pickImage(
-      source: ImageSource.gallery,
-      imageQuality: 80,
-    );
+    final file = await pickPhotoWithPermission(context, imageQuality: 80);
     if (file == null || !context.mounted) return;
 
     final teamRef = appFirestore

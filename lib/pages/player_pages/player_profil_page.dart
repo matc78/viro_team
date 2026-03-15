@@ -8,7 +8,6 @@ import 'package:viro_team/utils/firestore_instance.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -21,6 +20,7 @@ import '../../utils/auth_helper.dart';
 import '../../utils/firebase_helpers.dart';
 import '../../utils/firebase_error_handler.dart';
 import '../../utils/avatar_moderation.dart';
+import '../../utils/photo_permission_helper.dart';
 import '../auth_page.dart';
 import '../add_profile_page.dart';
 import '../notification_settings_page.dart';
@@ -64,7 +64,7 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
         }
         final data = snapshot.data?.data();
         final dataForModeration = data != null ? Map<String, dynamic>.from(data) : <String, dynamic>{};
-        final profile = context.read<UserSession>().currentUser;
+        final profile = context.watch<UserSession>().currentUser;
         if (profile != null && profile.uid == user.uid) {
           dataForModeration.addAll(profile.toAvatarMergeMap());
         }
@@ -83,8 +83,9 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
         final List<String> clubIds = clubIdsSet.toList();
         final avatarUrl = effectiveAvatarUrl(dataForModeration);
         final email = data?['email'] as String? ?? user.email ?? "";
-        if (avatarUrl != null && avatarUrl.isNotEmpty)
+        if (avatarUrl != null && avatarUrl.isNotEmpty) {
           _lastAvatarUrl = avatarUrl;
+        }
 
         _showAvatarModerationRejectedIfNeeded(context, user.uid, dataForModeration);
         _clearStaleAvatarModerationPendingIfNeeded(context, user.uid, dataForModeration);
@@ -149,12 +150,13 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
                       : "Non renseigné",
                   onTap: () => _changePhone(data?['phone'] as String? ?? ""),
                 ),
-                _buildMenuCard(
-                  icon: Icons.lock_open_outlined,
-                  title: "Changer mon mot de passe",
-                  subtitle: "Modifier le mot de passe",
-                  onTap: _changePassword,
-                ),
+                if (!user.providerData.any((p) => p.providerId == 'google.com'))
+                  _buildMenuCard(
+                    icon: Icons.lock_open_outlined,
+                    title: "Changer mon mot de passe",
+                    subtitle: "Modifier le mot de passe",
+                    onTap: _changePassword,
+                  ),
                 _buildMenuCard(
                   icon: Icons.info_outline,
                   title: "Afficher mes infos",
@@ -1681,13 +1683,9 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
   Future<void> _pickAvatar() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
+    final file = await pickPhotoWithPermission(context, imageQuality: 80);
+    if (file == null) return;
     try {
-      final picker = ImagePicker();
-      final XFile? file = await picker.pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 80,
-      );
-      if (file == null) return;
       setState(() {
         _isSaving = true;
         _isUploadingAvatar = true;

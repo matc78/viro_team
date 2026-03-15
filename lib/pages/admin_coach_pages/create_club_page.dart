@@ -2,12 +2,14 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:viro_team/utils/firestore_instance.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:viro_team/constants/firebase_collections.dart';
 import '../../theme/viro_theme.dart';
 import '../../widget/viro_loader.dart';
 import '../../utils/app_logger.dart';
 import '../../utils/firebase_error_handler.dart';
 import '../../services/membership_service.dart';
+import '../../services/user_session.dart';
 import 'admin_home_page.dart';
 
 class CreateClubPage extends StatefulWidget {
@@ -122,6 +124,9 @@ class _CreateClubPageState extends State<CreateClubPage> {
         },
       );
 
+      if (mounted) {
+        await context.read<UserSession>().loadUser(user.uid);
+      }
       if (mounted) {
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (_) => const AdminHomePage()),

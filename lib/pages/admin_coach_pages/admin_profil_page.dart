@@ -25,6 +25,7 @@ import '../../services/membership_service.dart';
 import '../../utils/firebase_helpers.dart';
 import '../../utils/firebase_error_handler.dart';
 import '../../utils/avatar_moderation.dart';
+import '../../utils/photo_permission_helper.dart';
 import '../../services/user_session.dart';
 import '../auth_page.dart';
 import '../onboarding_page.dart';
@@ -90,8 +91,9 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
         // Extraire tous les clubIds depuis roles
         final List<String> clubIds = _extractAllClubIds(userData);
         final avatarUrl = effectiveAvatarUrl(dataForModeration);
-        if (avatarUrl != null && avatarUrl.isNotEmpty)
+        if (avatarUrl != null && avatarUrl.isNotEmpty) {
           _lastAvatarUrl = avatarUrl;
+        }
 
         _showAvatarModerationRejectedIfNeeded(context, user.uid, dataForModeration);
         _clearStaleAvatarModerationPendingIfNeeded(context, user.uid, dataForModeration);
@@ -150,13 +152,14 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
                       _changePhone(userData?['phone'] as String? ?? ""),
                   disabled: _isSaving,
                 ),
-                ProfilMenuCard(
-                  icon: Icons.lock_open_outlined,
-                  title: "Changer mon mot de passe",
-                  subtitle: "Modifier le mot de passe",
-                  onTap: _changePassword,
-                  disabled: _isSaving,
-                ),
+                if (!user.providerData.any((p) => p.providerId == 'google.com'))
+                  ProfilMenuCard(
+                    icon: Icons.lock_open_outlined,
+                    title: "Changer mon mot de passe",
+                    subtitle: "Modifier le mot de passe",
+                    onTap: _changePassword,
+                    disabled: _isSaving,
+                  ),
                 ProfilMenuCard(
                   icon: Icons.info_outline,
                   title: "Afficher mes infos",
@@ -1957,9 +1960,8 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
   }
 
   Future<void> _pickAvatar(String uid) async {
-    final picker = ImagePicker();
-    final picked = await picker.pickImage(
-      source: ImageSource.gallery,
+    final picked = await pickPhotoWithPermission(
+      context,
       maxWidth: 800,
     );
     if (picked == null) return;

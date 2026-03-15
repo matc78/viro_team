@@ -15,12 +15,10 @@ import 'admin_members_page.dart';
 import 'admin_profil_page.dart';
 import 'package:intl/intl.dart';
 import '../../constants/firebase_collections.dart';
-import '../../services/membership_service.dart';
+import '../../services/join_request_service.dart';
 import '../../services/notification_service.dart';
-import '../../services/pending_member_merge_service.dart';
 import '../../theme/viro_theme.dart';
 import '../../utils/firebase_helpers.dart';
-import '../../utils/app_logger.dart';
 import '../../utils/firebase_error_handler.dart';
 import '../../utils/avatar_moderation.dart';
 import '../../widget/profile_switcher_dialog.dart';
@@ -230,32 +228,12 @@ class _AdminHomePageState extends State<AdminHomePage> {
                             ],
                           ),
 
-                          const SizedBox(height: 30),
-
-                          const Text(
-                            "À ne pas manquer",
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          _buildJoinRequestsSection(
+                          _buildNotToMissSection(
                             clubId,
                             clubName,
                             userSnapshot.data?.data() ?? {},
+                            canManageEquipmentAndLoans,
                           ),
-                          const SizedBox(height: 12),
-                          _buildMemberLeavesSection(clubId),
-                          const SizedBox(height: 12),
-                          if (canManageEquipmentAndLoans) ...[
-                            _buildLoanRequestsSection(clubId),
-                            _buildLoanChangeRequestsSection(clubId),
-                            _buildActiveLoans(clubId),
-                            _buildPickupToConfirmSection(clubId),
-                            _buildUpcomingLoans(clubId),
-                            const SizedBox(height: 12),
-                          ],
 
                           // Grille d'actions (cards en bas du body)
                           GridView.count(
@@ -434,6 +412,110 @@ class _AdminHomePageState extends State<AdminHomePage> {
     return false;
   }
 
+  Widget _buildNotToMissSection(
+    String clubId,
+    String clubName,
+    Map<String, dynamic> userData,
+    bool canManageEquipmentAndLoans,
+  ) {
+    final cutoff24h = Timestamp.fromDate(
+      DateTime.now().subtract(const Duration(hours: 24)),
+    );
+
+    return StreamBuilder<QuerySnapshot>(
+      stream: appFirestore
+          .collection(FirebaseCollections.joinRequests)
+          .where('clubId', isEqualTo: clubId)
+          .where('status', isEqualTo: 'pending')
+          .snapshots(),
+      builder: (context, joinSnap) {
+        return StreamBuilder<QuerySnapshot>(
+          stream: appFirestore
+              .collection(FirebaseCollections.clubs)
+              .doc(clubId)
+              .collection(FirebaseCollections.memberLeaves)
+              .where('leftAt', isGreaterThanOrEqualTo: cutoff24h)
+              .snapshots(),
+          builder: (context, leavesSnap) {
+            final hasJoin = (joinSnap.data?.docs ?? []).isNotEmpty;
+            final hasLeaves = (leavesSnap.data?.docs ?? []).isNotEmpty;
+
+            if (!canManageEquipmentAndLoans) {
+              final hasContent = hasJoin || hasLeaves;
+              return _buildNotToMissContent(
+                clubId, clubName, userData, canManageEquipmentAndLoans, hasContent,
+              );
+            }
+
+            return StreamBuilder<QuerySnapshot>(
+              stream: appFirestore
+                  .collection(FirebaseCollections.clubs)
+                  .doc(clubId)
+                  .collection(FirebaseCollections.equipmentLoanRequests)
+                  .where('status', isEqualTo: 'pending')
+                  .snapshots(),
+              builder: (context, loanReqSnap) {
+                return StreamBuilder<QuerySnapshot>(
+                  stream: appFirestore
+                      .collection(FirebaseCollections.clubs)
+                      .doc(clubId)
+                      .collection(FirebaseCollections.equipmentLoans)
+                      .where('status', isEqualTo: 'active')
+                      .snapshots(),
+                  builder: (context, loansSnap) {
+                    final hasLoanReqs = (loanReqSnap.data?.docs ?? []).isNotEmpty;
+                    final hasLoans = (loansSnap.data?.docs ?? []).isNotEmpty;
+                    final hasContent = hasJoin || hasLeaves || hasLoanReqs || hasLoans;
+                    return _buildNotToMissContent(
+                      clubId, clubName, userData, canManageEquipmentAndLoans, hasContent,
+                    );
+                  },
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildNotToMissContent(
+    String clubId,
+    String clubName,
+    Map<String, dynamic> userData,
+    bool canManageEquipmentAndLoans,
+    bool hasContent,
+  ) {
+    if (!hasContent) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 30),
+        const Text(
+          "À ne pas manquer",
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 16,
+          ),
+        ),
+        const SizedBox(height: 10),
+        _buildJoinRequestsSection(clubId, clubName, userData),
+        const SizedBox(height: 12),
+        _buildMemberLeavesSection(clubId),
+        const SizedBox(height: 12),
+        if (canManageEquipmentAndLoans) ...[
+          _buildLoanRequestsSection(clubId),
+          _buildLoanChangeRequestsSection(clubId),
+          _buildActiveLoans(clubId),
+          _buildPickupToConfirmSection(clubId),
+          _buildUpcomingLoans(clubId),
+          const SizedBox(height: 12),
+        ],
+      ],
+    );
+  }
+
   Widget _buildJoinRequestsSection(
     String clubId,
     String clubName,
@@ -471,12 +553,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
         });
 
         if (docs.isEmpty) {
-          return _InfoCard(
-            child: const Padding(
-              padding: EdgeInsets.all(12.0),
-              child: Text("Aucune demande en attente."),
-            ),
-          );
+          return const SizedBox.shrink();
         }
 
         final toShow = _showAllRequests ? docs : docs.take(2).toList();
@@ -737,6 +814,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
                   }
                 }
                 return Container(
+                  width: double.infinity,
                   margin: const EdgeInsets.only(bottom: 12),
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
@@ -788,79 +866,20 @@ class _AdminHomePageState extends State<AdminHomePage> {
     if (userId == null) return;
     setState(() => _processingRequestId = requestId);
     try {
-      final requestRef = appFirestore
-          .collection(FirebaseCollections.joinRequests)
-          .doc(requestId);
-
       if (accept) {
-        await requestRef.update({
-          'status': 'accepted',
-          'respondedAt': FieldValue.serverTimestamp(),
-        });
-
-        final requestData = (await requestRef.get()).data() ?? {};
-        final licenseFromRequest = requestData['license'] as String?;
-
-        // Récupérer les données utilisateur existantes
-        final userDoc = await appFirestore
-            .collection(FirebaseCollections.users)
-            .doc(userId)
-            .get();
-        final userData = userDoc.data() ?? {};
-        final normalizedRole = (role == 'admin_fondateur')
-            ? 'admin'
-            : (role ?? 'player');
-
-        final newActiveContext = <String, dynamic>{
-          'role': normalizedRole,
-          'clubId': clubId,
-        };
-
-        await appFirestore.collection(FirebaseCollections.users).doc(userId).set({
-          'hasPendingRequest': false,
-          'activeContext': newActiveContext,
-        }, SetOptions(merge: true));
-
-        if (clubId != null) {
-          await MembershipService.instance.ensureMemberAndProfileSummary(
-            uid: userId,
-            clubId: clubId,
-            role: normalizedRole,
-            playerLicense: normalizedRole == 'player' ? licenseFromRequest : null,
-            userDataOverride: userData,
-          );
-          final field = (normalizedRole == 'admin' || normalizedRole == 'coach')
-              ? 'coaches'
-              : 'members';
-          await appFirestore
-              .collection(FirebaseCollections.clubs)
-              .doc(clubId)
-              .update({
-                field: FieldValue.arrayUnion([userId]),
-              });
-        }
-        // Fusionner les pending_members (même email) : club, équipes, events, puis supprimer les pending
-        final userEmail = userData['email'] as String? ?? '';
-        if (userEmail.isNotEmpty) {
-          try {
-            await PendingMemberMergeService.instance.mergePendingMembersForUser(userId, userEmail);
-          } catch (e) {
-            AppLogger.instance.error('mergePendingMembersForUser failed', error: e, context: {'userId': userId});
-          }
-        }
+        await JoinRequestService.instance.acceptRequest(
+          requestId: requestId,
+          userId: userId,
+          clubId: clubId ?? '',
+          role: role ?? 'player',
+        );
       } else {
-        await requestRef.update({
-          'status': 'refused',
-          'respondedAt': FieldValue.serverTimestamp(),
-        });
-        await appFirestore.collection(FirebaseCollections.users).doc(userId).set({
-          'hasPendingRequest': false,
-          if (clubId != null) 'lastProcessedJoinRequestClubId': clubId,
-        }, SetOptions(merge: true));
+        await JoinRequestService.instance.refuseRequest(
+          requestId: requestId,
+          userId: userId,
+          clubId: clubId,
+        );
       }
-
-      // Supprime la demande (acceptée ou refusée) pour nettoyer la liste
-      await requestRef.delete();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(

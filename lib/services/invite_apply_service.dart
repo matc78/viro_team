@@ -188,10 +188,10 @@ class InviteApplyService {
     for (final snap in snaps) {
       for (final doc in snap.docs) {
         if (!seen.add(doc.id)) continue;
-        await doc.reference.set({
+        await doc.reference.update({
           'teamMemberIds': FieldValue.arrayUnion([userId]),
           'attendance.$userId': 'none',
-        }, SetOptions(merge: true));
+        });
 
         if (replacePendingMemberId != null &&
             replacePendingMemberId.isNotEmpty) {

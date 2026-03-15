@@ -15,6 +15,7 @@ import '../../theme/viro_theme.dart';
 import '../../utils/equipment_helpers.dart';
 import '../../utils/firebase_helpers.dart';
 import '../../utils/firebase_error_handler.dart';
+import '../../utils/photo_permission_helper.dart';
 
 class AdminEquipmentPage extends StatefulWidget {
   final String clubId;
@@ -184,11 +185,13 @@ class _InventoryTab extends StatelessWidget {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text(
-                          "Valeur totale de l'inventaire",
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 16,
+                        Flexible(
+                          child: Text(
+                            "Valeur totale de l'inventaire",
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 16,
+                            ),
                           ),
                         ),
                         Text(
@@ -635,11 +638,7 @@ class _AddEquipmentDialogState extends State<_AddEquipmentDialog> {
   bool _saving = false;
 
   Future<void> _pickImage() async {
-    final picker = ImagePicker();
-    final file = await picker.pickImage(
-      source: ImageSource.gallery,
-      imageQuality: 85,
-    );
+    final file = await pickPhotoWithPermission(context, imageQuality: 85);
     if (file != null) setState(() => _pickedImage = file);
   }
 
@@ -1138,6 +1137,7 @@ class _AddEquipmentDialogState extends State<_AddEquipmentDialog> {
                         };
                       }).toList();
                       return DropdownButtonFormField<String?>(
+                        isExpanded: true,
                         initialValue: _responsibleUserId,
                         decoration: const InputDecoration(
                           labelText: "Responsable",
@@ -1185,6 +1185,7 @@ class _AddEquipmentDialogState extends State<_AddEquipmentDialog> {
                         };
                       }).toList();
                       return DropdownButtonFormField<String?>(
+                        isExpanded: true,
                         initialValue: _assignedTeamId,
                         decoration: const InputDecoration(
                           labelText: "Équipe affectée",

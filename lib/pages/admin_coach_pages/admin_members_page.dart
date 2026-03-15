@@ -42,7 +42,6 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
   String _search = "";
   String? _selectedCategory;
   String? _selectedTeam;
-  bool _editMode = false;
   bool _isRemoving = false;
   final TextEditingController _searchController = TextEditingController();
 
@@ -66,19 +65,6 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
           "Membres • ${formatClubNameWithEmoji(widget.clubName, widget.clubSport)}",
         ),
         centerTitle: true,
-        actions: [
-          if (canEdit)
-            IconButton(
-              icon: Icon(
-                _editMode ? Icons.edit_off : Icons.edit,
-                color: _editMode ? ViroColors.primary : null,
-              ),
-              tooltip: _editMode ? "Quitter le mode édition" : "Mode édition",
-              onPressed: _isRemoving
-                  ? null
-                  : () => setState(() => _editMode = !_editMode),
-            ),
-        ],
       ),
       body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
         stream: appFirestore.collection(FirebaseCollections.users).snapshots(),
@@ -546,62 +532,56 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
                   return word[0].toUpperCase() + word.substring(1);
                 })
                 .join(' ');
-            final bool showDelete =
+            final bool canDelete =
                 canEdit &&
-                _editMode &&
                 role != 'admin_fondateur' &&
-            (widget.currentViewerRole == 'admin_fondateur' ||
-                (widget.currentViewerRole == 'admin' &&
-                    (role == 'player' || role == 'coach')));
-        final bool showPasserAdmin =
-            canEdit &&
-            _editMode &&
-            widget.currentViewerRole == 'admin_fondateur' &&
-            role == 'coach';
-        final bool showPasserCoach =
-            canEdit &&
-            _editMode &&
-            widget.currentViewerRole == 'admin_fondateur' &&
-            role == 'admin';
-        final hasLicense = entry['hasLicense'] as bool? ?? false;
-        final trailing =
-            _editMode && (showDelete || showPasserAdmin || showPasserCoach)
-            ? _buildEditTrailing(
-                roleLabel: roleLabel,
-                isPlayer: isPlayer,
-                hasLicense: hasLicense,
-                data: data,
-                showDelete: showDelete,
-                showPasserAdmin: showPasserAdmin,
-                showPasserCoach: showPasserCoach,
-                userId: userId,
-                role: role,
-                firstName: firstName,
-                lastName: lastName,
-              )
-            : const SizedBox.shrink();
-        return MemberTile(
-          userId: userId,
-          firstName: firstName,
-          lastName: lastName,
-          avatarUrl: avatarUrl,
-          roleLabel: roleLabel,
-          isPlayer: isPlayer,
-          isStaff: isStaff,
-          categories: userCategories,
-          teamNames: (entry['teamNames'] as List<String>?) ?? [],
-          hasLicense: entry['hasLicense'] as bool? ?? false,
-          trailing: trailing,
-          onTap: () {
-            if (!_editMode) {
-              Navigator.of(context).push(
+                (widget.currentViewerRole == 'admin_fondateur' ||
+                    (widget.currentViewerRole == 'admin' &&
+                        (role == 'player' || role == 'coach')));
+            final hasLicense = entry['hasLicense'] as bool? ?? false;
+
+            MemberTile buildTile({Animation<double>? animation}) => MemberTile(
+              userId: userId,
+              firstName: firstName,
+              lastName: lastName,
+              avatarUrl: avatarUrl,
+              roleLabel: roleLabel,
+              isPlayer: isPlayer,
+              isStaff: isStaff,
+              categories: userCategories,
+              teamNames: (entry['teamNames'] as List<String>?) ?? [],
+              hasLicense: hasLicense,
+              trailing: const SizedBox.shrink(),
+              slideAnimation: animation,
+              onTap: () => Navigator.of(context).push(
                 MaterialPageRoute(
                   builder: (_) => ProfilDisplayPage(userId: userId),
                 ),
-              );
-            }
-          },
-        );
+              ),
+            );
+
+            // Uniquement l'admin_fondateur peut changer le rôle coach ↔ admin
+            final bool canChangeRole =
+                widget.currentViewerRole == 'admin_fondateur' &&
+                (role == 'coach' || role == 'admin');
+
+            if (!canDelete) return buildTile();
+            return _MemberSlidableDeleteTile(
+              key: Key('$userId-$role'),
+              onDeleteTap: () =>
+                  _confirmAndRemove(userId, role, data, firstName, lastName),
+              onRoleChangeTap: canChangeRole
+                  ? () => _confirmAndChangeRole(
+                        userId,
+                        data,
+                        toAdmin: role == 'coach',
+                      )
+                  : null,
+              roleChangeIcon: role == 'coach'
+                  ? Icons.admin_panel_settings_outlined
+                  : Icons.sports_outlined,
+              builder: (animation) => buildTile(animation: animation),
+            );
       }, childCount: slots.length),
         );
       },
@@ -989,11 +969,10 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
     await Clipboard.setData(ClipboardData(text: result.bodyLong));
     final toAddress = email.trim().toLowerCase();
     final subject = 'Invitation ViroTeam - Créer votre compte';
-    final subjectEnc = Uri.encodeComponent(subject);
-    final bodyEnc = Uri.encodeComponent(result.bodyLong);
-    final mailtoString =
-        'mailto:$toAddress?subject=$subjectEnc&body=$bodyEnc';
-    final mailto = Uri.parse(mailtoString);
+    final mailto = Uri(
+      scheme: 'mailto',
+      query: 'to=${Uri.encodeComponent(toAddress)}&subject=${Uri.encodeComponent(subject)}&body=${Uri.encodeComponent(result.bodyLong)}',
+    );
     bool mailOpened = false;
     try {
       if (await canLaunchUrl(mailto)) {
@@ -1239,8 +1218,9 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
       if (result != null && pageContext.mounted) {
         await Clipboard.setData(ClipboardData(text: result.bodyLong));
         final subject = 'Invitation ViroTeam - Créer votre compte';
-        final mailto = Uri.parse(
-          'mailto:$emailNorm?subject=${Uri.encodeComponent(subject)}&body=${Uri.encodeComponent(result.bodyShort)}',
+        final mailto = Uri(
+          scheme: 'mailto',
+          query: 'to=${Uri.encodeComponent(emailNorm)}&subject=${Uri.encodeComponent(subject)}&body=${Uri.encodeComponent(result.bodyShort)}',
         );
         try {
           if (await canLaunchUrl(mailto)) {
@@ -1316,8 +1296,10 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
               onPressed: () async {
                 Navigator.pop(ctx);
                 await Clipboard.setData(ClipboardData(text: result.bodyLong));
-                final mailto = Uri.parse(
-                  'mailto:$emailNorm?subject=${Uri.encodeComponent('Invitation ViroTeam - Créer votre compte')}&body=${Uri.encodeComponent(result.bodyShort)}',
+                const subject = 'Invitation ViroTeam - Créer votre compte';
+                final mailto = Uri(
+                  scheme: 'mailto',
+                  query: 'to=${Uri.encodeComponent(emailNorm)}&subject=${Uri.encodeComponent(subject)}&body=${Uri.encodeComponent(result.bodyShort)}',
                 );
                 try {
                   if (await canLaunchUrl(mailto)) {
@@ -1373,8 +1355,9 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
                   border: OutlineInputBorder(),
                 ),
                 validator: (v) {
-                  if (v == null || v.trim().isEmpty)
+                  if (v == null || v.trim().isEmpty) {
                     return "Saisissez le prénom.";
+                  }
                   return null;
                 },
               ),
@@ -1509,90 +1492,8 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
     }
   }
 
-  Widget _buildEditTrailing({
-    required String roleLabel,
-    required bool isPlayer,
-    required bool hasLicense,
-    required Map<String, dynamic> data,
-    required bool showDelete,
-    required bool showPasserAdmin,
-    required bool showPasserCoach,
-    required String userId,
-    required String role,
-    required String firstName,
-    required String lastName,
-  }) {
-    final List<PopupMenuEntry<String>> items = [];
-    if (showDelete) {
-      items.add(
-        const PopupMenuItem<String>(
-          value: 'remove',
-          child: Row(
-            children: [
-              Icon(Icons.person_remove, color: Colors.red, size: 22),
-              SizedBox(width: 12),
-              Text("Retirer du club"),
-            ],
-          ),
-        ),
-      );
-    }
-    if (showPasserAdmin) {
-      items.add(
-        const PopupMenuItem<String>(
-          value: 'to_admin',
-          child: Row(
-            children: [
-              Icon(Icons.admin_panel_settings, size: 22),
-              SizedBox(width: 12),
-              Text("Passer en administrateur"),
-            ],
-          ),
-        ),
-      );
-    }
-    if (showPasserCoach) {
-      items.add(
-        const PopupMenuItem<String>(
-          value: 'to_coach',
-          child: Row(
-            children: [
-              Icon(Icons.sports, size: 22),
-              SizedBox(width: 12),
-              Text("Passer en coach"),
-            ],
-          ),
-        ),
-      );
-    }
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          isPlayer
-              ? (hasLicense ? "Licencié" : "Non Licencié")
-              : roleLabel,
-          style: const TextStyle(color: Colors.grey, fontSize: 12),
-        ),
-        PopupMenuButton<String>(
-          icon: const Icon(Icons.more_vert),
-          enabled: !_isRemoving,
-          onSelected: (value) async {
-            if (value == 'remove') {
-              await _confirmAndRemove(userId, role, data, firstName, lastName);
-            } else if (value == 'to_admin') {
-              await _confirmAndChangeRole(userId, data, toAdmin: true);
-            } else if (value == 'to_coach') {
-              await _confirmAndChangeRole(userId, data, toAdmin: false);
-            }
-          },
-          itemBuilder: (_) => items,
-        ),
-      ],
-    );
-  }
 
-  Future<void> _confirmAndRemove(
+  Future<bool> _confirmAndRemove(
     String userId,
     String role,
     Map<String, dynamic> data,
@@ -1625,7 +1526,9 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
     );
     if (confirmed == true && mounted) {
       await _removeFromClub(userId, role, data, firstName, lastName);
+      return true;
     }
+    return false;
   }
 
   Future<void> _confirmAndChangeRole(
@@ -1653,6 +1556,70 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
     );
     if (confirmed == true && mounted) {
       await _changeRole(userId, data, toAdmin: toAdmin);
+    }
+  }
+
+  Future<void> _changeRole(
+    String userId,
+    Map<String, dynamic> data, {
+    required bool toAdmin,
+  }) async {
+    setState(() => _isRemoving = true);
+    try {
+      final clubId = widget.clubId;
+      if (toAdmin) {
+        await MembershipService.instance.removeRoleFromClub(userId, clubId, 'coach');
+        await MembershipService.instance.ensureMemberAndProfileSummary(
+          uid: userId,
+          clubId: clubId,
+          role: 'admin',
+          userDataOverride: data,
+        );
+      } else {
+        await MembershipService.instance.removeRoleFromClub(userId, clubId, 'admin');
+        await MembershipService.instance.removeRoleFromClub(userId, clubId, 'admin_fondateur');
+        await MembershipService.instance.ensureMemberAndProfileSummary(
+          uid: userId,
+          clubId: clubId,
+          role: 'coach',
+          userDataOverride: data,
+        );
+      }
+      final activeContext = data['activeContext'] as Map<String, dynamic>?;
+      final activeClubId = activeContext?['clubId'] as String?;
+      final updates = <String, dynamic>{
+        if (activeClubId == clubId)
+          'activeContext': {'role': toAdmin ? 'admin' : 'coach', 'clubId': clubId},
+        '_adminClubId': clubId,
+      };
+      await appFirestore
+          .collection(FirebaseCollections.users)
+          .doc(userId)
+          .update(updates);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              toAdmin
+                  ? "Personne passée en administrateur."
+                  : "Personne passée en coach.",
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      AppLogger.instance.error(
+        'Erreur changement de rôle',
+        error: e,
+        context: {'clubId': widget.clubId, 'userId': userId},
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(FirebaseErrorHandler.getErrorMessage(e))),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isRemoving = false);
     }
   }
 
@@ -1957,73 +1924,6 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
     await MembershipService.instance.removeRoleFromClub(uid, clubId, 'admin_fondateur');
   }
 
-  Future<void> _changeRole(
-    String userId,
-    Map<String, dynamic> data, {
-    required bool toAdmin,
-  }) async {
-    setState(() => _isRemoving = true);
-    try {
-      final firestore = appFirestore;
-      final clubId = widget.clubId;
-
-      if (toAdmin) {
-        await MembershipService.instance.removeRoleFromClub(userId, clubId, 'coach');
-        await MembershipService.instance.ensureMemberAndProfileSummary(
-          uid: userId,
-          clubId: clubId,
-          role: 'admin',
-          userDataOverride: data,
-        );
-      } else {
-        await MembershipService.instance.removeRoleFromClub(userId, clubId, 'admin');
-        await MembershipService.instance.removeRoleFromClub(userId, clubId, 'admin_fondateur');
-        await MembershipService.instance.ensureMemberAndProfileSummary(
-          uid: userId,
-          clubId: clubId,
-          role: 'coach',
-          userDataOverride: data,
-        );
-      }
-
-      final activeContext = data['activeContext'] as Map<String, dynamic>?;
-      final activeClubId = activeContext?['clubId'] as String?;
-      final updates = <String, dynamic>{
-        if (activeClubId == clubId) 'activeContext': {'role': toAdmin ? 'admin' : 'coach', 'clubId': clubId},
-        '_adminClubId': clubId,
-      };
-      await firestore
-          .collection(FirebaseCollections.users)
-          .doc(userId)
-          .update(updates);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              toAdmin
-                  ? "Personne passée en administrateur."
-                  : "Personne passée en coach.",
-            ),
-          ),
-        );
-      }
-    } catch (e) {
-      AppLogger.instance.error(
-        'Erreur changement de rôle',
-        error: e,
-        context: {'clubId': widget.clubId, 'userId': userId},
-      );
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(FirebaseErrorHandler.getErrorMessage(e))),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isRemoving = false);
-    }
-  }
-
   String _normalize(String input) {
     final lower = input.toLowerCase();
     return lower
@@ -2034,5 +1934,176 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
         .replaceAll(RegExp('[ûü]'), 'u')
         .replaceAll(RegExp('[ç]'), 'c')
         .trim();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Swipe-to-reveal delete button pour les tiles membres
+// ---------------------------------------------------------------------------
+
+/// Enveloppe une [MemberTile] avec un swipe gauche qui révèle 1 ou 2 boutons :
+///   - toujours : bouton rouge "retirer du club"
+///   - optionnellement à sa gauche : bouton bleu "changer de rôle"
+///
+/// La largeur du panneau s'adapte automatiquement au nombre de boutons.
+/// Utilise un [builder] pour que la tile adapte ses tailles en temps réel.
+class _MemberSlidableDeleteTile extends StatefulWidget {
+  /// Builder appelé avec l'animation de slide (0 = fermé, 1 = ouvert).
+  final Widget Function(Animation<double> slideAnimation) builder;
+
+  /// Affiche la confirmation puis retire le membre. Renvoie true si retiré.
+  final Future<bool> Function() onDeleteTap;
+
+  /// Si non-null, un second bouton (changement de rôle) apparaît à gauche du bouton delete.
+  final Future<void> Function()? onRoleChangeTap;
+
+  /// Icône du bouton de changement de rôle.
+  final IconData? roleChangeIcon;
+
+  const _MemberSlidableDeleteTile({
+    required super.key,
+    required this.builder,
+    required this.onDeleteTap,
+    this.onRoleChangeTap,
+    this.roleChangeIcon,
+  });
+
+  @override
+  State<_MemberSlidableDeleteTile> createState() =>
+      _MemberSlidableDeleteTileState();
+}
+
+class _MemberSlidableDeleteTileState extends State<_MemberSlidableDeleteTile>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  static const double _buttonSize = 48.0;
+
+  /// Largeur du panneau pour 1 bouton.
+  /// Layout : [10px gap] [48px btn] [12px right padding] = 70px
+  static const double _singleRevealWidth = 70.0;
+
+  /// Largeur du panneau pour 2 boutons.
+  /// Layout : [10px gap] [48px btn] [8px gap] [48px btn] [12px right padding] = 126px
+  static const double _doubleRevealWidth = 126.0;
+
+  double get _revealWidth =>
+      widget.onRoleChangeTap != null ? _doubleRevealWidth : _singleRevealWidth;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 260),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _open() => _controller.animateTo(1.0, curve: Curves.easeOut);
+  void _close() => _controller.animateTo(0.0, curve: Curves.easeOut);
+
+  void _onDragStart(DragStartDetails _) => _controller.stop();
+
+  void _onDragUpdate(DragUpdateDetails details) {
+    _controller.value =
+        (_controller.value - details.delta.dx / _revealWidth).clamp(0.0, 1.0);
+  }
+
+  void _onDragEnd(DragEndDetails details) {
+    final vx = details.velocity.pixelsPerSecond.dx;
+    if (vx < -400) {
+      _open();
+    } else if (vx > 400) {
+      _close();
+    } else if (_controller.value >= 0.4) {
+      _open();
+    } else {
+      _close();
+    }
+  }
+
+  Future<void> _onDeleteTap() async {
+    final deleted = await widget.onDeleteTap();
+    if (!deleted && mounted) _close();
+  }
+
+  Future<void> _onRoleChangeTap() async {
+    await widget.onRoleChangeTap!();
+    if (mounted) _close();
+  }
+
+  Widget _roundButton({
+    required IconData icon,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: color,
+      shape: const CircleBorder(),
+      elevation: 2,
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: onTap,
+        child: SizedBox(
+          width: _buttonSize,
+          height: _buttonSize,
+          child: Icon(icon, color: Colors.white, size: 22),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hasRoleChange =
+        widget.onRoleChangeTap != null && widget.roleChangeIcon != null;
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onHorizontalDragStart: _onDragStart,
+      onHorizontalDragUpdate: _onDragUpdate,
+      onHorizontalDragEnd: _onDragEnd,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(child: widget.builder(_controller)),
+
+          // Panneau d'action : s'étend depuis la droite.
+          // Le padding droit (12) s'aligne avec le padding horizontal de MemberTile.
+          SizeTransition(
+            axis: Axis.horizontal,
+            sizeFactor: _controller,
+            axisAlignment: -1.0,
+            child: Padding(
+              padding: const EdgeInsets.only(left: 10, right: 12),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (hasRoleChange) ...[
+                    _roundButton(
+                      icon: widget.roleChangeIcon!,
+                      color: Colors.indigo.shade400,
+                      onTap: _onRoleChangeTap,
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                  _roundButton(
+                    icon: Icons.person_remove_outlined,
+                    color: Colors.red.shade400,
+                    onTap: _onDeleteTap,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

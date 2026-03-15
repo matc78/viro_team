@@ -2085,7 +2085,7 @@ class _RequestLoanDialogState extends State<_RequestLoanDialog> {
                       ],
                       const SizedBox(height: 16),
                       // Calendrier
-                      SizedBox(height: 350, child: _buildCalendar()),
+                      _buildCalendar(),
                       if (maxLoanDurationDays != null) ...[
                         const SizedBox(height: 8),
                         Text(

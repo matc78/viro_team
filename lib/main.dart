@@ -523,12 +523,13 @@ class _AuthGateState extends State<_AuthGate> {
               if (_userDocRetryCount == 0) {
                 if (_retryTimer == null) {
                   final uid = user.uid;
+                  final userSession = context.read<UserSession>();
                   _retryTimer = Timer(const Duration(milliseconds: 1500), () {
                     if (!mounted) return;
                     _retryTimer?.cancel();
                     _retryTimer = null;
                     setState(() => _userDocRetryCount = 1);
-                    context.read<UserSession>().loadUser(uid);
+                    userSession.loadUser(uid);
                   });
                 }
                 return const Scaffold(

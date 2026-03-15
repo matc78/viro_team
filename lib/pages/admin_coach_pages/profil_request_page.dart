@@ -2,10 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:viro_team/utils/firestore_instance.dart';
 import '../../constants/firebase_collections.dart';
-import '../../services/membership_service.dart';
-import '../../services/pending_member_merge_service.dart';
+import '../../services/join_request_service.dart';
 import '../../theme/viro_theme.dart';
-import '../../utils/app_logger.dart';
 import '../../utils/firebase_error_handler.dart';
 import '../../utils/avatar_moderation.dart';
 import '../../widget/user_display_tile.dart';
@@ -192,107 +190,22 @@ class _ProfilRequestPageState extends State<ProfilRequestPage> {
     if (widget.userId == null) return;
     setState(() => _isProcessing = true);
     try {
-      final requestRef = appFirestore
-          .collection(FirebaseCollections.joinRequests)
-          .doc(widget.requestId);
-
       if (accept) {
-        await requestRef.update({
-          'status': 'accepted',
-          'respondedAt': FieldValue.serverTimestamp(),
-        });
-
-        final userId = widget.userId!;
-        final clubId = widget.clubId;
-        final roleRequested = widget.roleRequested ?? 'player';
-
-        final userDoc = await appFirestore
-            .collection(FirebaseCollections.users)
-            .doc(userId)
-            .get();
-        final userData = userDoc.data() ?? {};
-        final normalizedRole = (roleRequested == 'admin_fondateur')
-            ? 'admin'
-            : roleRequested;
-
-        final newActiveContext = <String, dynamic>{
-          'role': normalizedRole,
-          'clubId': clubId,
-        };
-
-        await appFirestore.collection(FirebaseCollections.users).doc(userId).set({
-          'hasPendingRequest': false,
-          'activeContext': newActiveContext,
-        }, SetOptions(merge: true));
-
-        if (clubId != null) {
-          final requestData = (await requestRef.get()).data() ?? {};
-          final license = requestData['license'] as String?;
-          await MembershipService.instance.ensureMemberAndProfileSummary(
-            uid: userId,
-            clubId: clubId,
-            role: normalizedRole,
-            playerLicense: normalizedRole == 'player' ? license : null,
-            userDataOverride: userData,
-          );
-          final String field = normalizedRole == 'admin'
-              ? 'admins'
-              : normalizedRole == 'coach'
-                  ? 'coaches'
-                  : 'members';
-          await appFirestore
-              .collection(FirebaseCollections.clubs)
-              .doc(clubId)
-              .update({
-            field: FieldValue.arrayUnion([userId]),
-          });
-        }
-        // Fusionner les pending_members (même email) : club, équipes, events, puis supprimer les pending
-        final userEmail = userData['email'] as String? ?? '';
-        if (userEmail.isNotEmpty) {
-          try {
-            await PendingMemberMergeService.instance.mergePendingMembersForUser(userId, userEmail);
-          } catch (e) {
-            AppLogger.instance.error('mergePendingMembersForUser failed', error: e, context: {'userId': userId});
-          }
-        }
+        await JoinRequestService.instance.acceptRequest(
+          requestId: widget.requestId,
+          userId: widget.userId!,
+          clubId: widget.clubId ?? '',
+          role: widget.roleRequested ?? 'player',
+        );
       } else {
-        await requestRef.update({
-          'status': 'refused',
-          'respondedAt': FieldValue.serverTimestamp(),
-        });
-        await appFirestore
-            .collection(FirebaseCollections.users)
-            .doc(widget.userId)
-            .set({
-              'hasPendingRequest': false,
-              if (widget.clubId != null)
-                'lastProcessedJoinRequestClubId': widget.clubId,
-            }, SetOptions(merge: true));
+        await JoinRequestService.instance.refuseRequest(
+          requestId: widget.requestId,
+          userId: widget.userId!,
+          clubId: widget.clubId,
+        );
       }
-
-      await requestRef.delete();
-      AppLogger.instance.info(
-        accept ? 'Demande de profil acceptée' : 'Demande de profil refusée',
-        {
-          'requestId': widget.requestId,
-          'userId': widget.userId,
-          'clubId': widget.clubId,
-          'roleRequested': widget.roleRequested,
-        },
-      );
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
-      AppLogger.instance.error(
-        'Erreur lors du traitement de la demande de profil',
-        error: e,
-        context: {
-          'requestId': widget.requestId,
-          'userId': widget.userId,
-          'clubId': widget.clubId,
-          'action': accept ? 'accept' : 'refuse',
-        },
-      );
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,

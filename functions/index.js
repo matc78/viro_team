@@ -12,6 +12,27 @@ const dbProd = getFirestore("prod");
 const REJECT_LIKELIHOODS = ["VERY_LIKELY", "LIKELY", "VERIFIED"];
 
 /**
+ * Vérifie si une notification doit être envoyée en fonction des préférences de l'utilisateur.
+ * @param {Object} userDocData - Les données du document utilisateur Firestore.
+ * @param {string} notifType - Le type de la notification (ex: "join_request", "event", etc.).
+ * @returns {boolean}
+ */
+function isNotificationEnabled(userDocData, notifType) {
+  if (!userDocData || !userDocData.notificationPreferences) {
+    return true; // Par défaut, tout est activé
+  }
+  
+  // Tous les types d'événements ont maintenant leur propre clé de préférence
+  const typeToCheck = notifType;
+  
+  const prefs = userDocData.notificationPreferences;
+  if (prefs[typeToCheck] === false) {
+    return false;
+  }
+  return true;
+}
+
+/**
  * Envoie une notification FCM aux admins/coachs du club lorsqu'une nouvelle
  * demande d'adhésion (join_requests) est créée.
  */
@@ -78,10 +99,11 @@ const makeOnJoinRequestCreated = (db) => async (snap, context) => {
     const tokens = [];
     for (const uid of recipientIds) {
       const userDoc = await db.collection("users").doc(uid).get();
-      const token = userDoc.exists && userDoc.data().fcmToken;
-      if (token) {
+      const userData = userDoc.data();
+      const token = userDoc.exists && userData?.fcmToken;
+      if (token && isNotificationEnabled(userData, "join_request")) {
         tokens.push(token);
-      } else {
+      } else if (!token) {
         console.log(
           "onJoinRequestCreated: pas de fcmToken pour uid=",
           uid,
@@ -209,8 +231,9 @@ const makeOnLoanRequestCreated = (db) => async (snap, context) => {
     const tokens = [];
     for (const uid of recipientIds) {
       const userDoc = await db.collection("users").doc(uid).get();
-      const token = userDoc.exists && userDoc.data()?.fcmToken;
-      if (token) {
+      const userData = userDoc.data();
+      const token = userDoc.exists && userData?.fcmToken;
+      if (token && isNotificationEnabled(userData, "loan_request")) {
         tokens.push(token);
       }
     }
@@ -315,12 +338,16 @@ const makeOnJoinRequestUpdated = (db) => async (change, context) => {
     }
 
     const userDoc = await db.collection("users").doc(userId).get();
-    const token = userDoc.exists && userDoc.data()?.fcmToken;
+    const userData = userDoc.data();
+    const token = userDoc.exists && userData?.fcmToken;
     if (!token) {
       console.log(
         "onJoinRequestUpdated: pas de fcmToken pour userId=",
         userId,
       );
+      return null;
+    }
+    if (!isNotificationEnabled(userData, "join_request_response")) {
       return null;
     }
 
@@ -417,12 +444,16 @@ const makeOnLoanRequestUpdated = (db) => async (change, context) => {
       : "";
 
     const userDoc = await db.collection("users").doc(playerId).get();
-    const token = userDoc.exists && userDoc.data()?.fcmToken;
+    const userData = userDoc.data();
+    const token = userDoc.exists && userData?.fcmToken;
     if (!token) {
       console.log(
         "onLoanRequestUpdated: pas de fcmToken pour playerId=",
         playerId,
       );
+      return null;
+    }
+    if (!isNotificationEnabled(userData, "loan_request_response")) {
       return null;
     }
 
@@ -540,8 +571,9 @@ const makeOnMemberLeaveCreated = (db) => async (snap, context) => {
     const tokens = [];
     for (const uid of recipientIds) {
       const userDoc = await db.collection("users").doc(uid).get();
-      const token = userDoc.exists && userDoc.data()?.fcmToken;
-      if (token) {
+      const userData = userDoc.data();
+      const token = userDoc.exists && userData?.fcmToken;
+      if (token && isNotificationEnabled(userData, "member_leave")) {
         tokens.push(token);
       }
     }
@@ -659,8 +691,9 @@ const makeOnEquipmentLoanUpdated = (db) => async (change, context) => {
     const tokens = [];
     for (const uid of recipientIds) {
       const userDoc = await db.collection("users").doc(uid).get();
-      const token = userDoc.exists && userDoc.data()?.fcmToken;
-      if (token) {
+      const userData = userDoc.data();
+      const token = userDoc.exists && userData?.fcmToken;
+      if (token && isNotificationEnabled(userData, "loan_return")) {
         tokens.push(token);
       }
     }
@@ -834,8 +867,9 @@ const makeOnAnnouncementCreated = (db) => async (snap, context) => {
     const tokens = [];
     for (const uid of recipientIds) {
       const userDoc = await db.collection("users").doc(uid).get();
-      const token = userDoc.exists && userDoc.data()?.fcmToken;
-      if (token) {
+      const userData = userDoc.data();
+      const token = userDoc.exists && userData?.fcmToken;
+      if (token && isNotificationEnabled(userData, "announcement")) {
         tokens.push(token);
       }
     }
@@ -933,8 +967,9 @@ const makeOnEventCreated = (db) => async (snap, context) => {
     const tokens = [];
     for (const uid of teamMemberIds) {
       const userDoc = await db.collection("users").doc(uid).get();
-      const token = userDoc.exists && userDoc.data()?.fcmToken;
-      if (token) {
+      const userData = userDoc.data();
+      const token = userDoc.exists && userData?.fcmToken;
+      if (token && isNotificationEnabled(userData, "event")) {
         tokens.push(token);
       }
     }
@@ -1111,8 +1146,9 @@ const makeOnEventUpdated = (db) => async (change, context) => {
       const coachTokens = [];
       for (const uid of coachIds) {
         const userDoc = await db.collection("users").doc(uid).get();
-        const token = userDoc.exists && userDoc.data()?.fcmToken;
-        if (token) coachTokens.push(token);
+        const userData = userDoc.data();
+        const token = userDoc.exists && userData?.fcmToken;
+        if (token && isNotificationEnabled(userData, "event_presence")) coachTokens.push(token);
       }
 
       if (coachTokens.length > 0) {
@@ -1158,8 +1194,9 @@ const makeOnEventUpdated = (db) => async (change, context) => {
     const playerTokens = [];
     for (const uid of teamMemberIds) {
       const userDoc = await db.collection("users").doc(uid).get();
-      const token = userDoc.exists && userDoc.data()?.fcmToken;
-      if (token) playerTokens.push(token);
+      const userData = userDoc.data();
+      const token = userDoc.exists && userData?.fcmToken;
+      if (token && isNotificationEnabled(userData, "event_update")) playerTokens.push(token);
     }
 
     if (playerTokens.length > 0) {
@@ -1224,8 +1261,9 @@ const makeOnEventDeleted = (db) => async (snap, context) => {
   const tokens = [];
   for (const uid of teamMemberIds) {
     const userDoc = await db.collection("users").doc(uid).get();
-    const token = userDoc.exists && userDoc.data()?.fcmToken;
-    if (token) tokens.push(token);
+    const userData = userDoc.data();
+    const token = userDoc.exists && userData?.fcmToken;
+    if (token && isNotificationEnabled(userData, "event_deleted")) tokens.push(token);
   }
 
   if (tokens.length === 0) return null;
@@ -1379,8 +1417,9 @@ async function runEventReminderForDb(db) {
           const tokens = [];
           for (const uid of teamMemberIds) {
             const userDoc = await db.collection("users").doc(uid).get();
-            const token = userDoc.exists && userDoc.data()?.fcmToken;
-            if (token) tokens.push(token);
+            const userData = userDoc.data();
+            const token = userDoc.exists && userData?.fcmToken;
+            if (token && isNotificationEnabled(userData, "event")) tokens.push(token);
           }
 
           if (tokens.length > 0) {

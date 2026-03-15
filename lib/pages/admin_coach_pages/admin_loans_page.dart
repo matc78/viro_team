@@ -730,33 +730,48 @@ class _LoanAllowedDaysDialogState extends State<_LoanAllowedDaysDialog> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
-                            children: [
-                              const Text("De ", style: TextStyle(fontSize: 13)),
-                              _hourDropdown(
-                                value: s.startHour,
-                                onChanged: (v) =>
-                                    setState(() => s.startHour = v ?? 8),
-                              ),
-                              const Text(" h ", style: TextStyle(fontSize: 13)),
-                              _minuteDropdown(
-                                value: s.startMinute,
-                                onChanged: (v) =>
-                                    setState(() => s.startMinute = v ?? 0),
-                              ),
-                              const Text(" à ", style: TextStyle(fontSize: 13)),
-                              _hourDropdown(
-                                value: s.endHour,
-                                onChanged: (v) =>
-                                    setState(() => s.endHour = v ?? 20),
-                              ),
-                              const Text(" h ", style: TextStyle(fontSize: 13)),
-                              _minuteDropdown(
-                                value: s.endMinute,
-                                onChanged: (v) =>
-                                    setState(() => s.endMinute = v ?? 0),
-                              ),
-                            ],
+                          SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: Row(
+                              children: [
+                                const Text(
+                                  "De ",
+                                  style: TextStyle(fontSize: 13),
+                                ),
+                                _hourDropdown(
+                                  value: s.startHour,
+                                  onChanged: (v) =>
+                                      setState(() => s.startHour = v ?? 8),
+                                ),
+                                const Text(
+                                  " h ",
+                                  style: TextStyle(fontSize: 13),
+                                ),
+                                _minuteDropdown(
+                                  value: s.startMinute,
+                                  onChanged: (v) =>
+                                      setState(() => s.startMinute = v ?? 0),
+                                ),
+                                const Text(
+                                  " à ",
+                                  style: TextStyle(fontSize: 13),
+                                ),
+                                _hourDropdown(
+                                  value: s.endHour,
+                                  onChanged: (v) =>
+                                      setState(() => s.endHour = v ?? 20),
+                                ),
+                                const Text(
+                                  " h ",
+                                  style: TextStyle(fontSize: 13),
+                                ),
+                                _minuteDropdown(
+                                  value: s.endMinute,
+                                  onChanged: (v) =>
+                                      setState(() => s.endMinute = v ?? 0),
+                                ),
+                              ],
+                            ),
                           ),
                           const SizedBox(height: 6),
                           TextField(
@@ -1133,9 +1148,14 @@ class _ManageCatalogDialogState extends State<_ManageCatalogDialog> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
-                    "Gérer le catalogue de prêts",
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                  Flexible(
+                    child: Text(
+                      "Gérer le catalogue de prêts",
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                      ),
+                    ),
                   ),
                   IconButton(
                     icon: const Icon(Icons.close),

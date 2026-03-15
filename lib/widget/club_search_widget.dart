@@ -10,7 +10,7 @@ import '../utils/firebase_error_handler.dart';
 class ClubSearchWidget extends StatefulWidget {
   final String? selectedClubId;
   final String? selectedClubName;
-  final Function(String clubId, String clubName) onClubSelected;
+  final Function(String clubId, String clubName, String? clubSport) onClubSelected;
   final String? sportFilter;
   final Function(String?)? onSportFilterChanged;
   final List<String>? excludedClubIds; // Clubs à exclure (déjà membres)
@@ -33,6 +33,10 @@ class _ClubSearchWidgetState extends State<ClubSearchWidget> {
   final TextEditingController _searchController = TextEditingController();
   String _searchTerm = "";
   String _sportFilter = "Tous";
+
+  // Stream mémorisé : recréé uniquement si le filtre sport change
+  Stream<QuerySnapshot>? _cachedStream;
+  String _cachedStreamSportFilter = '';
 
   static const List<String> _sports = [
     "Tous",
@@ -57,6 +61,19 @@ class _ClubSearchWidgetState extends State<ClubSearchWidget> {
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  /// Retourne le stream mémorisé. Le recrée uniquement si le filtre sport a changé.
+  Stream<QuerySnapshot> _getClubStream() {
+    if (_cachedStream == null || _cachedStreamSportFilter != _sportFilter) {
+      _cachedStreamSportFilter = _sportFilter;
+      Query query = appFirestore.collection(FirebaseCollections.clubs);
+      if (_sportFilter != 'Tous') {
+        query = query.where('sport', isEqualTo: _sportFilter);
+      }
+      _cachedStream = query.snapshots();
+    }
+    return _cachedStream!;
   }
 
   @override
@@ -154,13 +171,8 @@ class _ClubSearchWidgetState extends State<ClubSearchWidget> {
   }
 
   Widget _buildClubList() {
-    Query query = appFirestore.collection(FirebaseCollections.clubs);
-    if (_sportFilter != 'Tous') {
-      query = query.where('sport', isEqualTo: _sportFilter);
-    }
-
     return StreamBuilder<QuerySnapshot>(
-      stream: query.snapshots(),
+      stream: _getClubStream(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           return Padding(
@@ -195,7 +207,7 @@ class _ClubSearchWidgetState extends State<ClubSearchWidget> {
             ),
           );
         }
-        if (snapshot.connectionState == ConnectionState.waiting) {
+        if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
           return const SizedBox(
             height: 150,
             child: Center(child: CircularProgressIndicator()),
@@ -267,7 +279,7 @@ class _ClubSearchWidgetState extends State<ClubSearchWidget> {
                     ? const Icon(Icons.check_circle, color: ViroColors.primary)
                     : null,
                 onTap: () {
-                  widget.onClubSelected(clubId, club['name']);
+                  widget.onClubSelected(clubId, club['name'], club['sport'] as String?);
                 },
               );
             },

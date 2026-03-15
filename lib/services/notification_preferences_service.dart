@@ -13,6 +13,9 @@ const List<String> kNotificationTypes = [
   'loan_return',
   'announcement',
   'event',
+  'event_update',
+  'event_deleted',
+  'event_presence',
 ];
 
 /// Types reçus par un joueur (player).
@@ -21,6 +24,8 @@ const List<String> kNotificationTypesPlayer = [
   'loan_request_response',
   'announcement',
   'event',
+  'event_update',
+  'event_deleted',
 ];
 
 /// Types reçus par un admin ou coach.
@@ -31,6 +36,9 @@ const List<String> kNotificationTypesAdmin = [
   'loan_return',
   'announcement',
   'event',
+  'event_update',
+  'event_deleted',
+  'event_presence',
 ];
 
 /// Libellés français pour l'UI.
@@ -42,7 +50,10 @@ const Map<String, String> kNotificationTypeLabels = {
   'member_leave': "Départ d'un membre",
   'loan_return': 'Retour de matériel',
   'announcement': 'Annonces du club',
-  'event': 'Événements et rappels',
+  'event': 'Nouveaux événements et rappels',
+  'event_update': 'Modifications d\'événements',
+  'event_deleted': 'Annulations d\'événements',
+  'event_presence': 'Récapitulatif des présences',
 };
 
 /// Service pour lire/écrire les préférences de notifications dans Firestore.

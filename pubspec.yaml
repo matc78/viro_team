@@ -54,6 +54,8 @@ dependencies:
   table_calendar: ^3.2.0
   url_launcher: ^6.2.5
   app_links: ^6.3.2
+  permission_handler: ^11.3.1
+  device_info_plus: ^10.1.2
 
 dev_dependencies:
   fake_cloud_firestore: ^4.0.1
@@ -79,6 +81,7 @@ flutter:
     - assets/logo/logo_long.png
     - assets/logo/logo_seul.png
     - assets/logo/logo_seul_launcher_icons.png
+    - assets/logo/logo_seul_launcher_icons2.png
     - assets/sons/son_sifflet.mp3
     - assets/sons/son_buzzer.mp3
     - assets/icons/icon_sifflet.png
@@ -107,7 +110,9 @@ flutter:
   # see https://flutter.dev/to/font-from-package
 
 flutter_launcher_icons:
-  image_path: "assets/logo/logo_seul_launcher_icons.png"
   android: true
   ios: true
   remove_alpha_ios: true
+  image_path: "assets/logo/logo_seul_launcher_icons2.png"
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/logo/logo_seul_launcher_icons.png"

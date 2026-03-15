@@ -49,7 +49,7 @@ service cloud.firestore {
     //   l'appelant doit être admin de ce club.
     // -------------------------------------------------------------------------
     function isClubAdminForUserWrite() {
-      let clubId = request.resource.data.get(['activeContext', 'clubId'], '');
+      let clubId = request.resource.data.get('activeContext', {}).get('clubId', '');
       return clubId != '' && isClubAdmin(clubId);
     }
     function isClubAdminForRefusedRequest() {
@@ -255,18 +255,18 @@ service cloud.firestore {
     // -------------------------------------------------------------------------
     // join_requests/{requestId} (collection racine)
     // Création : tout utilisateur connecté (déposer une demande).
-    // Lecture : le demandeur (userId) ou un admin du club (clubId).
-    // Mise à jour / suppression : le demandeur (annuler) ou un admin du club (accepter/refuser).
+    // Lecture : le demandeur (userId) ou un admin/coach du club (clubId).
+    // Mise à jour / suppression : le demandeur (annuler) ou un admin/coach du club (accepter/refuser).
     // -------------------------------------------------------------------------
     match /join_requests/{requestId} {
       allow create: if request.auth != null
         && request.resource.data.userId == request.auth.uid;
       allow read: if request.auth != null
         && (resource.data.userId == request.auth.uid
-             || isClubAdmin(resource.data.clubId));
+             || canWriteClub(resource.data.clubId));
       allow update, delete: if request.auth != null
         && (resource.data.userId == request.auth.uid
-             || isClubAdmin(resource.data.clubId));
+             || canWriteClub(resource.data.clubId));
     }
 
     // -------------------------------------------------------------------------

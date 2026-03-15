@@ -26,7 +26,6 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
 
   Map<String, bool>? _preferences;
   String? _loadError;
-  final Set<String> _updating = {};
   bool _enablingAll = false;
 
   List<String> get _visibleTypes => widget.types ?? kNotificationTypes;
@@ -105,19 +104,22 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
   Future<void> _setPreference(String type, bool enabled) async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null || uid.isEmpty) return;
-    setState(() => _updating.add(type));
+
+    // Mise à jour optimiste immédiate : pas de spinner, transition fluide
+    setState(() {
+      _preferences ??= {};
+      _preferences![type] = enabled;
+    });
+
+    // Sauvegarde en arrière-plan
     try {
       await _prefsService.setPreference(uid, type, enabled);
+    } catch (e) {
+      // En cas d'erreur, on annule le changement optimiste
       if (mounted) {
         setState(() {
-          _updating.remove(type);
-          _preferences ??= {};
-          _preferences![type] = enabled;
+          _preferences![type] = !enabled;
         });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _updating.remove(type));
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(FirebaseErrorHandler.getErrorMessage(e)),
@@ -203,7 +205,6 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
           ..._visibleTypes.map((type) {
             final label = kNotificationTypeLabels[type] ?? type;
             final value = _preferences![type] ?? true;
-            final isUpdating = _updating.contains(type);
             return Container(
               margin: const EdgeInsets.only(bottom: 12),
               decoration: BoxDecoration(
@@ -213,9 +214,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
               ),
               child: SwitchListTile(
                 value: value,
-                onChanged: isUpdating
-                    ? null
-                    : (bool newValue) => _setPreference(type, newValue),
+                onChanged: (bool newValue) => _setPreference(type, newValue),
                 title: Text(
                   label,
                   style: const TextStyle(
@@ -223,18 +222,20 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
                     fontSize: 15,
                   ),
                 ),
-                secondary: isUpdating
-                    ? const SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : Icon(
-                        value
-                            ? Icons.notifications_active_outlined
-                            : Icons.notifications_off_outlined,
-                        color: ViroColors.primary,
-                      ),
+                secondary: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 250),
+                  transitionBuilder: (child, animation) => ScaleTransition(
+                    scale: animation,
+                    child: FadeTransition(opacity: animation, child: child),
+                  ),
+                  child: Icon(
+                    value
+                        ? Icons.notifications_active_outlined
+                        : Icons.notifications_off_outlined,
+                    key: ValueKey(value),
+                    color: value ? ViroColors.primary : Colors.grey,
+                  ),
+                ),
                 activeThumbColor: ViroColors.primary,
               ),
             );

@@ -137,8 +137,8 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
 
         final String firstName = userData?['firstName'] ?? "Sportif";
 
-        // 1. SI DEMANDE EN ATTENTE
-        if (hasPendingRequest) {
+        // 1. SI DEMANDE EN ATTENTE (seulement si l'utilisateur n'a pas encore de club actif)
+        if (hasPendingRequest && (finalClubId == null || finalClubId.isEmpty)) {
           return PlayerPendingPage(
             clubName: userData?['lastClubRequested'] ?? "ton club",
             isRefreshing: _isManualRefreshing,
