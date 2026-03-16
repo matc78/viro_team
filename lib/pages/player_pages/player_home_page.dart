@@ -23,10 +23,9 @@ import '../../services/notification_service.dart';
 import '../../theme/viro_theme.dart';
 import '../../utils/avatar_moderation.dart';
 import '../../widget/player_bottom_nav.dart';
-import '../../widget/profile_switcher_dialog.dart';
+import '../../widget/profile_menu_dropdown.dart';
 import '../../widget/user_display_tile.dart';
 import '../../widget/viro_loader.dart';
-import '../add_profile_page.dart';
 
 class PlayerHomePage extends StatefulWidget {
   const PlayerHomePage({super.key});
@@ -197,16 +196,6 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
         elevation: 0,
         automaticallyImplyLeading: false,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.add_circle_outline),
-            tooltip: "Ajouter un profil",
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const AddProfilePage()),
-              );
-            },
-          ),
           StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
             stream: appFirestore
                 .collection(FirebaseCollections.users)
@@ -214,20 +203,16 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
                 .snapshots(),
             builder: (context, snap) {
               final avatarUrl = effectiveAvatarUrl(snap.data?.data());
-              return GestureDetector(
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const PlayerProfilPage()),
-                ),
-                onLongPress: () {
-                  showDialog(
-                    context: context,
-                    builder: (_) => const ProfileSwitcherDialog(),
-                  );
-                },
-                child: Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: (avatarUrl != null && avatarUrl.isNotEmpty)
+              return Builder(
+                builder: (ctx) {
+                  return GestureDetector(
+                    onTap: () => showProfileDropdown(
+                      ctx,
+                      settingsPage: const PlayerProfilPage(),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: (avatarUrl != null && avatarUrl.isNotEmpty)
                       ? CachedNetworkImage(
                           imageUrl: avatarUrl,
                           imageBuilder: (context, imageProvider) =>
@@ -264,7 +249,9 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
                             color: ViroColors.primary,
                           ),
                         ),
-                ),
+                    ),
+                  );
+                },
               );
             },
           ),

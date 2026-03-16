@@ -21,10 +21,9 @@ import '../../theme/viro_theme.dart';
 import '../../utils/firebase_helpers.dart';
 import '../../utils/firebase_error_handler.dart';
 import '../../utils/avatar_moderation.dart';
-import '../../widget/profile_switcher_dialog.dart';
+import '../../widget/profile_menu_dropdown.dart';
 import '../../widget/slide_to_confirm.dart';
 import '../../widget/user_display_tile.dart';
-import '../add_profile_page.dart';
 
 class AdminHomePage extends StatefulWidget {
   const AdminHomePage({super.key});
@@ -59,16 +58,6 @@ class _AdminHomePageState extends State<AdminHomePage> {
       appBar: AppBar(
         title: const Text("Tableau de bord"),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.add_circle_outline),
-            tooltip: "Ajouter un profil",
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const AddProfilePage()),
-              );
-            },
-          ),
           StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
             stream: user != null
                 ? appFirestore
@@ -78,19 +67,14 @@ class _AdminHomePageState extends State<AdminHomePage> {
                 : null,
             builder: (context, snap) {
               final avatarUrl = effectiveAvatarUrl(snap.data?.data());
-              return GestureDetector(
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const AdminProfilPage()),
-                  );
-                },
-                onLongPress: () {
-                  showDialog(
-                    context: context,
-                    builder: (_) => const ProfileSwitcherDialog(),
-                  );
-                },
-                child: Padding(
+              return Builder(
+                builder: (ctx) {
+                  return GestureDetector(
+                    onTap: () => showProfileDropdown(
+                      ctx,
+                      settingsPage: const AdminProfilPage(),
+                    ),
+                    child: Padding(
                   padding: const EdgeInsets.all(8.0),
                   child: (avatarUrl != null && avatarUrl.isNotEmpty)
                       ? CachedNetworkImage(
@@ -129,7 +113,9 @@ class _AdminHomePageState extends State<AdminHomePage> {
                             color: ViroColors.primary,
                           ),
                         ),
-                ),
+                    ),
+                  );
+                },
               );
             },
           ),
