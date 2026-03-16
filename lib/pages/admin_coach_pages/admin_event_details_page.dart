@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:viro_team/services/event_service.dart';
 import 'package:intl/intl.dart';
 import '../../constants/firebase_collections.dart';
+import '../../services/user_session.dart';
 import '../../theme/viro_theme.dart';
 import '../../utils/firebase_helpers.dart';
 import '../../utils/firestore_instance.dart';
@@ -11,6 +12,7 @@ import '../../utils/avatar_moderation.dart';
 import '../../widget/user_display_tile.dart';
 import '../../widget/viro_loader.dart';
 import 'admin_edit_event_page.dart';
+import 'admin_training_session_page.dart';
 
 class AdminEventDetailsPage extends StatelessWidget {
   final String clubId;
@@ -400,6 +402,9 @@ class AdminEventDetailsPage extends StatelessWidget {
                     // --- HEADER INFO ---
                     _buildEventHeader(context, clubId, date, event, team, categories),
 
+                    // --- BOUTON LANCER L'ENTRAÎNEMENT (jour J + coach) ---
+                    _buildLaunchTrainingButton(context, date, team, event),
+
                     // --- INFOS PRATIQUES ---
                     _buildInfoSection(location, event),
 
@@ -424,6 +429,77 @@ class AdminEventDetailsPage extends StatelessWidget {
                 ),
               );
             },
+          ),
+        );
+      },
+    );
+  }
+
+  /// Vérifie si l'utilisateur courant est coach de l'équipe donnée.
+  static Future<bool> _isCurrentUserCoachOfTeam(
+    String clubId,
+    String teamName,
+  ) async {
+    final uid = UserSession().currentUser?.uid;
+    if (uid == null || teamName.isEmpty) return false;
+    final snap = await appFirestore
+        .collection(FirebaseCollections.clubs)
+        .doc(clubId)
+        .collection(FirebaseCollections.teams)
+        .where('name', isEqualTo: teamName)
+        .limit(1)
+        .get();
+    if (snap.docs.isEmpty) return false;
+    final coachIds =
+        (snap.docs.first.data()['coachIds'] as List?)?.cast<String>() ?? [];
+    return coachIds.contains(uid);
+  }
+
+  /// Affiche le bouton "Lancer l'entraînement" le jour J pour les coachs de l'équipe.
+  Widget _buildLaunchTrainingButton(
+    BuildContext context,
+    DateTime eventDate,
+    String teamName,
+    Map<String, dynamic> event,
+  ) {
+    final type = event['type'] as String? ?? '';
+    if (type != 'Entraînement') return const SizedBox.shrink();
+
+    final now = DateTime.now();
+    final isToday = eventDate.year == now.year &&
+        eventDate.month == now.month &&
+        eventDate.day == now.day;
+    if (!isToday) return const SizedBox.shrink();
+
+    return FutureBuilder<bool>(
+      future: _isCurrentUserCoachOfTeam(clubId, teamName),
+      builder: (context, snap) {
+        if (snap.data != true) return const SizedBox.shrink();
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+          child: SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => AdminTrainingSessionPage(
+                      clubId: clubId,
+                      eventId: eventId,
+                      teamName: teamName,
+                      eventDate: eventDate,
+                      sport: event['sport'] as String?,
+                    ),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.play_circle_fill),
+              label: const Text("Lancer l'entraînement"),
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+            ),
           ),
         );
       },

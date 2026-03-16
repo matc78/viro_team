@@ -31,6 +31,9 @@ class FirebaseCollections {
   /// Sous-collection des liens d'invite pour création de compte (token, pendingMemberId, email, etc.)
   static const String inviteLinks = 'invite_links';
 
+  /// Sous-collection des présences réelles lors des entraînements (un doc par joueur par event)
+  static const String trainingAttendances = 'training_attendances';
+
   /// Sous-collection sous users/{uid} pour l'état de modération avatar (un doc par user)
   static const String avatarModeration = 'avatar_moderation';
 

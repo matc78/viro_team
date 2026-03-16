@@ -1,18 +1,29 @@
+import 'dart:async';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../constants/firebase_collections.dart';
 import '../theme/viro_theme.dart';
+import '../utils/firestore_instance.dart';
 
-/// Zone de notes pour le coach, auto-expand et sauvegarde locale.
+/// Zone de notes pour le coach, auto-expand et sauvegarde locale (SharedPreferences).
+/// Quand [eventId] est fourni, les notes sont également persistées dans Firestore
+/// sous `clubs/{clubId}/events/{eventId}.sessionNotes` avec un debounce de 1,5 s.
 class CoachNotesWidget extends StatefulWidget {
   final String clubId;
   final String? sport;
   final ValueNotifier<int>? resetTrigger;
+
+  /// Identifiant de l'événement en cours. Si fourni, les notes sont sauvegardées
+  /// sur Firestore en plus du stockage local.
+  final String? eventId;
 
   const CoachNotesWidget({
     super.key,
     required this.clubId,
     this.sport,
     this.resetTrigger,
+    this.eventId,
   });
 
   @override
@@ -24,6 +35,18 @@ class _CoachNotesWidgetState extends State<CoachNotesWidget> {
   bool _isInitialized = false;
   bool _isHidden = false;
   int _lastResetVersion = 0;
+  Timer? _debounce;
+
+  String get _localKey =>
+      'notes_${widget.clubId}_${widget.sport ?? 'default'}';
+
+  DocumentReference? get _eventRef => widget.eventId != null
+      ? appFirestore
+          .collection(FirebaseCollections.clubs)
+          .doc(widget.clubId)
+          .collection(FirebaseCollections.events)
+          .doc(widget.eventId)
+      : null;
 
   @override
   void initState() {
@@ -35,7 +58,8 @@ class _CoachNotesWidgetState extends State<CoachNotesWidget> {
 
   @override
   void dispose() {
-    _saveNotes();
+    _debounce?.cancel();
+    _saveLocal();
     _controller.dispose();
     widget.resetTrigger?.removeListener(_onResetTriggered);
     super.dispose();
@@ -46,15 +70,32 @@ class _CoachNotesWidgetState extends State<CoachNotesWidget> {
         widget.resetTrigger!.value > _lastResetVersion) {
       _lastResetVersion = widget.resetTrigger!.value;
       _controller.clear();
-      _saveNotes();
+      _onNotesChanged('');
     }
   }
 
   Future<void> _loadNotes() async {
+    // Si event lié, on charge depuis Firestore en priorité
+    if (_eventRef != null) {
+      try {
+        final doc = await _eventRef!.get();
+        final data = (doc.data() as Map<String, dynamic>?);
+        final remote = data?['sessionNotes'] as String?;
+        if (remote != null && remote.isNotEmpty && mounted) {
+          _controller.text = remote;
+          _controller.selection =
+              TextSelection.collapsed(offset: remote.length);
+          setState(() => _isInitialized = true);
+          return;
+        }
+      } catch (_) {
+        // Fallback sur local en cas d'erreur réseau
+      }
+    }
+
     final prefs = await SharedPreferences.getInstance();
-    final key = 'notes_${widget.clubId}_${widget.sport ?? 'default'}';
-    final text = prefs.getString(key) ?? '';
-    final hidden = prefs.getBool('${key}_hidden') ?? false;
+    final text = prefs.getString(_localKey) ?? '';
+    final hidden = prefs.getBool('${_localKey}_hidden') ?? false;
 
     if (mounted) {
       _controller.text = text;
@@ -66,18 +107,35 @@ class _CoachNotesWidgetState extends State<CoachNotesWidget> {
     }
   }
 
-  Future<void> _saveNotes() async {
+  void _onNotesChanged(String text) {
+    _saveLocal();
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 1500), () {
+      _saveFirestore(text);
+    });
+  }
+
+  Future<void> _saveLocal() async {
     final prefs = await SharedPreferences.getInstance();
-    final key = 'notes_${widget.clubId}_${widget.sport ?? 'default'}';
-    await prefs.setString(key, _controller.text);
-    await prefs.setBool('${key}_hidden', _isHidden);
+    await prefs.setString(_localKey, _controller.text);
+    await prefs.setBool('${_localKey}_hidden', _isHidden);
+  }
+
+  Future<void> _saveFirestore(String text) async {
+    if (_eventRef == null) return;
+    try {
+      await _eventRef!.update({
+        'sessionNotes': text,
+        'sessionNotesUpdatedAt': FieldValue.serverTimestamp(),
+      });
+    } catch (_) {
+      // Silencieux : la sauvegarde locale garantit que rien n'est perdu
+    }
   }
 
   void _toggleVisibility() {
-    setState(() {
-      _isHidden = !_isHidden;
-      _saveNotes();
-    });
+    setState(() => _isHidden = !_isHidden);
+    _saveLocal();
   }
 
   @override
@@ -136,7 +194,7 @@ class _CoachNotesWidgetState extends State<CoachNotesWidget> {
                 contentPadding: EdgeInsets.all(12),
                 alignLabelWithHint: true,
               ),
-              onChanged: (_) => _saveNotes(),
+              onChanged: _onNotesChanged,
             ),
         ],
       ),

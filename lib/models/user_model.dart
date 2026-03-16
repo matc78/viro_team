@@ -37,6 +37,12 @@ class UserModel {
   /// Défaut true pour rétrocompatibilité avec les utilisateurs existants.
   final bool profileCompleted;
 
+  /// Résumé dénormalisé des stats de présence aux entraînements par saison et club.
+  /// Clé : "{clubId}_{saison}" (ex: "abc123_2025-2026")
+  /// Valeur : { present: int, late: int, absent: int, total: int }
+  /// Mis à jour via WriteBatch atomique lors de la prise de présence.
+  final Map<String, dynamic> trainingStats;
+
   UserModel({
     required this.uid,
     this.email,
@@ -48,6 +54,7 @@ class UserModel {
     required this.roles,
     this.hasPendingRequest = false,
     this.profileCompleted = true,
+    this.trainingStats = const {},
   });
 
   static PlayerClubInfo _parseClubInfo(Map<String, dynamic> m) {
@@ -159,6 +166,9 @@ class UserModel {
     final profileCompleted = identical(profileCompletedRaw, false)
         ? false
         : true;
+    final trainingStats = data['trainingStats'] is Map
+        ? Map<String, dynamic>.from(data['trainingStats'] as Map)
+        : <String, dynamic>{};
 
     return UserModel(
       uid: doc.id,
@@ -176,6 +186,7 @@ class UserModel {
       ),
       hasPendingRequest: hasPending,
       profileCompleted: profileCompleted,
+      trainingStats: trainingStats,
     );
   }
 
@@ -242,6 +253,9 @@ class UserModel {
     final profileCompletedRaw = data['profileCompleted'];
     final profileCompleted =
         identical(profileCompletedRaw, false) ? false : true;
+    final trainingStats = data['trainingStats'] is Map
+        ? Map<String, dynamic>.from(data['trainingStats'] as Map)
+        : <String, dynamic>{};
 
     return UserModel(
       uid: userDoc.id,
@@ -259,6 +273,7 @@ class UserModel {
       ),
       hasPendingRequest: hasPending,
       profileCompleted: profileCompleted,
+      trainingStats: trainingStats,
     );
   }
 
@@ -309,6 +324,7 @@ class UserModel {
         'clubId': activeContext!.clubId,
       },
       'roles': rolesMap,
+      if (trainingStats.isNotEmpty) 'trainingStats': trainingStats,
     };
   }
 

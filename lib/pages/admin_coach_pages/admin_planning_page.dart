@@ -24,16 +24,78 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
   bool _deleteMode = false;
   final ScrollController _dayScrollController = ScrollController();
 
+  /// Date du premier événement recensé (chargée une fois au démarrage).
+  DateTime? _firstEventDate;
+  bool _firstEventLoaded = false;
+
   static const double _dayItemWidth = 77.0; // 65 + 6 + 6 (container + margins)
 
-  // Liste des jours pour le sélecteur horizontal (4 semaines = 28 jours)
-  // Si un filtre est actif, retourne uniquement les jours avec des événements filtrés
+  @override
+  void initState() {
+    super.initState();
+    _loadFirstEventDate();
+  }
+
+  Future<void> _loadFirstEventDate() async {
+    try {
+      final snap = await appFirestore
+          .collection(FirebaseCollections.clubs)
+          .doc(widget.clubId)
+          .collection(FirebaseCollections.events)
+          .orderBy('date')
+          .limit(1)
+          .get();
+      if (!mounted) return;
+      setState(() {
+        if (snap.docs.isNotEmpty) {
+          final ts = snap.docs.first.get('date') as Timestamp?;
+          if (ts != null) {
+            final d = ts.toDate();
+            _firstEventDate = DateTime(d.year, d.month, d.day);
+          }
+        }
+        _firstEventLoaded = true;
+      });
+      // Auto-scroll sur aujourd'hui une fois la liste connue
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollToToday();
+      });
+    } catch (_) {
+      if (mounted) setState(() => _firstEventLoaded = true);
+    }
+  }
+
+  /// Génère la liste des jours du planning :
+  /// du premier event (si passé) jusqu'à aujourd'hui + 28 jours.
+  /// Si aucun event, retourne une liste vide.
   List<DateTime> _getDays() {
-    final allDays = List.generate(
-      28,
-      (index) => DateTime.now().add(Duration(days: index)),
+    if (!_firstEventLoaded) return [];
+    if (_firstEventDate == null) return [];
+
+    final today = DateTime(
+      DateTime.now().year,
+      DateTime.now().month,
+      DateTime.now().day,
     );
-    return allDays;
+    final startDay = _firstEventDate!.isBefore(today) ? _firstEventDate! : today;
+    final endDay = today.add(const Duration(days: 28));
+
+    final days = <DateTime>[];
+    var d = startDay;
+    while (!d.isAfter(endDay)) {
+      days.add(d);
+      d = d.add(const Duration(days: 1));
+    }
+    return days;
+  }
+
+  void _scrollToToday() {
+    if (!_dayScrollController.hasClients) return;
+    final days = _getDays();
+    final todayIndex = days.indexWhere(
+      (d) => DateUtils.isSameDay(d, DateTime.now()),
+    );
+    if (todayIndex >= 0) _scrollToCenterSelectedDay(todayIndex);
   }
 
   // Vérifie si un filtre est actif
@@ -42,6 +104,7 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
   }
 
   void _scrollToCenterSelectedDay(int selectedIndex) {
+    if (!_dayScrollController.hasClients) return;
     final targetOffset = selectedIndex * _dayItemWidth;
     final maxOffset = _dayScrollController.position.maxScrollExtent;
     final clampedOffset = targetOffset.clamp(0.0, maxOffset);
@@ -121,13 +184,17 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
             seasonEndDate = DateTime(now.year, 7, 31, 23, 59);
           }
 
-          // Utiliser la date de fin de saison comme limite supérieure
+          // Utiliser la date du premier event comme borne inférieure (inclut les jours passés)
+          final lowerBound = _firstEventDate != null
+              ? Timestamp.fromDate(_firstEventDate!)
+              : Timestamp.fromDate(DateTime.now().subtract(const Duration(days: 365 * 2)));
+
           return StreamBuilder<QuerySnapshot>(
             stream: appFirestore
                 .collection(FirebaseCollections.clubs)
                 .doc(widget.clubId)
                 .collection(FirebaseCollections.events)
-                .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(DateTime.now()))
+                .where('date', isGreaterThanOrEqualTo: lowerBound)
                 .where('date', isLessThanOrEqualTo: Timestamp.fromDate(seasonEndDate))
                 .snapshots(),
             builder: (context, snapshot) {
@@ -196,18 +263,37 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
                 );
               }
 
-              // Vérifier si la date sélectionnée est dans les jours filtrés
-              // Si non, sélectionner le premier jour disponible
+              // Si la date sélectionnée n'est pas dans les jours filtrés,
+              // préférer aujourd'hui ou le premier jour futur disponible
               if (!filteredDays.any((day) => DateUtils.isSameDay(day, _selectedDate))) {
                 WidgetsBinding.instance.addPostFrameCallback((_) {
                   if (mounted && filteredDays.isNotEmpty) {
-                    setState(() => _selectedDate = filteredDays.first);
+                    final todayOrAfter = filteredDays.firstWhere(
+                      (d) => !d.isBefore(DateTime(
+                        DateTime.now().year,
+                        DateTime.now().month,
+                        DateTime.now().day,
+                      )),
+                      orElse: () => filteredDays.last,
+                    );
+                    setState(() => _selectedDate = todayOrAfter);
+                    final idx = filteredDays.indexWhere(
+                      (d) => DateUtils.isSameDay(d, todayOrAfter),
+                    );
+                    if (idx >= 0 && _dayScrollController.hasClients) {
+                      _scrollToCenterSelectedDay(idx);
+                    }
                   }
                 });
               }
 
               final viewportWidth = MediaQuery.of(context).size.width;
               final sidePadding = (viewportWidth - _dayItemWidth) / 2;
+              final today = DateTime(
+                DateTime.now().year,
+                DateTime.now().month,
+                DateTime.now().day,
+              );
 
               return Container(
                 height: 110,
@@ -221,6 +307,35 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
                   itemBuilder: (context, index) {
                     final date = filteredDays[index];
                     final isSelected = DateUtils.isSameDay(date, _selectedDate);
+                    final isPast = date.isBefore(today);
+                    final isToday = DateUtils.isSameDay(date, today);
+
+                    Color bgColor;
+                    Color borderColor;
+                    Color dayNumColor;
+                    Color dayLabelColor;
+                    Color monthColor;
+
+                    if (isSelected) {
+                      bgColor = isPast ? Colors.grey.shade500 : ViroColors.primary;
+                      borderColor = bgColor;
+                      dayNumColor = Colors.white;
+                      dayLabelColor = Colors.white;
+                      monthColor = Colors.white70;
+                    } else if (isPast) {
+                      bgColor = Colors.grey.shade100;
+                      borderColor = Colors.grey.shade300;
+                      dayNumColor = Colors.grey.shade400;
+                      dayLabelColor = Colors.grey.shade400;
+                      monthColor = Colors.grey.shade400;
+                    } else {
+                      bgColor = Colors.grey[50]!;
+                      borderColor = ViroColors.borderColor;
+                      dayNumColor = Colors.black;
+                      dayLabelColor = Colors.grey;
+                      monthColor = Colors.grey;
+                    }
+
                     return GestureDetector(
                       onTap: () {
                         setState(() => _selectedDate = date);
@@ -234,13 +349,9 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
                         width: 65,
                         margin: const EdgeInsets.symmetric(horizontal: 6),
                         decoration: BoxDecoration(
-                          color: isSelected ? ViroColors.primary : Colors.grey[50],
+                          color: bgColor,
                           borderRadius: BorderRadius.circular(15),
-                          border: Border.all(
-                            color: isSelected
-                                ? ViroColors.primary
-                                : ViroColors.borderColor,
-                          ),
+                          border: Border.all(color: borderColor),
                         ),
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -248,7 +359,7 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
                             Text(
                               DateFormat('E', 'fr_FR').format(date).toUpperCase(),
                               style: TextStyle(
-                                color: isSelected ? Colors.white : Colors.grey,
+                                color: dayLabelColor,
                                 fontSize: 12,
                                 fontWeight: FontWeight.bold,
                               ),
@@ -257,18 +368,25 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
                             Text(
                               date.day.toString(),
                               style: TextStyle(
-                                color: isSelected ? Colors.white : Colors.black,
+                                color: dayNumColor,
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
                             Text(
                               DateFormat('MMM', 'fr_FR').format(date).toUpperCase(),
-                              style: TextStyle(
-                                color: isSelected ? Colors.white70 : Colors.grey,
-                                fontSize: 10,
-                              ),
+                              style: TextStyle(color: monthColor, fontSize: 10),
                             ),
+                            if (isToday && !isSelected)
+                              Container(
+                                width: 4,
+                                height: 4,
+                                margin: const EdgeInsets.only(top: 2),
+                                decoration: BoxDecoration(
+                                  color: ViroColors.primary,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
                           ],
                         ),
                       ),
@@ -282,10 +400,27 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
       );
     }
 
-    // Pas de filtre actif, afficher tous les jours (style joueur, centrage)
+    // Pas de filtre actif : afficher tous les jours depuis le premier event
+    if (!_firstEventLoaded) {
+      return Container(
+        height: 110,
+        color: Colors.white,
+        child: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
     final days = _getDays();
+
+    // Aucun événement recensé → ne rien afficher
+    if (days.isEmpty) return const SizedBox.shrink();
+
     final viewportWidth = MediaQuery.of(context).size.width;
     final sidePadding = (viewportWidth - _dayItemWidth) / 2;
+    final today = DateTime(
+      DateTime.now().year,
+      DateTime.now().month,
+      DateTime.now().day,
+    );
 
     return Container(
       height: 110,
@@ -299,6 +434,35 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
         itemBuilder: (context, index) {
           final date = days[index];
           final isSelected = DateUtils.isSameDay(date, _selectedDate);
+          final isPast = date.isBefore(today);
+          final isToday = DateUtils.isSameDay(date, today);
+
+          Color bgColor;
+          Color borderColor;
+          Color dayNumColor;
+          Color dayLabelColor;
+          Color monthColor;
+
+          if (isSelected) {
+            bgColor = isPast ? Colors.grey.shade500 : ViroColors.primary;
+            borderColor = bgColor;
+            dayNumColor = Colors.white;
+            dayLabelColor = Colors.white;
+            monthColor = Colors.white70;
+          } else if (isPast) {
+            bgColor = Colors.grey.shade100;
+            borderColor = Colors.grey.shade300;
+            dayNumColor = Colors.grey.shade400;
+            dayLabelColor = Colors.grey.shade400;
+            monthColor = Colors.grey.shade400;
+          } else {
+            bgColor = Colors.grey[50]!;
+            borderColor = ViroColors.borderColor;
+            dayNumColor = Colors.black;
+            dayLabelColor = Colors.grey;
+            monthColor = Colors.grey;
+          }
+
           return GestureDetector(
             onTap: () {
               setState(() => _selectedDate = date);
@@ -312,13 +476,9 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
               width: 65,
               margin: const EdgeInsets.symmetric(horizontal: 6),
               decoration: BoxDecoration(
-                color: isSelected ? ViroColors.primary : Colors.grey[50],
+                color: bgColor,
                 borderRadius: BorderRadius.circular(15),
-                border: Border.all(
-                  color: isSelected
-                      ? ViroColors.primary
-                      : ViroColors.borderColor,
-                ),
+                border: Border.all(color: borderColor),
               ),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -326,7 +486,7 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
                   Text(
                     DateFormat('E', 'fr_FR').format(date).toUpperCase(),
                     style: TextStyle(
-                      color: isSelected ? Colors.white : Colors.grey,
+                      color: dayLabelColor,
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
                     ),
@@ -335,18 +495,25 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
                   Text(
                     date.day.toString(),
                     style: TextStyle(
-                      color: isSelected ? Colors.white : Colors.black,
+                      color: dayNumColor,
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                   Text(
                     DateFormat('MMM', 'fr_FR').format(date).toUpperCase(),
-                    style: TextStyle(
-                      color: isSelected ? Colors.white70 : Colors.grey,
-                      fontSize: 10,
-                    ),
+                    style: TextStyle(color: monthColor, fontSize: 10),
                   ),
+                  if (isToday && !isSelected)
+                    Container(
+                      width: 4,
+                      height: 4,
+                      margin: const EdgeInsets.only(top: 2),
+                      decoration: BoxDecoration(
+                        color: ViroColors.primary,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
                 ],
               ),
             ),
