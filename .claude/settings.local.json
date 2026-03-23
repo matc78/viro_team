@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xargs -I {} basename {})",
+      "Bash(ls -la lib/pages/*.dart)",
+      "Read(//c/Users/matin/Documents/viroteam/viro_team/**)",
+      "Bash(xargs wc:*)",
+      "Bash(flutter analyze:*)"
+    ]
+  }
+}

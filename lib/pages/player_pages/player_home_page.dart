@@ -22,7 +22,6 @@ import 'player_loan_catalog_page.dart';
 import '../../services/notification_service.dart';
 import '../../theme/viro_theme.dart';
 import '../../utils/avatar_moderation.dart';
-import '../../widget/player_bottom_nav.dart';
 import '../../widget/profile_menu_dropdown.dart';
 import '../../widget/user_display_tile.dart';
 import '../../widget/viro_loader.dart';
@@ -318,11 +317,6 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
             ],
           ),
         ),
-      ),
-      bottomNavigationBar: playerBottomNav(
-        context,
-        currentIndex: 0,
-        clubId: clubId,
       ),
     );
   }

@@ -7,8 +7,8 @@ import 'package:intl/intl.dart';
 import 'package:viro_team/constants/firebase_collections.dart';
 import '../../theme/viro_theme.dart';
 import '../../utils/firebase_error_handler.dart';
+import '../../utils/document_cache.dart';
 import '../../utils/firebase_helpers.dart';
-import '../../widget/player_bottom_nav.dart';
 import '../../widget/viro_loader.dart';
 import 'player_event_details_page.dart'; // Importation de ta page de détails player
 
@@ -25,6 +25,10 @@ class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
   final String _currentUserId = FirebaseAuth.instance.currentUser?.uid ?? "";
   Map<String, dynamic>? _userData;
   final ScrollController _dayScrollController = ScrollController();
+
+  // Jours ayant au moins un événement pertinent (format "YYYY-MM-DD")
+  Set<String> _daysWithEvents = {};
+  List<String>? _dotsLoadedForClubIds;
 
   // Liste des jours pour le sélecteur horizontal (4 semaines = 28 jours)
   List<DateTime> _getDays() {
@@ -53,6 +57,57 @@ class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
     if (legacyClubId != null) clubIdsSet.add(legacyClubId);
 
     return clubIdsSet.toList();
+  }
+
+  // Charger les jours ayant des événements pertinents sur les 28 prochains jours
+  Future<void> _loadEventDots(List<String> clubIds) async {
+    if (clubIds.isEmpty || _currentUserId.isEmpty) return;
+
+    final startDate = DateTime(
+      DateTime.now().year,
+      DateTime.now().month,
+      DateTime.now().day,
+    );
+    final endDate = startDate.add(const Duration(days: 28));
+
+    // Charger les données membre en parallèle pour tous les clubs
+    final memberDataByClub = <String, Map<String, dynamic>?>{};
+    await Future.wait(clubIds.map((cid) async {
+      memberDataByClub[cid] = await getMemberData(appFirestore, _currentUserId, cid);
+    }));
+
+    final Set<String> days = {};
+
+    await Future.wait(clubIds.map((clubId) async {
+      final snap = await appFirestore
+          .collection(FirebaseCollections.clubs)
+          .doc(clubId)
+          .collection(FirebaseCollections.events)
+          .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(startDate))
+          .where('date', isLessThan: Timestamp.fromDate(endDate))
+          .get();
+
+      final player = memberDataByClub[clubId]?['player'] as Map<String, dynamic>?;
+      final userTeams =
+          (player?['teamNames'] as List?)?.whereType<String>().toList() ?? [];
+      final userCategories =
+          (player?['categories'] as List?)?.whereType<String>().toList() ?? [];
+
+      for (final doc in snap.docs) {
+        final data = doc.data();
+        if (_isEventRelevantForPlayer(data, userTeams, userCategories)) {
+          final ts = data['date'] as Timestamp?;
+          if (ts != null) {
+            final d = ts.toDate();
+            days.add(
+              '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}',
+            );
+          }
+        }
+      }
+    }));
+
+    if (mounted) setState(() => _daysWithEvents = days);
   }
 
   // Générer une couleur unique par clubId
@@ -104,16 +159,20 @@ class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
                   return const Center(child: ViroLoader(size: 60));
                 }
                 _userData = snapshot.data?.data();
+
+                // Déclencher le chargement des dots si les clubs ont changé
+                final clubIds = _extractClubIds(_userData);
+                if (clubIds.isNotEmpty &&
+                    clubIds.join(',') != (_dotsLoadedForClubIds?.join(',') ?? '')) {
+                  _dotsLoadedForClubIds = clubIds;
+                  Future.microtask(() => _loadEventDots(clubIds));
+                }
+
                 return _buildEventList();
               },
             ),
           ),
         ],
-      ),
-      bottomNavigationBar: playerBottomNav(
-        context,
-        currentIndex: 1,
-        clubId: widget.clubId,
       ),
     );
   }
@@ -137,6 +196,9 @@ class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
         itemBuilder: (context, index) {
           final day = days[index];
           final isSelected = DateUtils.isSameDay(day, _selectedDate);
+          final dayKey =
+              '${day.year}-${day.month.toString().padLeft(2, '0')}-${day.day.toString().padLeft(2, '0')}';
+          final hasEvents = _daysWithEvents.contains(dayKey);
 
           return GestureDetector(
             onTap: () {
@@ -184,6 +246,19 @@ class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
                     style: TextStyle(
                       color: isSelected ? Colors.white70 : Colors.grey,
                       fontSize: 10,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Container(
+                    width: 5,
+                    height: 5,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: hasEvents
+                          ? (isSelected
+                              ? Colors.white
+                              : ViroColors.primary)
+                          : Colors.transparent,
                     ),
                   ),
                 ],
@@ -316,25 +391,26 @@ class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
           seasonEndMap[clubId] = date;
         }
 
-        // Charger teams/categories par club pour le filtre (async)
+        // Charger teams/categories par club — en parallèle, 1 seule lecture
+        // du doc member par club (au lieu de 2 lectures séquentielles)
         return FutureBuilder<Map<String, Map<String, List<String>>>>(
           future: () async {
             final map = <String, Map<String, List<String>>>{};
             final uid = _currentUserId;
-            if (uid.isNotEmpty) {
-              for (final cid in clubIds) {
-                final teams = await getUserTeamNames(
-                  appFirestore,
-                  uid,
-                  clubId: cid,
-                );
-                final cats = await getUserCategories(
-                  appFirestore,
-                  uid,
-                  clubId: cid,
-                );
+            if (uid.isNotEmpty && clubIds.isNotEmpty) {
+              await Future.wait(clubIds.map((cid) async {
+                final memberData = await getMemberData(appFirestore, uid, cid);
+                final player = memberData?['player'] as Map<String, dynamic>?;
+                final teams = (player?['teamNames'] as List?)
+                        ?.whereType<String>()
+                        .toList() ??
+                    [];
+                final cats = (player?['categories'] as List?)
+                        ?.whereType<String>()
+                        .toList() ??
+                    [];
                 map[cid] = {'teams': teams, 'categories': cats};
-              }
+              }));
             }
             return map;
           }(),
@@ -419,37 +495,26 @@ class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
     );
   }
 
-  // Récupérer les dates de fin de saison pour plusieurs clubs
+  // Récupérer les dates de fin de saison pour plusieurs clubs (avec cache)
   Future<List<Map<String, dynamic>>> _getSeasonEndDates(
     List<String> clubIds,
   ) async {
     final List<Map<String, dynamic>> results = [];
-    for (final clubId in clubIds) {
+    await Future.wait(clubIds.map((clubId) async {
       try {
-        final doc = await appFirestore
-            .collection(FirebaseCollections.clubs)
-            .doc(clubId)
-            .get();
-        final data = doc.data();
-        final timestamp = data?['seasonEndDate'] as Timestamp?;
-        DateTime? seasonEndDate;
-        if (timestamp != null) {
-          seasonEndDate = timestamp.toDate();
-        } else {
-          // Valeur par défaut si non définie
-          final now = DateTime.now();
-          seasonEndDate = DateTime(now.year, 7, 31, 23, 59);
-        }
+        final snap = await DocumentCache.getDocument(
+          '${FirebaseCollections.clubs}/$clubId',
+          cacheDuration: const Duration(minutes: 15),
+        );
+        final timestamp = snap.data()?['seasonEndDate'] as Timestamp?;
+        final now = DateTime.now();
+        final seasonEndDate = timestamp?.toDate() ?? DateTime(now.year, 7, 31, 23, 59);
         results.add({'clubId': clubId, 'date': seasonEndDate});
       } catch (e) {
-        // En cas d'erreur, utiliser la valeur par défaut
         final now = DateTime.now();
-        results.add({
-          'clubId': clubId,
-          'date': DateTime(now.year, 7, 31, 23, 59),
-        });
+        results.add({'clubId': clubId, 'date': DateTime(now.year, 7, 31, 23, 59)});
       }
-    }
+    }));
     return results;
   }
 
@@ -541,13 +606,13 @@ class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
     // Récupérer la couleur du club
     final clubColor = _getClubColor(clubId);
 
-    // Récupérer le nom du club et le nombre de pending pour calculer les sans réponse
+    // Récupérer le nom du club (mis en cache 15 min) et le nombre de pending
     return FutureBuilder<Map<String, dynamic>>(
       future: () async {
-        final clubDoc = await appFirestore
-            .collection(FirebaseCollections.clubs)
-            .doc(clubId)
-            .get();
+        final clubDoc = await DocumentCache.getDocument(
+          '${FirebaseCollections.clubs}/$clubId',
+          cacheDuration: const Duration(minutes: 15),
+        );
         final pendingIds = await _getPendingPlayerIdsForTeam(clubId, teamName);
         return {'club': clubDoc, 'pendingCount': pendingIds.length};
       }(),

@@ -10,7 +10,6 @@ import '../../theme/viro_theme.dart';
 import '../../utils/app_logger.dart';
 import '../../utils/firebase_helpers.dart';
 import '../../utils/avatar_moderation.dart';
-import '../../widget/player_bottom_nav.dart';
 import '../../widget/user_display_tile.dart';
 import '../../widget/viro_loader.dart';
 import '../profil_display_page.dart';
@@ -185,11 +184,6 @@ class _PlayerInfosPageState extends State<PlayerInfosPage> {
             ],
           );
         },
-      ),
-      bottomNavigationBar: playerBottomNav(
-        context,
-        currentIndex: 2,
-        clubId: _selectedClubId ?? widget.clubId,
       ),
     );
   }
@@ -666,7 +660,7 @@ class _StaffListPage extends StatelessWidget {
 }
 
 // --- WIDGET LISTE DES ANNONCES DU CLUB ---
-class _ClubAnnouncementsList extends StatelessWidget {
+class _ClubAnnouncementsList extends StatefulWidget {
   final List<String> clubIds;
   final String userId;
   final bool hasMultipleClubs;
@@ -680,6 +674,19 @@ class _ClubAnnouncementsList extends StatelessWidget {
     this.clubNames,
     this.clubSports,
   });
+
+  @override
+  State<_ClubAnnouncementsList> createState() => _ClubAnnouncementsListState();
+}
+
+class _ClubAnnouncementsListState extends State<_ClubAnnouncementsList> {
+  int _limit = 20;
+
+  List<String> get clubIds => widget.clubIds;
+  String get userId => widget.userId;
+  bool get hasMultipleClubs => widget.hasMultipleClubs;
+  Map<String, String>? get clubNames => widget.clubNames;
+  Map<String, String>? get clubSports => widget.clubSports;
 
   // Récupère les teamIds et catégories de l'utilisateur pour tous ses clubs
   Future<Map<String, Map<String, dynamic>>> _getUserClubsInfo() async {
@@ -905,6 +912,7 @@ class _ClubAnnouncementsList extends StatelessWidget {
             .doc(clubId)
             .collection(FirebaseCollections.announcements)
             .orderBy('createdAt', descending: true)
+            .limit(_limit)
             .snapshots(),
         builder: (context, snapshot) {
           return _processAnnouncements(snapshot, {
@@ -927,6 +935,7 @@ class _ClubAnnouncementsList extends StatelessWidget {
           .doc(firstClubId)
           .collection(FirebaseCollections.announcements)
           .orderBy('createdAt', descending: true)
+          .limit(_limit)
           .snapshots(),
       builder: (context, firstSnapshot) {
         // Pour chaque autre club, créer un autre StreamBuilder
@@ -941,6 +950,7 @@ class _ClubAnnouncementsList extends StatelessWidget {
                 .doc(secondClubId)
                 .collection(FirebaseCollections.announcements)
                 .orderBy('createdAt', descending: true)
+                .limit(_limit)
                 .snapshots(),
             builder: (context, secondSnapshot) {
               // Combiner les deux snapshots
@@ -1071,6 +1081,7 @@ class _ClubAnnouncementsList extends StatelessWidget {
       return bCreated.compareTo(aCreated);
     });
 
+    final rawDocCount = snapshot.data?.docs.length ?? 0;
     if (hasMultipleClubs && validAnnouncements.isNotEmpty) {
       final clubIdsInAnnouncements = validAnnouncements
           .map((a) => a.clubId)
@@ -1079,11 +1090,11 @@ class _ClubAnnouncementsList extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildLegend(clubIdsInAnnouncements),
-          Expanded(child: _buildAnnouncementsList(validAnnouncements)),
+          Expanded(child: _buildAnnouncementsList(validAnnouncements, rawDocCount)),
         ],
       );
     }
-    return _buildAnnouncementsList(validAnnouncements);
+    return _buildAnnouncementsList(validAnnouncements, rawDocCount);
   }
 
   Widget _processCombinedAnnouncements(
@@ -1153,6 +1164,7 @@ class _ClubAnnouncementsList extends StatelessWidget {
       );
     }
 
+    final rawDocCount = allDocs.length;
     if (hasMultipleClubs && validAnnouncements.isNotEmpty) {
       final clubIdsInAnnouncements = validAnnouncements
           .map((a) => a.clubId)
@@ -1161,20 +1173,34 @@ class _ClubAnnouncementsList extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildLegend(clubIdsInAnnouncements),
-          Expanded(child: _buildAnnouncementsList(validAnnouncements)),
+          Expanded(child: _buildAnnouncementsList(validAnnouncements, rawDocCount)),
         ],
       );
     }
-    return _buildAnnouncementsList(validAnnouncements);
+    return _buildAnnouncementsList(validAnnouncements, rawDocCount);
   }
 
   Widget _buildAnnouncementsList(
     List<({DocumentSnapshot doc, String clubId})> validAnnouncements,
+    int rawDocCount,
   ) {
+    final showLoadMore = rawDocCount >= _limit;
     return ListView.builder(
       padding: const EdgeInsets.all(16),
-      itemCount: validAnnouncements.length,
+      itemCount: validAnnouncements.length + (showLoadMore ? 1 : 0),
       itemBuilder: (context, index) {
+        if (index == validAnnouncements.length) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: TextButton.icon(
+                onPressed: () => setState(() => _limit += 20),
+                icon: const Icon(Icons.expand_more),
+                label: const Text("Charger plus"),
+              ),
+            ),
+          );
+        }
         final item = validAnnouncements[index];
         final doc = item.doc;
         final clubId = item.clubId;

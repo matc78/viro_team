@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:ui';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
@@ -23,7 +24,7 @@ import 'pages/complete_profile_page.dart';
 import 'package:viro_team/pages/player_confirm_club_invitation_page.dart';
 import 'pages/invite_signup_page.dart';
 import 'pages/no_internet_page.dart';
-import 'pages/player_pages/player_home_page.dart';
+import 'pages/player_pages/player_shell.dart';
 import 'pages/player_pages/player_event_details_page.dart';
 import 'pages/player_pages/player_loan_catalog_page.dart';
 import 'pages/splash_page.dart';
@@ -95,6 +96,18 @@ void main() {
         await Firebase.initializeApp(
           options: DefaultFirebaseOptions.currentPlatform,
         );
+
+        // 2.1. Activer la persistence offline Firestore (cache local sur mobile)
+        // Doit être configuré avant tout appel Firestore
+        for (final dbId in ['test', 'prod']) {
+          FirebaseFirestore.instanceFor(
+            app: Firebase.app(),
+            databaseId: dbId,
+          ).settings = const Settings(
+            persistenceEnabled: true,
+            cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
+          );
+        }
 
         // 2.3. Enregistrer le handler FCM en arrière-plan (obligatoire sur Android)
         FirebaseMessaging.onBackgroundMessage(
@@ -301,7 +314,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       // Événement supprimé, on pourrait juste aller sur le planning.
       _navigatorKey.currentState?.pushAndRemoveUntil(
         MaterialPageRoute<void>(
-          builder: (_) => const PlayerHomePage(),
+          builder: (_) => const PlayerShell(),
         ),
         (route) => false,
       );
@@ -620,11 +633,11 @@ class _AuthGateState extends State<_AuthGate> {
                 return const AdminHomePage();
               }
               if (activeRole == 'player') {
-                return const PlayerHomePage();
+                return const PlayerShell();
               }
             }
             if (currentUser.hasPendingRequest) {
-              return const PlayerHomePage();
+              return const PlayerShell();
             }
             if (!_initialLinkChecked) {
               return const Scaffold(

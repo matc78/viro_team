@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
@@ -45,9 +46,83 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
   bool _isRemoving = false;
   final TextEditingController _searchController = TextEditingController();
 
+  // Stream club members au lieu de tous les users
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _membersSubscription;
+  List<Map<String, dynamic>>? _enrichedEntries;
+  bool _isLoadingMembers = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _membersSubscription = appFirestore
+        .collection(FirebaseCollections.clubs)
+        .doc(widget.clubId)
+        .collection(FirebaseCollections.members)
+        .snapshots()
+        .listen(_onMembersSnapshot, onError: (_) {
+      if (mounted) setState(() => _isLoadingMembers = false);
+    });
+  }
+
+  /// Appelé à chaque mise à jour du stream members.
+  /// Construit les entrées depuis les docs member (sans requête extra),
+  /// puis batch-fetch les profils utilisateurs en une seule passe.
+  Future<void> _onMembersSnapshot(
+    QuerySnapshot<Map<String, dynamic>> snap,
+  ) async {
+    final memberDocs = snap.docs;
+    final memberIds = memberDocs.map((d) => d.id).toList();
+
+    // Construire les entrées directement depuis les docs member (0 requête extra)
+    final entries = <Map<String, dynamic>>[];
+    for (final memberDoc in memberDocs) {
+      final data = memberDoc.data();
+      final roles =
+          (data['roles'] as List?)?.whereType<String>().toList() ?? [];
+      final player = data['player'] as Map<String, dynamic>?;
+      final teamNames =
+          (player?['teamNames'] as List?)?.whereType<String>().toList() ?? [];
+      final categories =
+          (player?['categories'] as List?)?.whereType<String>().toList() ?? [];
+      final license = (player?['license'] as String? ?? '').trim();
+
+      for (final role in roles) {
+        entries.add({
+          'uid': memberDoc.id,
+          'role': role,
+          'teamNames': teamNames,
+          'categories': categories,
+          'hasLicense': license.isNotEmpty,
+        });
+      }
+    }
+
+    // Batch-fetch des profils utilisateurs (groupés en chunks de 10)
+    final userMap = <String, Map<String, dynamic>>{};
+    if (memberIds.isNotEmpty) {
+      final userDocs = await fetchUsersBatch(memberIds);
+      for (final doc in userDocs) {
+        userMap[doc.id] = doc.data() ?? {};
+      }
+    }
+
+    // Enrichir avec les données d'affichage utilisateur
+    final enrichedEntries = entries
+        .map((e) => {...e, 'userData': userMap[e['uid'] as String] ?? {}})
+        .toList();
+
+    if (mounted) {
+      setState(() {
+        _enrichedEntries = enrichedEntries;
+        _isLoadingMembers = false;
+      });
+    }
+  }
+
   @override
   void dispose() {
     _searchController.dispose();
+    _membersSubscription?.cancel();
     super.dispose();
   }
 
@@ -66,10 +141,7 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
         ),
         centerTitle: true,
       ),
-      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: appFirestore.collection(FirebaseCollections.users).snapshots(),
-        builder: (context, snapshot) {
-          return CustomScrollView(
+      body: CustomScrollView(
             slivers: [
               SliverToBoxAdapter(
                 child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
@@ -349,7 +421,7 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
                   },
                 ),
               ),
-              _buildMembersSliver(snapshot),
+              _buildMembersSliver(),
               if (canEdit)
                 SliverToBoxAdapter(
                   child: Padding(
@@ -379,25 +451,14 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
                 ),
               ),
             ],
-          );
-        },
-      ),
+          ),
     );
   }
 
-  /// Sliver pour la liste des membres (loading, vide ou liste avec séparateurs).
-  Widget _buildMembersSliver(
-    AsyncSnapshot<QuerySnapshot<Map<String, dynamic>>> snapshot,
-  ) {
-    if (snapshot.hasError) {
-      return SliverToBoxAdapter(
-        child: const SizedBox(
-          height: 200,
-          child: Center(child: Text("Erreur de chargement des membres.")),
-        ),
-      );
-    }
-    if (snapshot.connectionState == ConnectionState.waiting) {
+  /// Sliver pour la liste des membres — lit depuis [_enrichedEntries] (alimenté
+  /// par le stream members du club), sans requête Firestore supplémentaire.
+  Widget _buildMembersSliver() {
+    if (_isLoadingMembers) {
       return const SliverToBoxAdapter(
         child: SizedBox(
           height: 200,
@@ -405,205 +466,152 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
         ),
       );
     }
-    final allDocs = snapshot.data?.docs ?? [];
-    final clubMembers = filterUsersByClub(allDocs, widget.clubId);
-    final entries = <Map<String, dynamic>>[];
-    for (final doc in clubMembers) {
-      final data = doc.data();
-      if (data == null) continue;
-      final roles = getAllUserRolesInClub(data, widget.clubId);
-      for (final role in roles) {
-        entries.add({'doc': doc, 'role': role});
-      }
+
+    final enrichedEntries = _enrichedEntries ?? [];
+    final filtered = enrichedEntries.where((entry) {
+      final role = entry['role'] as String;
+      final data = entry['userData'] as Map<String, dynamic>;
+      final first = (data['firstName'] as String? ?? "").toLowerCase();
+      final last = (data['lastName'] as String? ?? "").toLowerCase();
+      final email = (data['email'] as String? ?? "").toLowerCase();
+      final userCats = (entry['categories'] as List<String>?) ?? [];
+      final userTeams = (entry['teamNames'] as List<String>?) ?? [];
+      final isPlayer = role == 'player';
+      final catOk =
+          !isPlayer ||
+          _selectedCategory == null ||
+          userCats.any((c) => _normalize(c) == _normalize(_selectedCategory!));
+      final teamOk =
+          !isPlayer ||
+          _selectedTeam == null ||
+          userTeams.any((t) => _normalize(t) == _normalize(_selectedTeam!));
+      final matchesSearch =
+          _search.isEmpty ||
+          first.contains(_search) ||
+          last.contains(_search) ||
+          email.contains(_search);
+      return matchesSearch && catOk && teamOk;
+    }).toList()
+      ..sort((a, b) {
+        final aRole = a['role'] as String;
+        final bRole = b['role'] as String;
+        final aData = a['userData'] as Map<String, dynamic>;
+        final bData = b['userData'] as Map<String, dynamic>;
+        final aIsStaff =
+            aRole == 'admin_fondateur' || aRole == 'coach' || aRole == 'admin';
+        final bIsStaff =
+            bRole == 'admin_fondateur' || bRole == 'coach' || bRole == 'admin';
+        if (aIsStaff && !bIsStaff) return -1;
+        if (!aIsStaff && bIsStaff) return 1;
+        final aFirst = (aData['firstName'] as String? ?? "").toLowerCase();
+        final bFirst = (bData['firstName'] as String? ?? "").toLowerCase();
+        return aFirst.compareTo(bFirst);
+      });
+
+    if (filtered.isEmpty) {
+      return const SliverToBoxAdapter(
+        child: SizedBox(
+          height: 120,
+          child: Center(child: Text("Aucun membre trouvé.")),
+        ),
+      );
     }
-    return FutureBuilder<List<Map<String, dynamic>>>(
-      future: _enrichMemberEntries(entries),
-      builder: (context, enrichSnap) {
-        if (!enrichSnap.hasData) {
-          return const SliverToBoxAdapter(
-            child: SizedBox(height: 120, child: Center(child: CircularProgressIndicator())),
-          );
-        }
-        final enrichedEntries = enrichSnap.data!;
-        final filtered =
-            enrichedEntries.where((entry) {
-              final doc = entry['doc'] as DocumentSnapshot;
-              final role = entry['role'] as String;
-              final data = doc.data() as Map<String, dynamic>?;
-              if (data == null) return false;
-              final first = (data['firstName'] as String? ?? "").toLowerCase();
-              final last = (data['lastName'] as String? ?? "").toLowerCase();
-              final email = (data['email'] as String? ?? "").toLowerCase();
-              final userCats = (entry['categories'] as List<String>?) ?? [];
-              final userTeams = (entry['teamNames'] as List<String>?) ?? [];
-              final isPlayer = role == 'player';
-              final catOk =
-                  !isPlayer ||
-                  _selectedCategory == null ||
-                  userCats.any(
-                    (c) => _normalize(c) == _normalize(_selectedCategory!),
-                  );
-              final teamOk =
-                  !isPlayer ||
-                  _selectedTeam == null ||
-                  userTeams.any((t) => _normalize(t) == _normalize(_selectedTeam!));
-              final matchesSearch =
-                  _search.isEmpty ||
-                  first.contains(_search) ||
-                  last.contains(_search) ||
-                  email.contains(_search);
-              return matchesSearch && catOk && teamOk;
-            }).toList()..sort((a, b) {
-          final aDoc = a['doc'] as DocumentSnapshot;
-          final bDoc = b['doc'] as DocumentSnapshot;
-          final aRole = a['role'] as String;
-          final bRole = b['role'] as String;
-          final aData = aDoc.data() as Map<String, dynamic>?;
-          final bData = bDoc.data() as Map<String, dynamic>?;
-          final aIsStaff =
-              aRole == 'admin_fondateur' ||
-              aRole == 'coach' ||
-              aRole == 'admin';
-          final bIsStaff =
-              bRole == 'admin_fondateur' ||
-              bRole == 'coach' ||
-              bRole == 'admin';
-          if (aIsStaff && !bIsStaff) return -1;
-          if (!aIsStaff && bIsStaff) return 1;
-          final aFirst = (aData?['firstName'] as String? ?? "").toLowerCase();
-          final bFirst = (bData?['firstName'] as String? ?? "").toLowerCase();
-          return aFirst.compareTo(bFirst);
-        });
-        if (filtered.isEmpty) {
-          return SliverToBoxAdapter(
-            child: const SizedBox(
-              height: 120,
-              child: Center(child: Text("Aucun membre trouvé.")),
-            ),
-          );
-        }
-        final bool canEdit =
-            widget.currentViewerRole == 'admin' ||
-            widget.currentViewerRole == 'admin_fondateur';
-        final List<int> slots = [];
-        for (int i = 0; i < filtered.length; i++) {
-          if (i > 0) {
-            final prevRole = filtered[i - 1]['role'] as String;
-            final currRole = filtered[i]['role'] as String;
-            final prevStaff =
-                prevRole == 'admin_fondateur' ||
-                prevRole == 'coach' ||
-                prevRole == 'admin';
-            final currPlayer = currRole == 'player';
-            if (prevStaff && currPlayer) slots.add(-1);
-          }
-          slots.add(i);
-        }
-        return SliverList(
-          delegate: SliverChildBuilderDelegate((context, index) {
-            if (slots[index] == -1) {
-              return const Divider(
-                height: 1,
-                color: Colors.black,
-                indent: 50,
-                endIndent: 50,
-              );
-            }
-            final entryIndex = slots[index];
-            final entry = filtered[entryIndex];
-            final doc = entry['doc'] as DocumentSnapshot;
-            final role = entry['role'] as String;
-            final rawData = doc.data();
-            final data = rawData as Map<String, dynamic>?;
-            if (data == null) return const SizedBox.shrink();
-            final userId = doc.id;
-            final firstName = data['firstName'] as String? ?? "";
-            final lastName = data['lastName'] as String? ?? "";
-            final avatarUrl = effectiveAvatarUrl(data);
-            final isPlayer = role == 'player';
-            final userCategories = (entry['categories'] as List<String>?) ?? [];
-            final isStaff =
-                role == 'admin_fondateur' || role == 'coach' || role == 'admin';
-            final roleLabel = role
-                .replaceAll('_', ' ')
-                .split(' ')
-                .map((word) {
-                  if (word.isEmpty) return word;
-                  return word[0].toUpperCase() + word.substring(1);
-                })
-                .join(' ');
-            final bool canDelete =
-                canEdit &&
-                role != 'admin_fondateur' &&
-                (widget.currentViewerRole == 'admin_fondateur' ||
-                    (widget.currentViewerRole == 'admin' &&
-                        (role == 'player' || role == 'coach')));
-            final hasLicense = entry['hasLicense'] as bool? ?? false;
 
-            MemberTile buildTile({Animation<double>? animation}) => MemberTile(
-              userId: userId,
-              firstName: firstName,
-              lastName: lastName,
-              avatarUrl: avatarUrl,
-              roleLabel: roleLabel,
-              isPlayer: isPlayer,
-              isStaff: isStaff,
-              categories: userCategories,
-              teamNames: (entry['teamNames'] as List<String>?) ?? [],
-              hasLicense: hasLicense,
-              trailing: const SizedBox.shrink(),
-              slideAnimation: animation,
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => ProfilDisplayPage(userId: userId),
-                ),
-              ),
-            );
-
-            // Uniquement l'admin_fondateur peut changer le rôle coach ↔ admin
-            final bool canChangeRole =
-                widget.currentViewerRole == 'admin_fondateur' &&
-                (role == 'coach' || role == 'admin');
-
-            if (!canDelete) return buildTile();
-            return _MemberSlidableDeleteTile(
-              key: Key('$userId-$role'),
-              onDeleteTap: () =>
-                  _confirmAndRemove(userId, role, data, firstName, lastName),
-              onRoleChangeTap: canChangeRole
-                  ? () => _confirmAndChangeRole(
-                        userId,
-                        data,
-                        toAdmin: role == 'coach',
-                      )
-                  : null,
-              roleChangeIcon: role == 'coach'
-                  ? Icons.admin_panel_settings_outlined
-                  : Icons.sports_outlined,
-              builder: (animation) => buildTile(animation: animation),
-            );
-      }, childCount: slots.length),
-        );
-      },
-    );
-  }
-
-  Future<List<Map<String, dynamic>>> _enrichMemberEntries(
-    List<Map<String, dynamic>> entries,
-  ) async {
-    final firestore = appFirestore;
-    return Future.wait(entries.map((e) async {
-      final doc = e['doc'] as DocumentSnapshot;
-      final role = e['role'] as String;
-      final uid = doc.id;
-      if (role != 'player') {
-        return {...e, 'teamNames': <String>[], 'categories': <String>[], 'hasLicense': false};
+    final bool canEdit =
+        widget.currentViewerRole == 'admin' ||
+        widget.currentViewerRole == 'admin_fondateur';
+    final List<int> slots = [];
+    for (int i = 0; i < filtered.length; i++) {
+      if (i > 0) {
+        final prevRole = filtered[i - 1]['role'] as String;
+        final currRole = filtered[i]['role'] as String;
+        final prevStaff =
+            prevRole == 'admin_fondateur' ||
+            prevRole == 'coach' ||
+            prevRole == 'admin';
+        final currPlayer = currRole == 'player';
+        if (prevStaff && currPlayer) slots.add(-1);
       }
-      final teams = await getUserTeamNames(firestore, uid, clubId: widget.clubId);
-      final cats = await getUserCategories(firestore, uid, clubId: widget.clubId);
-      final hasLicense = await playerHasLicense(firestore, uid, widget.clubId);
-      return {...e, 'teamNames': teams, 'categories': cats, 'hasLicense': hasLicense};
-    }));
+      slots.add(i);
+    }
+
+    return SliverList(
+      delegate: SliverChildBuilderDelegate((context, index) {
+        if (slots[index] == -1) {
+          return const Divider(
+            height: 1,
+            color: Colors.black,
+            indent: 50,
+            endIndent: 50,
+          );
+        }
+        final entryIndex = slots[index];
+        final entry = filtered[entryIndex];
+        final uid = entry['uid'] as String;
+        final role = entry['role'] as String;
+        final data = entry['userData'] as Map<String, dynamic>;
+        if (data.isEmpty) return const SizedBox.shrink();
+        final firstName = data['firstName'] as String? ?? "";
+        final lastName = data['lastName'] as String? ?? "";
+        final avatarUrl = effectiveAvatarUrl(data);
+        final isPlayer = role == 'player';
+        final userCategories = (entry['categories'] as List<String>?) ?? [];
+        final isStaff =
+            role == 'admin_fondateur' || role == 'coach' || role == 'admin';
+        final roleLabel = role
+            .replaceAll('_', ' ')
+            .split(' ')
+            .map((word) {
+              if (word.isEmpty) return word;
+              return word[0].toUpperCase() + word.substring(1);
+            })
+            .join(' ');
+        final bool canDelete =
+            canEdit &&
+            role != 'admin_fondateur' &&
+            (widget.currentViewerRole == 'admin_fondateur' ||
+                (widget.currentViewerRole == 'admin' &&
+                    (role == 'player' || role == 'coach')));
+        final hasLicense = entry['hasLicense'] as bool? ?? false;
+
+        MemberTile buildTile({Animation<double>? animation}) => MemberTile(
+          userId: uid,
+          firstName: firstName,
+          lastName: lastName,
+          avatarUrl: avatarUrl,
+          roleLabel: roleLabel,
+          isPlayer: isPlayer,
+          isStaff: isStaff,
+          categories: userCategories,
+          teamNames: (entry['teamNames'] as List<String>?) ?? [],
+          hasLicense: hasLicense,
+          trailing: const SizedBox.shrink(),
+          slideAnimation: animation,
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => ProfilDisplayPage(userId: uid)),
+          ),
+        );
+
+        // Uniquement l'admin_fondateur peut changer le rôle coach ↔ admin
+        final bool canChangeRole =
+            widget.currentViewerRole == 'admin_fondateur' &&
+            (role == 'coach' || role == 'admin');
+
+        if (!canDelete) return buildTile();
+        return _MemberSlidableDeleteTile(
+          key: Key('$uid-$role'),
+          onDeleteTap: () =>
+              _confirmAndRemove(uid, role, data, firstName, lastName),
+          onRoleChangeTap: canChangeRole
+              ? () => _confirmAndChangeRole(uid, data, toAdmin: role == 'coach')
+              : null,
+          roleChangeIcon: role == 'coach'
+              ? Icons.admin_panel_settings_outlined
+              : Icons.sports_outlined,
+          builder: (animation) => buildTile(animation: animation),
+        );
+      }, childCount: slots.length),
+    );
   }
 
   /// Contenu des cartes "En attente de création de compte" et "Refus d'invitation".
