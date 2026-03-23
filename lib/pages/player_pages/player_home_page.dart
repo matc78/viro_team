@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:viro_team/utils/club_emoji_utils.dart';
@@ -189,131 +190,74 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
   ) {
     return Scaffold(
       backgroundColor: ViroColors.background,
-      appBar: AppBar(
-        title: Text("Bonjour, $name"),
-        backgroundColor: ViroColors.background,
-        elevation: 0,
-        automaticallyImplyLeading: false,
-        actions: [
-          StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-            stream: appFirestore
-                .collection(FirebaseCollections.users)
-                .doc(_currentUserId)
-                .snapshots(),
-            builder: (context, snap) {
-              final avatarUrl = effectiveAvatarUrl(snap.data?.data());
-              return Builder(
-                builder: (ctx) {
-                  return GestureDetector(
-                    onTap: () => showProfileDropdown(
-                      ctx,
-                      settingsPage: const PlayerProfilPage(),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(8.0),
-                      child: (avatarUrl != null && avatarUrl.isNotEmpty)
-                      ? CachedNetworkImage(
-                          imageUrl: avatarUrl,
-                          imageBuilder: (context, imageProvider) =>
-                              CircleAvatar(
-                                radius: 18,
-                                backgroundColor: ViroColors.primary.withValues(alpha: 0.1),
-                                backgroundImage: imageProvider,
-                              ),
-                          placeholder: (context, url) => CircleAvatar(
-                            radius: 18,
-                            backgroundColor: ViroColors.primary.withValues(alpha: 0.1),
-                            child: const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
-                          ),
-                          errorWidget: (context, url, error) => CircleAvatar(
-                            radius: 18,
-                            backgroundColor: ViroColors.primary.withValues(alpha: 0.1),
-                            child: const Icon(
-                              Icons.person,
-                              color: ViroColors.primary,
-                            ),
-                          ),
-                          memCacheWidth: 72,
-                          memCacheHeight: 72,
-                        )
-                      : CircleAvatar(
-                          radius: 18,
-                          backgroundColor: ViroColors.primary.withValues(alpha: 0.1),
-                          child: const Icon(
-                            Icons.person,
-                            color: ViroColors.primary,
-                          ),
-                        ),
-                    ),
-                  );
-                },
-              );
-            },
-          ),
-        ],
-      ),
       body: RepaintBoundary(
         child: SafeArea(
           child: Stack(
             children: [
-              // Logo en arrière-plan avec opacité
-            Positioned(
-              bottom: -150,
-              left: 0,
-              right: 0,
-              child: Opacity(
-                opacity: 0.12,
-                child: Image.asset(
-                  'assets/logo/logo_seul.png',
-                  fit: BoxFit.contain,
-                  alignment: Alignment.bottomCenter,
+              // Logo en arrière-plan
+              Positioned(
+                bottom: -150,
+                left: 0,
+                right: 0,
+                child: Opacity(
+                  opacity: 0.10,
+                  child: Image.asset(
+                    'assets/logo/logo_seul.png',
+                    fit: BoxFit.contain,
+                    alignment: Alignment.bottomCenter,
+                  ),
                 ),
               ),
-            ),
-            // Contenu principal
-            RefreshIndicator(
-              onRefresh: _refreshUserStatus,
-              child: SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(20.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildHero(name, clubId, clubName, allClubIds, userData),
-                    const SizedBox(height: 28),
+              // Contenu principal
+              RefreshIndicator(
+                onRefresh: _refreshUserStatus,
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Header immersif (gère son propre padding)
+                      _buildHeader(name, clubId, userData, allClubIds),
 
-                    _buildActionRequiredBloc(clubId, allClubIds, userData),
-                    const SizedBox(height: 28),
-
-                    _buildActiveLoansSection(clubId, allClubIds),
-                    const SizedBox(height: 28),
-
-                    _buildNextEventSummaryLine(allClubIds, userData),
-                    const SizedBox(height: 14),
-                    _buildTodaySection(clubId, allClubIds, userData),
-                    const SizedBox(height: 28),
-
-                    // Navigation Rapide (carte Mes Équipes)
-                    Row(
-                      children: [
-                        _buildMenuCard("Mes Équipes", Icons.group_rounded, () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => PlayerTeamsPage(clubId: clubId),
+                      // Sections avec padding horizontal uniforme
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildNextEventCard(allClubIds, userData),
+                            const SizedBox(height: 28),
+                            _buildTodaySection(clubId, allClubIds, userData),
+                            const SizedBox(height: 28),
+                            _buildActionRequiredBloc(clubId, allClubIds, userData),
+                            const SizedBox(height: 28),
+                            _buildAnnouncements(allClubIds, userData),
+                            const SizedBox(height: 28),
+                            _buildActiveLoansSection(clubId, allClubIds),
+                            const SizedBox(height: 28),
+                            Row(
+                              children: [
+                                _buildMenuCard(
+                                  "Mes Équipes",
+                                  Icons.group_rounded,
+                                  () => Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          PlayerTeamsPage(clubId: clubId),
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
-                          );
-                        }),
-                      ],
-                    ),
-                  ],
+                            const SizedBox(height: 28),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
             ],
           ),
         ),
@@ -613,36 +557,114 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
     );
   }
 
-  Widget _buildHero(
+  // ── HEADER ──────────────────────────────────────────────────────────────────
+
+  Widget _buildHeader(
     String name,
     String clubId,
-    String clubName,
-    List<String> allClubIds,
     Map<String, dynamic>? userData,
+    List<String> allClubIds,
   ) {
+    final avatarUrl = effectiveAvatarUrl(userData);
+    final dateStr = DateFormat('EEEE d MMMM', 'fr_FR').format(DateTime.now());
+    const clubColor = ViroColors.primary;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          _getGreeting(),
-          style: TextStyle(fontSize: 16, color: Colors.grey[600]),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          name,
-          style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-            color: ViroColors.primary,
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      dateStr,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[500],
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      _getGreeting(),
+                      style: TextStyle(fontSize: 15, color: Colors.grey[600]),
+                    ),
+                    Text(
+                      name,
+                      style: const TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.bold,
+                        color: ViroColors.primary,
+                        height: 1.1,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              Builder(
+                builder: (ctx) => GestureDetector(
+                  onTap: () => showProfileDropdown(
+                    ctx,
+                    settingsPage: const PlayerProfilPage(),
+                  ),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: clubColor.withValues(alpha: 0.4),
+                        width: 2.5,
+                      ),
+                    ),
+                    child: avatarUrl != null && avatarUrl.isNotEmpty
+                        ? CachedNetworkImage(
+                            imageUrl: avatarUrl,
+                            imageBuilder: (_, imageProvider) => CircleAvatar(
+                              radius: 22,
+                              backgroundImage: imageProvider,
+                            ),
+                            placeholder: (_, __) => CircleAvatar(
+                              radius: 22,
+                              backgroundColor: clubColor.withValues(alpha: 0.1),
+                              child: const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                            ),
+                            errorWidget: (_, __, ___) => CircleAvatar(
+                              radius: 22,
+                              backgroundColor: clubColor.withValues(alpha: 0.1),
+                              child: const Icon(Icons.person, color: ViroColors.primary),
+                            ),
+                            memCacheWidth: 88,
+                            memCacheHeight: 88,
+                          )
+                        : CircleAvatar(
+                            radius: 22,
+                            backgroundColor: clubColor.withValues(alpha: 0.1),
+                            child: const Icon(Icons.person, color: ViroColors.primary),
+                          ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
         const SizedBox(height: 16),
-        _buildAllClubsCards(allClubIds),
-        const SizedBox(height: 20),
-        _buildAnnouncements(allClubIds, userData),
+        // Carousel pleine largeur (pas de padding horizontal)
+        _buildClubChips(allClubIds),
+        const SizedBox(height: 16),
       ],
     );
   }
+
+  // ── CHIPS CLUBS (horizontal) ─────────────────────────────────────────────
 
   Future<List<Map<String, dynamic>>> _fetchClubInfos(
     List<String> clubIds,
@@ -657,224 +679,143 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
       final i = e.key;
       final id = e.value;
       final data = snaps[i].data();
-      final name = data?['name'] as String? ?? 'Club';
-      final logoUrl = data?['logoUrl'] as String?;
-      final sport = data?['sport'] as String?;
-      return <String, dynamic>{'id': id, 'name': name, 'logoUrl': logoUrl, 'sport': sport};
+      return <String, dynamic>{
+        'id': id,
+        'name': data?['name'] as String? ?? 'Club',
+        'logoUrl': data?['logoUrl'] as String?,
+        'sport': data?['sport'] as String?,
+      };
     }).toList();
   }
 
-  Widget _buildAllClubsCards(List<String> allClubIds) {
-    if (allClubIds.isEmpty) {
-      return const SizedBox.shrink();
-    }
+  Widget _buildClubChips(List<String> allClubIds) {
+    if (allClubIds.isEmpty) return const SizedBox.shrink();
     return FutureBuilder<List<Map<String, dynamic>>>(
       future: _fetchClubInfos(allClubIds),
       builder: (context, snapshot) {
-        if (!snapshot.hasData || snapshot.data!.isEmpty) {
-          return const SizedBox.shrink();
-        }
-        final clubs = snapshot.data!;
-        return GridView.count(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          crossAxisCount: 2,
-          mainAxisSpacing: 10,
-          crossAxisSpacing: 10,
-          childAspectRatio: 2.4,
-          children: clubs
-              .map(
-                (c) => _buildClubCard(
-                  c['id'] as String,
-                  c['name'] as String,
-                  c['logoUrl'] as String?,
-                  c['sport'] as String?,
-                ),
-              )
-              .toList(),
+        if (!snapshot.hasData || snapshot.data!.isEmpty) return const SizedBox.shrink();
+        return _ClubChipsCarousel(
+          clubs: snapshot.data!,
+          buildChip: _buildClubChip,
         );
       },
     );
   }
 
-  Widget _buildClubCard(String clubId, String clubName, String? logoUrl, String? sport) {
+  Widget _buildClubChip(
+    String clubId,
+    String clubName,
+    String? logoUrl,
+    String? sport,
+  ) {
     final clubColor = _getClubColor(clubId);
     final hasLogo = logoUrl != null && logoUrl.isNotEmpty;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => PlayerInfosPage(clubId: clubId)),
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => PlayerInfosPage(clubId: clubId)),
+      ),
+      child: Container(
+        margin: const EdgeInsets.only(right: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: clubColor.withValues(alpha: 0.10),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: clubColor.withValues(alpha: 0.30), width: 1.5),
         ),
-        borderRadius: BorderRadius.circular(14),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          decoration: BoxDecoration(
-            color: clubColor.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: clubColor.withValues(alpha: 0.3), width: 1),
-          ),
-          child: Row(
-            children: [
-              SizedBox(
-                width: 36,
-                height: 36,
-                child: hasLogo
-                    ? ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: CachedNetworkImage(
-                          imageUrl: logoUrl,
-                          fit: BoxFit.cover,
-                          placeholder: (context, url) => Icon(
-                            Icons.groups_rounded,
-                            color: clubColor,
-                            size: 24,
-                          ),
-                          errorWidget: (context, url, error) => Icon(
-                            Icons.groups_rounded,
-                            color: clubColor,
-                            size: 24,
-                          ),
-                        ),
-                      )
-                    : Icon(Icons.groups_rounded, color: clubColor, size: 24),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: 20,
+              height: 20,
+              child: hasLogo
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: CachedNetworkImage(
+                        imageUrl: logoUrl,
+                        fit: BoxFit.cover,
+                        errorWidget: (_, __, ___) =>
+                            Icon(Icons.groups_rounded, color: clubColor, size: 16),
+                      ),
+                    )
+                  : Icon(Icons.groups_rounded, color: clubColor, size: 16),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              formatClubNameWithEmoji(clubName, sport),
+              style: TextStyle(
+                color: clubColor,
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  formatClubNameWithEmoji(clubName, sport),
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: clubColor,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildNextEventSummaryLine(
+  // ── Prochain événement : carte visuelle ─────────────────────────────────────
+
+  Widget _buildNextEventCard(
     List<String> clubIds,
     Map<String, dynamic>? userData,
   ) {
-    if (clubIds.isEmpty) {
-      return Text(
-        "Ta journée est libre.",
-        style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-      );
-    }
+    if (clubIds.isEmpty) return const SizedBox.shrink();
+
     final now = DateTime.now();
     final startOfDay = DateTime(now.year, now.month, now.day);
-    final nextSunday = startOfDay.add(Duration(days: 7 - now.weekday + 1));
-    final streams = clubIds.map((clubId) {
+    final inThirtyDays = startOfDay.add(const Duration(days: 30));
+
+    final streams = clubIds.map((cid) {
       return appFirestore
           .collection(FirebaseCollections.clubs)
-          .doc(clubId)
+          .doc(cid)
           .collection(FirebaseCollections.events)
           .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
-          .where('date', isLessThan: Timestamp.fromDate(nextSunday))
+          .where('date', isLessThan: Timestamp.fromDate(inThirtyDays))
           .orderBy('date')
           .snapshots();
     }).toList();
 
+    Widget buildFromSnaps(List<QuerySnapshot?> snaps) {
+      return FutureBuilder<Map<String, dynamic>?>(
+        future: _getNextEvent(snaps, clubIds, userData),
+        builder: (context, snap) {
+          return _buildNextEventCardFromEvent(snap.data);
+        },
+      );
+    }
+
     if (streams.length == 1) {
       return StreamBuilder<QuerySnapshot>(
         stream: streams[0],
-        builder: (context, snapshot) {
-          return FutureBuilder<String?>(
-            future: _getNextEventLineFromSnapshots(
-              [snapshot.data],
-              clubIds,
-              userData,
-            ),
-            builder: (context, lineSnap) {
-              return Text(
-                lineSnap.data ?? "Ta journée est libre.",
-                style: TextStyle(fontSize: 14, color: Colors.grey[700]),
-              );
-            },
-          );
-        },
+        builder: (_, s0) => buildFromSnaps([s0.data]),
       );
     }
     if (streams.length == 2) {
       return StreamBuilder<QuerySnapshot>(
         stream: streams[0],
-        builder: (context, snapshot0) {
-          return StreamBuilder<QuerySnapshot>(
-            stream: streams[1],
-            builder: (context, snapshot1) {
-              return FutureBuilder<String?>(
-                future: _getNextEventLineFromSnapshots(
-                  [snapshot0.data, snapshot1.data],
-                  clubIds,
-                  userData,
-                ),
-                builder: (context, lineSnap) {
-                  return Text(
-                    lineSnap.data ?? "Ta journée est libre.",
-                    style: TextStyle(fontSize: 14, color: Colors.grey[700]),
-                  );
-                },
-              );
-            },
-          );
-        },
+        builder: (_, s0) => StreamBuilder<QuerySnapshot>(
+          stream: streams[1],
+          builder: (_, s1) => buildFromSnaps([s0.data, s1.data]),
+        ),
       );
     }
     return StreamBuilder<QuerySnapshot>(
       stream: streams[0],
-      builder: (context, snapshot0) {
-        return StreamBuilder<QuerySnapshot>(
-          stream: streams[1],
-          builder: (context, snapshot1) {
-            if (streams.length == 3) {
-              return StreamBuilder<QuerySnapshot>(
-                stream: streams[2],
-                builder: (context, snapshot2) {
-                  return FutureBuilder<String?>(
-                    future: _getNextEventLineFromSnapshots(
-                      [snapshot0.data, snapshot1.data, snapshot2.data],
-                      clubIds,
-                      userData,
-                    ),
-                    builder: (context, lineSnap) {
-                      return Text(
-                        lineSnap.data ?? "Ta journée est libre.",
-                        style: TextStyle(fontSize: 14, color: Colors.grey[700]),
-                      );
-                    },
-                  );
-                },
-              );
-            }
-            return FutureBuilder<String?>(
-              future: _getNextEventLineFromSnapshots(
-                [snapshot0.data, snapshot1.data],
-                clubIds.take(2).toList(),
-                userData,
-              ),
-              builder: (context, lineSnap) {
-                return Text(
-                  lineSnap.data ?? "Ta journée est libre.",
-                  style: TextStyle(fontSize: 14, color: Colors.grey[700]),
-                );
-              },
-            );
-          },
-        );
-      },
+      builder: (_, s0) => StreamBuilder<QuerySnapshot>(
+        stream: streams[1],
+        builder: (_, s1) => StreamBuilder<QuerySnapshot>(
+          stream: streams.length > 2 ? streams[2] : streams[1],
+          builder: (_, s2) => buildFromSnaps([s0.data, s1.data, s2.data]),
+        ),
+      ),
     );
   }
 
-  Future<String?> _getNextEventLineFromSnapshots(
+  Future<Map<String, dynamic>?> _getNextEvent(
     List<QuerySnapshot?>? snapshots,
     List<String> clubIds,
     Map<String, dynamic>? userData,
@@ -894,30 +835,221 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
       if (bDate == null) return -1;
       return aDate.compareTo(bDate);
     });
-    final first = events.first;
-    final data = first['eventData'] as Map<String, dynamic>;
+    return events.first;
+  }
+
+  Widget _buildNextEventCardFromEvent(Map<String, dynamic>? eventInfo) {
+    if (eventInfo == null) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: Colors.grey[50],
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: Colors.grey[200]!, width: 1),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.event_available_rounded, color: Colors.grey[400], size: 22),
+            const SizedBox(width: 10),
+            Text(
+              "Aucun événement à venir",
+              style: TextStyle(fontSize: 14, color: Colors.grey[500]),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final data = eventInfo['eventData'] as Map<String, dynamic>;
+    final clubId = eventInfo['clubId'] as String;
+    final eventId = eventInfo['eventId'] as String? ?? '';
+    final clubColor = _getClubColor(clubId);
+
+    final title = (data['title'] as String?)?.isNotEmpty == true
+        ? data['title'] as String
+        : (data['type'] as String?) ?? 'Événement';
     final date = (data['date'] as Timestamp?)?.toDate();
-    final title = data['title'] ?? data['type'] ?? 'Événement';
     final startTime = data['startTime'] as String?;
-    String dateLabel;
-    if (date == null) {
-      dateLabel = '';
-    } else {
+    final location = data['location'] as String?;
+    final teamName = data['teamName'] as String?;
+    final teamNames = (data['teamNames'] as List?)?.whereType<String>().join(', ');
+    final teamLabel = (teamNames?.isNotEmpty == true ? teamNames : teamName) ?? '';
+
+    String dateLabel = '';
+    String dayLabel = '';
+    if (date != null) {
       final today = DateTime.now();
       final todayDate = DateTime(today.year, today.month, today.day);
       final eventDate = DateTime(date.year, date.month, date.day);
       if (eventDate == todayDate) {
-        dateLabel = startTime != null
-            ? "aujourd'hui à $startTime"
-            : "aujourd'hui";
+        dayLabel = "Aujourd'hui";
       } else if (eventDate == todayDate.add(const Duration(days: 1))) {
-        dateLabel = startTime != null ? "demain à $startTime" : "demain";
+        dayLabel = "Demain";
       } else {
-        dateLabel = DateFormat('EEEE d MMM', 'fr_FR').format(date);
-        if (startTime != null) dateLabel += ' à $startTime';
+        dayLabel = DateFormat('EEEE d MMM', 'fr_FR').format(date);
+        dayLabel = dayLabel[0].toUpperCase() + dayLabel.substring(1);
       }
+      dateLabel = startTime != null ? '$dayLabel · $startTime' : dayLabel;
     }
-    return "Prochain événement : $title${dateLabel.isNotEmpty ? ' — $dateLabel' : ''}";
+
+    // Icône selon le type d'événement
+    final type = (data['type'] as String? ?? '').toLowerCase();
+    IconData eventIcon = Icons.event_rounded;
+    if (type.contains('match') || type.contains('compétition')) {
+      eventIcon = Icons.sports_rounded;
+    } else if (type.contains('entraîne') || type.contains('training')) {
+      eventIcon = Icons.fitness_center_rounded;
+    } else if (type.contains('réunion') || type.contains('meeting')) {
+      eventIcon = Icons.groups_rounded;
+    }
+
+    return GestureDetector(
+      onTap: eventId.isNotEmpty
+          ? () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => PlayerEventDetailsPage(
+                    clubId: clubId,
+                    eventId: eventId,
+                  ),
+                ),
+              )
+          : null,
+      child: Container(
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: clubColor.withValues(alpha: 0.12),
+              blurRadius: 16,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Barre colorée gauche
+                Container(width: 5, color: clubColor),
+                // Contenu
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Ligne supérieure : label "Prochain" + date
+                        Row(
+                          children: [
+                            Text(
+                              "Prochain événement",
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: clubColor,
+                                letterSpacing: 0.3,
+                              ),
+                            ),
+                            const Spacer(),
+                            if (dateLabel.isNotEmpty)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: clubColor.withValues(alpha: 0.10),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Text(
+                                  dateLabel,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: clubColor,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        // Titre
+                        Row(
+                          children: [
+                            Icon(eventIcon, size: 18, color: Colors.grey[700]),
+                            const SizedBox(width: 7),
+                            Expanded(
+                              child: Text(
+                                title,
+                                style: const TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF1A1A2E),
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                        // Équipe + lieu
+                        if (teamLabel.isNotEmpty || location != null) ...[
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              if (teamLabel.isNotEmpty) ...[
+                                Icon(Icons.group_rounded,
+                                    size: 13, color: Colors.grey[500]),
+                                const SizedBox(width: 4),
+                                Flexible(
+                                  child: Text(
+                                    teamLabel,
+                                    style: TextStyle(
+                                        fontSize: 12, color: Colors.grey[600]),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                if (location != null) const SizedBox(width: 10),
+                              ],
+                              if (location != null) ...[
+                                Icon(Icons.location_on_outlined,
+                                    size: 13, color: Colors.grey[500]),
+                                const SizedBox(width: 4),
+                                Flexible(
+                                  child: Text(
+                                    location,
+                                    style: TextStyle(
+                                        fontSize: 12, color: Colors.grey[600]),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+                // Flèche
+                if (eventId.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 12),
+                    child: Icon(Icons.chevron_right_rounded,
+                        color: Colors.grey[400], size: 22),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   Future<List<Map<String, dynamic>>> _extractEventsFromSnapshots(
@@ -991,19 +1123,15 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
     final nextSunday = startOfDay.add(Duration(days: 7 - now.weekday + 1));
     final oneDayAgo = now.subtract(const Duration(days: 1));
 
-    final eventStream = allClubIds.isEmpty
-        ? null
-        : appFirestore
-              .collection(FirebaseCollections.clubs)
-              .doc(allClubIds.first)
-              .collection(FirebaseCollections.events)
-              .where(
-                'date',
-                isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay),
-              )
-              .where('date', isLessThan: Timestamp.fromDate(nextSunday))
-              .orderBy('date')
-              .snapshots();
+    // Un stream d'événements par club (toujours les mêmes 3 paramètres dans la query)
+    final eventStreams = allClubIds.map((cid) => appFirestore
+        .collection(FirebaseCollections.clubs)
+        .doc(cid)
+        .collection(FirebaseCollections.events)
+        .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
+        .where('date', isLessThan: Timestamp.fromDate(nextSunday))
+        .orderBy('date')
+        .snapshots()).toList();
 
     final loanRequestStream = appFirestore
         .collection(FirebaseCollections.clubs)
@@ -1011,16 +1139,13 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
         .collection(FirebaseCollections.equipmentLoanRequests)
         .where('playerId', isEqualTo: _currentUserId)
         .where('status', whereIn: ['accepted', 'refused'])
-        .where(
-          'respondedAt',
-          isGreaterThanOrEqualTo: Timestamp.fromDate(oneDayAgo),
-        )
+        .where('respondedAt', isGreaterThanOrEqualTo: Timestamp.fromDate(oneDayAgo))
         .orderBy('respondedAt', descending: true)
         .limit(10)
         .snapshots();
 
-    // Requête sans plage sur lentAt/dueAt pour éviter les index composites
-    final preparationStream = appFirestore
+    // Un seul stream pour les prêts actifs (filtrés côté client pour prépara et retour)
+    final activeLoansStream = appFirestore
         .collection(FirebaseCollections.clubs)
         .doc(clubId)
         .collection(FirebaseCollections.equipmentLoans)
@@ -1028,45 +1153,33 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
         .where('status', isEqualTo: 'active')
         .snapshots();
 
-    final returnStream = appFirestore
-        .collection(FirebaseCollections.clubs)
-        .doc(clubId)
-        .collection(FirebaseCollections.equipmentLoans)
-        .where('borrowerId', isEqualTo: _currentUserId)
-        .where('status', isEqualTo: 'active')
-        .snapshots();
-
-    if (eventStream == null) {
+    // Construction des StreamBuilders imbriqués selon le nombre de clubs
+    Widget buildFromEventSnaps(List<QuerySnapshot?> eventSnaps) {
       return StreamBuilder<QuerySnapshot>(
         stream: loanRequestStream,
         builder: (context, loanReqSnap) {
           return StreamBuilder<QuerySnapshot>(
-            stream: preparationStream,
-            builder: (context, prepSnap) {
-              return StreamBuilder<QuerySnapshot>(
-                stream: returnStream,
-                builder: (context, returnSnap) {
-                  return FutureBuilder<({bool isEmpty, Widget widget})>(
-                    future: _buildActionRequiredList(
-                      null,
-                      loanReqSnap.data,
-                      prepSnap.data,
-                      returnSnap.data,
-                      clubId,
-                      allClubIds,
-                      userData,
-                    ),
-                    builder: (context, resultSnap) {
-                      final result = resultSnap.data ?? (isEmpty: true, widget: const SizedBox.shrink());
-                      if (result.isEmpty) return const SizedBox.shrink();
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _buildSectionTitleLarge("À faire maintenant"),
-                          result.widget,
-                        ],
-                      );
-                    },
+            stream: activeLoansStream,
+            builder: (context, activeLoansSnap) {
+              return FutureBuilder<({bool isEmpty, Widget widget})>(
+                future: _buildActionRequiredList(
+                  eventSnaps,
+                  allClubIds,
+                  loanReqSnap.data,
+                  activeLoansSnap.data,
+                  clubId,
+                  userData,
+                ),
+                builder: (context, resultSnap) {
+                  final result = resultSnap.data ??
+                      (isEmpty: true, widget: const SizedBox.shrink());
+                  if (result.isEmpty) return const SizedBox.shrink();
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildSectionTitleLarge("À faire maintenant"),
+                      result.widget,
+                    ],
                   );
                 },
               );
@@ -1076,61 +1189,44 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
       );
     }
 
+    if (eventStreams.isEmpty) return buildFromEventSnaps([]);
+
+    if (eventStreams.length == 1) {
+      return StreamBuilder<QuerySnapshot>(
+        stream: eventStreams[0],
+        builder: (_, s0) => buildFromEventSnaps([s0.data]),
+      );
+    }
+    if (eventStreams.length == 2) {
+      return StreamBuilder<QuerySnapshot>(
+        stream: eventStreams[0],
+        builder: (_, s0) => StreamBuilder<QuerySnapshot>(
+          stream: eventStreams[1],
+          builder: (_, s1) => buildFromEventSnaps([s0.data, s1.data]),
+        ),
+      );
+    }
     return StreamBuilder<QuerySnapshot>(
-      stream: eventStream,
-      builder: (context, eventSnap) {
-        return StreamBuilder<QuerySnapshot>(
-          stream: loanRequestStream,
-          builder: (context, loanReqSnap) {
-            return StreamBuilder<QuerySnapshot>(
-              stream: preparationStream,
-              builder: (context, prepSnap) {
-                return StreamBuilder<QuerySnapshot>(
-                  stream: returnStream,
-                  builder: (context, returnSnap) {
-                    return FutureBuilder<({bool isEmpty, Widget widget})>(
-                      future: _buildActionRequiredList(
-                        eventSnap.data,
-                        loanReqSnap.data,
-                        prepSnap.data,
-                        returnSnap.data,
-                        clubId,
-                        allClubIds,
-                        userData,
-                      ),
-                      builder: (context, resultSnap) {
-                        final result = resultSnap.data ?? (isEmpty: true, widget: const SizedBox.shrink());
-                        if (result.isEmpty) return const SizedBox.shrink();
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _buildSectionTitleLarge("À faire maintenant"),
-                            result.widget,
-                          ],
-                        );
-                      },
-                    );
-                  },
-                );
-              },
-            );
-          },
-        );
-      },
+      stream: eventStreams[0],
+      builder: (_, s0) => StreamBuilder<QuerySnapshot>(
+        stream: eventStreams[1],
+        builder: (_, s1) => StreamBuilder<QuerySnapshot>(
+          stream: eventStreams.length > 2 ? eventStreams[2] : eventStreams[1],
+          builder: (_, s2) => buildFromEventSnaps([s0.data, s1.data, s2.data]),
+        ),
+      ),
     );
   }
 
   Future<({bool isEmpty, Widget widget})> _buildActionRequiredList(
-    QuerySnapshot? eventSnapshot,
+    List<QuerySnapshot?> eventSnapshots,
+    List<String> eventClubIds,
     QuerySnapshot? loanRequestSnapshot,
-    QuerySnapshot? preparationSnapshot,
-    QuerySnapshot? returnSnapshot,
+    QuerySnapshot? activeLoansSnapshot,
     String clubId,
-    List<String> allClubIds,
     Map<String, dynamic>? userData,
   ) async {
     final List<Widget> items = [];
-    final primaryClubId = allClubIds.isNotEmpty ? allClubIds.first : clubId;
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final tomorrow = today.add(const Duration(days: 1));
@@ -1139,11 +1235,11 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
     final tomorrowTs = Timestamp.fromDate(tomorrow);
     final inThreeDaysTs = Timestamp.fromDate(inThreeDays);
 
-    final pendingEvents = eventSnapshot == null
+    final pendingEvents = eventSnapshots.isEmpty
         ? <Map<String, dynamic>>[]
         : await _extractEventsFromSnapshots(
-            [eventSnapshot],
-            [primaryClubId],
+            eventSnapshots,
+            eventClubIds,
             userData,
             onlyNeedingAction: true,
           );
@@ -1203,7 +1299,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
     }
 
     // Filtrer côté client : prêts à récupérer aujourd'hui (lentAt dans [today, tomorrow))
-    final preparationDocs = (preparationSnapshot?.docs ?? []).where((doc) {
+    final preparationDocs = (activeLoansSnapshot?.docs ?? []).where((doc) {
       final data = doc.data() as Map<String, dynamic>?;
       if (data == null) return false;
       final lentAt = data['lentAt'] as Timestamp?;
@@ -1232,7 +1328,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
     }
 
     // Filtrer et trier côté client : retours à venir (dueAt dans [today, inThreeDays])
-    final returnDocs = (returnSnapshot?.docs ?? []).where((doc) {
+    final returnDocs = (activeLoansSnapshot?.docs ?? []).where((doc) {
       final dueAt = (doc.data() as Map)['dueAt'] as Timestamp?;
       if (dueAt == null) return false;
       return dueAt.compareTo(todayTs) >= 0 &&
@@ -1428,6 +1524,20 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
   }
 
   Widget _buildTodayEmptyStateCard(String clubId) {
+    final hour = DateTime.now().hour;
+    final String message;
+    final IconData icon;
+    if (hour >= 5 && hour < 12) {
+      message = "Bonne matinée ! Aucun événement prévu aujourd'hui.";
+      icon = Icons.wb_sunny_outlined;
+    } else if (hour >= 12 && hour < 18) {
+      message = "Bon après-midi ! Tu as du temps libre aujourd'hui.";
+      icon = Icons.wb_cloudy_outlined;
+    } else {
+      message = "Bonne soirée ! Rien au programme ce soir.";
+      icon = Icons.nightlight_outlined;
+    }
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
@@ -1438,18 +1548,15 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
       ),
       child: Column(
         children: [
-          Icon(
-            Icons.calendar_today_outlined,
-            size: 40,
-            color: Colors.grey[400],
-          ),
-          const SizedBox(height: 12),
+          Icon(icon, size: 36, color: Colors.grey[400]),
+          const SizedBox(height: 10),
           Text(
-            "Aucun événement aujourd'hui",
+            message,
+            textAlign: TextAlign.center,
             style: TextStyle(
-              fontSize: 15,
-              color: Colors.grey[700],
-              fontWeight: FontWeight.w500,
+              fontSize: 14,
+              color: Colors.grey[600],
+              fontWeight: FontWeight.w400,
             ),
           ),
           const SizedBox(height: 12),
@@ -1460,7 +1567,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
                 builder: (_) => PlayerPlanningPage(clubId: clubId),
               ),
             ),
-            icon: const Icon(Icons.calendar_month, size: 20),
+            icon: const Icon(Icons.calendar_month, size: 18),
             label: const Text("Voir le planning"),
           ),
         ],
@@ -2105,6 +2212,123 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Carousel infini de chips clubs
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _ClubChipsCarousel extends StatefulWidget {
+  final List<Map<String, dynamic>> clubs;
+  final Widget Function(String id, String name, String? logoUrl, String? sport) buildChip;
+
+  const _ClubChipsCarousel({required this.clubs, required this.buildChip});
+
+  @override
+  State<_ClubChipsCarousel> createState() => _ClubChipsCarouselState();
+}
+
+class _ClubChipsCarouselState extends State<_ClubChipsCarousel> {
+  late final ScrollController _ctrl;
+  Timer? _autoScrollTimer;
+  Timer? _resumeTimer;
+
+  // 30 px/s — défilement lent et discret
+  static const double _pxPerTick = 30.0 / 60.0;
+  // Répéter la liste N fois pour simuler l'infini
+  static const int _repeat = 200;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = ScrollController();
+    // Démarrage après le premier frame (maxScrollExtent disponible)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_ctrl.hasClients) return;
+      // Sauter au milieu pour que l'user puisse scroller dans les deux sens
+      _ctrl.jumpTo(_ctrl.position.maxScrollExtent / 2);
+      _startAutoScroll();
+    });
+  }
+
+  void _startAutoScroll() {
+    _autoScrollTimer?.cancel();
+    _autoScrollTimer = Timer.periodic(const Duration(milliseconds: 16), (_) {
+      if (!_ctrl.hasClients) return;
+      final next = _ctrl.offset + _pxPerTick;
+      // Boucle : en fin de liste, sauter au début
+      if (next >= _ctrl.position.maxScrollExtent) {
+        _ctrl.jumpTo(0);
+      } else {
+        _ctrl.jumpTo(next);
+      }
+    });
+  }
+
+  void _pauseAndScheduleResume() {
+    _autoScrollTimer?.cancel();
+    _resumeTimer?.cancel();
+    _resumeTimer = Timer(const Duration(seconds: 2), _startAutoScroll);
+  }
+
+  @override
+  void dispose() {
+    _autoScrollTimer?.cancel();
+    _resumeTimer?.cancel();
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final clubs = widget.clubs;
+    if (clubs.isEmpty) return const SizedBox.shrink();
+
+    // Si un seul club, pas besoin de carousel — juste le chip avec padding
+    if (clubs.length == 1) {
+      final c = clubs.first;
+      return Padding(
+        padding: const EdgeInsets.only(left: 20),
+        child: widget.buildChip(
+          c['id'] as String,
+          c['name'] as String,
+          c['logoUrl'] as String?,
+          c['sport'] as String?,
+        ),
+      );
+    }
+
+    final itemCount = clubs.length * _repeat;
+
+    return NotificationListener<ScrollNotification>(
+      onNotification: (n) {
+        // Pause sur interaction utilisateur, reprend 2s après relâchement
+        if (n is UserScrollNotification) {
+          _pauseAndScheduleResume();
+        }
+        return false;
+      },
+      child: SizedBox(
+        height: 38,
+        child: ListView.builder(
+          controller: _ctrl,
+          scrollDirection: Axis.horizontal,
+          physics: const ClampingScrollPhysics(),
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          itemCount: itemCount,
+          itemBuilder: (_, i) {
+            final c = clubs[i % clubs.length];
+            return widget.buildChip(
+              c['id'] as String,
+              c['name'] as String,
+              c['logoUrl'] as String?,
+              c['sport'] as String?,
+            );
+          },
         ),
       ),
     );

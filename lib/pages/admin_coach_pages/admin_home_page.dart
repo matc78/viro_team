@@ -54,73 +54,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color.fromARGB(255, 255, 255, 255),
-      appBar: AppBar(
-        title: const Text("Tableau de bord"),
-        actions: [
-          StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-            stream: user != null
-                ? appFirestore
-                      .collection(FirebaseCollections.users)
-                      .doc(user!.uid)
-                      .snapshots()
-                : null,
-            builder: (context, snap) {
-              final avatarUrl = effectiveAvatarUrl(snap.data?.data());
-              return Builder(
-                builder: (ctx) {
-                  return GestureDetector(
-                    onTap: () => showProfileDropdown(
-                      ctx,
-                      settingsPage: const AdminProfilPage(),
-                    ),
-                    child: Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: (avatarUrl != null && avatarUrl.isNotEmpty)
-                      ? CachedNetworkImage(
-                          imageUrl: avatarUrl,
-                          imageBuilder: (context, imageProvider) =>
-                              CircleAvatar(
-                                radius: 16,
-                                backgroundColor: ViroColors.primary.withValues(alpha: 0.1),
-                                backgroundImage: imageProvider,
-                              ),
-                          placeholder: (context, url) => CircleAvatar(
-                            radius: 16,
-                            backgroundColor: ViroColors.primary.withValues(alpha: 0.1),
-                            child: const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
-                          ),
-                          errorWidget: (context, url, error) => CircleAvatar(
-                            radius: 16,
-                            backgroundColor: ViroColors.primary.withValues(alpha: 0.1),
-                            child: const Icon(
-                              Icons.person,
-                              color: ViroColors.primary,
-                            ),
-                          ),
-                          memCacheWidth: 64,
-                          memCacheHeight: 64,
-                        )
-                      : CircleAvatar(
-                          radius: 16,
-                          backgroundColor: ViroColors.primary.withValues(alpha: 0.1),
-                          child: const Icon(
-                            Icons.person,
-                            color: ViroColors.primary,
-                          ),
-                        ),
-                    ),
-                  );
-                },
-              );
-            },
-          ),
-        ],
-      ),
+      backgroundColor: ViroColors.background,
       body: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
         stream: user != null
             ? appFirestore
@@ -133,7 +67,6 @@ class _AdminHomePageState extends State<AdminHomePage> {
             return const Center(child: CircularProgressIndicator());
           }
 
-          // Extraire le clubId depuis le document utilisateur
           final userData = userSnapshot.data?.data();
           final activeContext =
               userData?['activeContext'] as Map<String, dynamic>?;
@@ -141,14 +74,12 @@ class _AdminHomePageState extends State<AdminHomePage> {
               activeContext?['clubId'] as String? ??
               userData?['clubId'] as String?;
 
-          // Si pas de clubId, afficher un message
           if (clubId == null) {
             return const Center(
               child: Text("Aucun club associé à votre compte"),
             );
           }
 
-          // Récupérer les données du club
           return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
             stream: appFirestore
                 .collection(FirebaseCollections.clubs)
@@ -161,200 +92,348 @@ class _AdminHomePageState extends State<AdminHomePage> {
 
               final clubData = clubSnapshot.data?.data() ?? {};
               final club = {...clubData, 'id': clubId};
-              final clubName = club['name'] ?? "Mon Club";
+              final clubName = club['name'] as String? ?? "Mon Club";
               final viewerRole =
                   _viewerRoleInClub(userSnapshot.data?.data() ?? {}, clubId);
               final canManageEquipmentAndLoans =
                   viewerRole == 'admin' || viewerRole == 'admin_fondateur';
 
-              return RepaintBoundary(
+              return SafeArea(
+                child: RepaintBoundary(
                 child: Stack(
                   children: [
-                    // Logo en arrière-plan avec opacité
-                  Positioned(
-                    bottom: 0,
-                    left: 0,
-                    right: 0,
-                    child: Opacity(
-                      opacity: 0.12,
-                      child: Image.asset(
-                        'assets/logo/logo_seul.png',
-                        fit: BoxFit.contain,
-                        alignment: Alignment.bottomCenter,
+                    Positioned(
+                      bottom: 0,
+                      left: 0,
+                      right: 0,
+                      child: Opacity(
+                        opacity: 0.10,
+                        child: Image.asset(
+                          'assets/logo/logo_seul.png',
+                          fit: BoxFit.contain,
+                          alignment: Alignment.bottomCenter,
+                        ),
                       ),
                     ),
-                  ),
-                  // Contenu principal (pull-to-refresh comme player_home_page)
-                  RefreshIndicator(
-                    onRefresh: _refreshAdminHome,
-                    child: SingleChildScrollView(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      padding: const EdgeInsets.all(20.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Header Bienvenue
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                "Salut Coach ! 👋",
-                                style: Theme.of(
-                                  context,
-                                ).textTheme.headlineSmall,
-                              ),
-                              Text(
-                                formatClubNameWithEmoji(clubName, club['sport'] as String?),
-                                style: const TextStyle(
-                                  color: ViroColors.primary,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 18,
-                                ),
-                              ),
-                            ],
-                          ),
-
-                          _buildNotToMissSection(
-                            clubId,
-                            clubName,
-                            userSnapshot.data?.data() ?? {},
-                            canManageEquipmentAndLoans,
-                          ),
-
-                          // Grille d'actions (cards en bas du body)
-                          GridView.count(
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            crossAxisCount: 2,
-                            crossAxisSpacing: 15,
-                            mainAxisSpacing: 15,
-                            children: [
-                              _adminCard(
-                                title: "Mode Coach",
-                                count: "",
-                                icon: Icons.sports_score,
-                                color: ViroColors.accent,
-                                onTap: () {
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (_) => AdminCoachModePage(
-                                        clubId: clubId,
-                                        sport: club['sport'] as String?,
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
-                              _MembersCountCard(
-                                clubId: clubId,
-                                clubName: clubName,
-                                clubSport: club['sport'] as String?,
-                                userId: user?.uid,
-                              ),
-                              _TeamsCountCard(clubId: clubId),
-                              _adminCard(
-                                title: "Planning",
-                                count: DateFormat(
-                                  'd MMM',
-                                  'fr_FR',
-                                ).format(DateTime.now()),
-                                icon: Icons.calendar_today_rounded,
-                                color: ViroColors.primary,
-                                onTap: () {
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (_) =>
-                                          AdminPlanningPage(clubId: clubId),
-                                    ),
-                                  );
-                                },
-                              ),
-                              _adminCard(
-                                title: "Communiquer",
-                                count: "",
-                                icon: Icons.campaign_rounded,
-                                color: ViroColors.accent,
-                                onTap: () {
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (_) =>
-                                          AdminClubCommunicationPage(
-                                            clubId: clubId,
-                                          ),
-                                    ),
-                                  );
-                                },
-                              ),
-                              if (canManageEquipmentAndLoans)
-                                _adminCard(
-                                  title: "Équipement",
-                                  count: "",
-                                  icon: Icons.inventory_2,
-                                  color: ViroColors.primary,
-                                  onTap: () {
-                                    Navigator.of(context).push(
-                                      MaterialPageRoute(
-                                        builder: (_) => AdminEquipmentPage(
-                                          clubId: clubId,
-                                          sport: club['sport'] as String?,
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                ),
-                              if (canManageEquipmentAndLoans)
-                                _adminCard(
-                                  title: "Prêts",
-                                  count: "",
-                                  icon: Icons.handshake_outlined,
-                                  color: ViroColors.accent,
-                                  onTap: () {
-                                    Navigator.of(context).push(
-                                      MaterialPageRoute(
-                                        builder: (_) => AdminLoansPage(
-                                          clubId: clubId,
-                                          initialTabIndex: 1,
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                ),
-                            ],
-                          ),
-                          const SizedBox(height: 24),
-                          if ((club['logoUrl'] as String?)?.isNotEmpty ?? false)
-                            Center(
+                    RefreshIndicator(
+                      onRefresh: _refreshAdminHome,
+                      child: SingleChildScrollView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildAdminHeader(userData, clubData, clubId, viewerRole),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 20),
                               child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  CircleAvatar(
-                                    radius: 32,
-                                    backgroundImage: CachedNetworkImageProvider(
-                                      club['logoUrl'] as String,
-                                    ),
-                                    backgroundColor: Colors.transparent,
+                                  _buildNotToMissSection(
+                                    clubId,
+                                    clubName,
+                                    userSnapshot.data?.data() ?? {},
+                                    canManageEquipmentAndLoans,
                                   ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    formatClubNameWithEmoji(clubName, club['sport'] as String?),
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.grey,
-                                    ),
+                                  const SizedBox(height: 28),
+                                  _buildActionsSection(
+                                    clubId,
+                                    club,
+                                    canManageEquipmentAndLoans,
                                   ),
+                                  const SizedBox(height: 28),
                                 ],
                               ),
                             ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            );
+              );
             },
           );
         },
       ),
+    );
+  }
+
+  Widget _buildAdminHeader(
+    Map<String, dynamic>? userData,
+    Map<String, dynamic> clubData,
+    String clubId,
+    String? viewerRole,
+  ) {
+    final avatarUrl = effectiveAvatarUrl(userData);
+    final firstName = (userData?['firstName'] as String? ?? '').trim();
+    final name = firstName.isNotEmpty ? firstName : 'Admin';
+    final dateStr = DateFormat('EEEE d MMMM', 'fr_FR').format(DateTime.now());
+    final hour = DateTime.now().hour;
+    final greeting = hour >= 5 && hour < 12
+        ? 'Bonjour'
+        : (hour < 18 ? 'Bon après-midi' : 'Bonsoir');
+    const clubColor = ViroColors.primary;
+
+    final clubName = clubData['name'] as String? ?? 'Mon Club';
+    final sport = clubData['sport'] as String?;
+    final logoUrl = clubData['logoUrl'] as String?;
+    final hasLogo = logoUrl != null && logoUrl.isNotEmpty;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      dateStr,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[500],
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      greeting,
+                      style: TextStyle(fontSize: 15, color: Colors.grey[600]),
+                    ),
+                    Text(
+                      name,
+                      style: const TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.bold,
+                        color: ViroColors.primary,
+                        height: 1.1,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              Builder(
+                builder: (ctx) => GestureDetector(
+                  onTap: () => showProfileDropdown(
+                    ctx,
+                    settingsPage: const AdminProfilPage(),
+                  ),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: clubColor.withValues(alpha: 0.4),
+                        width: 2.5,
+                      ),
+                    ),
+                    child: avatarUrl != null && avatarUrl.isNotEmpty
+                        ? CachedNetworkImage(
+                            imageUrl: avatarUrl,
+                            imageBuilder: (_, imageProvider) => CircleAvatar(
+                              radius: 22,
+                              backgroundImage: imageProvider,
+                            ),
+                            placeholder: (_, __) => CircleAvatar(
+                              radius: 22,
+                              backgroundColor: clubColor.withValues(alpha: 0.1),
+                              child: const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                            ),
+                            errorWidget: (_, __, ___) => CircleAvatar(
+                              radius: 22,
+                              backgroundColor: clubColor.withValues(alpha: 0.1),
+                              child: const Icon(Icons.person, color: ViroColors.primary),
+                            ),
+                            memCacheWidth: 88,
+                            memCacheHeight: 88,
+                          )
+                        : CircleAvatar(
+                            radius: 22,
+                            backgroundColor: clubColor.withValues(alpha: 0.1),
+                            child: const Icon(Icons.person, color: ViroColors.primary),
+                          ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        // Club + rôle
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: ViroColors.primary.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: ViroColors.primary.withValues(alpha: 0.25),
+                    width: 1.5,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: hasLogo
+                          ? ClipRRect(
+                              borderRadius: BorderRadius.circular(4),
+                              child: CachedNetworkImage(
+                                imageUrl: logoUrl,
+                                fit: BoxFit.cover,
+                                errorWidget: (_, __, ___) => const Icon(
+                                  Icons.groups_rounded,
+                                  color: ViroColors.primary,
+                                  size: 16,
+                                ),
+                              ),
+                            )
+                          : const Icon(
+                              Icons.groups_rounded,
+                              color: ViroColors.primary,
+                              size: 16,
+                            ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      formatClubNameWithEmoji(clubName, sport),
+                      style: const TextStyle(
+                        color: ViroColors.primary,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              _AnimatedRoleBadge(role: viewerRole),
+            ],
+          ),
+        ),
+        const SizedBox(height: 24),
+      ],
+    );
+  }
+
+  Widget _buildActionsSection(
+    String clubId,
+    Map<String, dynamic> club,
+    bool canManageEquipmentAndLoans,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 14),
+          child: Text(
+            "Actions",
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: ViroColors.primary,
+            ),
+          ),
+        ),
+        GridView.count(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          crossAxisCount: 2,
+          crossAxisSpacing: 14,
+          mainAxisSpacing: 14,
+          childAspectRatio: 1.15,
+          children: [
+            _adminCard(
+              title: "Mode Coach",
+              count: "",
+              icon: Icons.sports_score,
+              color: ViroColors.accent,
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => AdminCoachModePage(
+                    clubId: clubId,
+                    sport: club['sport'] as String?,
+                  ),
+                ),
+              ),
+            ),
+            _MembersCountCard(
+              clubId: clubId,
+              clubName: club['name'] as String? ?? 'Mon Club',
+              clubSport: club['sport'] as String?,
+              userId: user?.uid,
+            ),
+            _TeamsCountCard(clubId: clubId),
+            _adminCard(
+              title: "Planning",
+              count: DateFormat('d MMM', 'fr_FR').format(DateTime.now()),
+              icon: Icons.calendar_today_rounded,
+              color: ViroColors.primary,
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => AdminPlanningPage(clubId: clubId),
+                ),
+              ),
+            ),
+            _adminCard(
+              title: "Communiquer",
+              count: "",
+              icon: Icons.campaign_rounded,
+              color: ViroColors.accent,
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => AdminClubCommunicationPage(clubId: clubId),
+                ),
+              ),
+            ),
+            if (canManageEquipmentAndLoans)
+              _adminCard(
+                title: "Équipement",
+                count: "",
+                icon: Icons.inventory_2,
+                color: ViroColors.primary,
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => AdminEquipmentPage(
+                      clubId: clubId,
+                      sport: club['sport'] as String?,
+                    ),
+                  ),
+                ),
+              ),
+            if (canManageEquipmentAndLoans)
+              _adminCard(
+                title: "Prêts",
+                count: "",
+                icon: Icons.handshake_outlined,
+                color: ViroColors.accent,
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => AdminLoansPage(
+                      clubId: clubId,
+                      initialTabIndex: 1,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ],
     );
   }
 
@@ -2393,6 +2472,106 @@ class _TeamsCountCard extends StatelessWidget {
               MaterialPageRoute(builder: (_) => AdminTeamsPage(clubId: clubId)),
             );
           },
+        );
+      },
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Badge de rôle animé (shimmer métallique)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _AnimatedRoleBadge extends StatefulWidget {
+  final String? role;
+  const _AnimatedRoleBadge({required this.role});
+
+  @override
+  State<_AnimatedRoleBadge> createState() => _AnimatedRoleBadgeState();
+}
+
+class _AnimatedRoleBadgeState extends State<_AnimatedRoleBadge>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _shimmer;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1800),
+    )..repeat(reverse: true);
+    _shimmer = Tween<double>(begin: -0.8, end: 0.8)
+        .chain(CurveTween(curve: Curves.easeInOut))
+        .animate(_ctrl);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final (label, base, shine, textColor) = switch (widget.role) {
+      'admin_fondateur' => (
+          'Fondateur',
+          const Color(0xFFB8860B),
+          const Color(0xFFFFF0A0),
+          Colors.white,
+        ),
+      'admin' => (
+          'Administrateur',
+          const Color(0xFF7A7A7A),
+          const Color(0xFFE8E8E8),
+          Colors.white,
+        ),
+      'coach' => (
+          'Entraîneur',
+          const Color(0xFF7B4F2E),
+          const Color(0xFFE8B27A),
+          Colors.white,
+        ),
+      _ => (
+          'Membre',
+          const Color(0xFF9E9E9E),
+          const Color(0xFFE0E0E0),
+          Colors.white,
+        ),
+    };
+
+    return AnimatedBuilder(
+      animation: _shimmer,
+      builder: (context, _) {
+        final pos = _shimmer.value;
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            gradient: LinearGradient(
+              begin: Alignment(pos - 1.5, -0.5),
+              end: Alignment(pos + 1.5, 0.5),
+              colors: [base, base, shine, base, base],
+              stops: const [0.0, 0.35, 0.5, 0.65, 1.0],
+            ),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: textColor,
+              fontWeight: FontWeight.w700,
+              fontSize: 12,
+              shadows: const [
+                Shadow(
+                  color: Colors.black26,
+                  offset: Offset(0, 1),
+                  blurRadius: 2,
+                ),
+              ],
+            ),
+          ),
         );
       },
     );

@@ -13,7 +13,7 @@ import 'package:viro_team/theme/viro_theme.dart';
 import 'package:viro_team/utils/avatar_moderation.dart';
 import 'package:viro_team/pages/add_profile_page.dart';
 import 'package:viro_team/pages/admin_coach_pages/admin_home_page.dart';
-import 'package:viro_team/pages/player_pages/player_home_page.dart';
+import 'package:viro_team/pages/player_pages/player_shell.dart';
 
 /// Affiche le menu déroulant profil sous le bouton (avatar).
 /// [context] doit être le contexte du widget cliqué (pour la position).
@@ -77,17 +77,19 @@ void showProfileDropdown(
       left: left,
       top: top,
       width: menuWidth,
-      height: menuHeight,
-      child: Material(
-        elevation: 8,
-        shadowColor: Colors.black26,
-        borderRadius: BorderRadius.circular(20),
-        child: ClipRRect(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: menuHeight),
+        child: Material(
+          elevation: 8,
+          shadowColor: Colors.black26,
           borderRadius: BorderRadius.circular(20),
-          child: ProfileMenuDropdownContent(
-            onClose: remove,
-            maxHeight: menuHeight,
-            settingsPage: settingsPage,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: ProfileMenuDropdownContent(
+              onClose: remove,
+              maxHeight: menuHeight,
+              settingsPage: settingsPage,
+            ),
           ),
         ),
       ),
@@ -296,7 +298,7 @@ class _ProfileMenuDropdownContentState extends State<ProfileMenuDropdownContent>
     widget.onClose();
     if (role == 'player') {
       navigator.pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const PlayerHomePage()),
+        MaterialPageRoute(builder: (_) => const PlayerShell()),
         (route) => false,
       );
     } else {
@@ -448,21 +450,18 @@ class _ProfileMenuDropdownContentState extends State<ProfileMenuDropdownContent>
       ...listChildren,
     ];
 
-    final maxHeight = widget.maxHeight;
-    if (maxHeight != null && maxHeight.isFinite) {
-      return SizedBox(
-        height: maxHeight,
-        child: ListView(
-          shrinkWrap: false,
-          padding: EdgeInsets.zero,
-          children: listItems,
-        ),
-      );
-    }
-    return ListView(
+    final list = ListView(
       shrinkWrap: true,
       padding: EdgeInsets.zero,
       children: listItems,
     );
+    final maxHeight = widget.maxHeight;
+    if (maxHeight != null && maxHeight.isFinite) {
+      return ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: maxHeight),
+        child: list,
+      );
+    }
+    return list;
   }
 }

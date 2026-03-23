@@ -213,6 +213,7 @@ class _PlayerLoanCatalogPageState extends State<PlayerLoanCatalogPage>
           appBar: AppBar(
             title: const Text("Catalogue de prêt"),
             centerTitle: true,
+            automaticallyImplyLeading: false,
             bottom: TabBar(
               controller: _tabController,
               tabs: const [
