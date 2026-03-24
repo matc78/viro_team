@@ -106,6 +106,7 @@ class _AdminEquipmentPageState extends State<AdminEquipmentPage> {
           ),
           body: _InventoryTab(clubId: widget.clubId, sport: widget.sport),
           floatingActionButton: FloatingActionButton(
+            heroTag: 'fab_equipment',
             onPressed: () => _showAddEquipmentDialog(context),
             backgroundColor: ViroColors.primary,
             child: const Icon(Icons.add, color: Colors.white),

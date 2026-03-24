@@ -289,6 +289,7 @@ class _AdminTrainingSessionPageState extends State<AdminTrainingSessionPage>
         ],
       ),
       floatingActionButton: FloatingActionButton(
+        heroTag: 'fab_training_session',
         onPressed: WhistleSound.play,
         backgroundColor: ViroColors.primary,
         tooltip: 'Sifflet',

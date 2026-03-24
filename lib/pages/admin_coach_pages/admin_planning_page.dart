@@ -152,6 +152,7 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
         ],
       ),
       floatingActionButton: FloatingActionButton(
+        heroTag: 'fab_planning',
         onPressed: _showAddEventDialog,
         backgroundColor: ViroColors.primary,
         child: const Icon(Icons.add, color: Colors.white),

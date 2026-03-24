@@ -610,6 +610,7 @@ class _AdminTeamsPageState extends State<AdminTeamsPage> {
       ),
           floatingActionButton: canCreateOrDelete
               ? FloatingActionButton(
+                  heroTag: 'fab_teams',
                   onPressed: _showCreateTeamDialog,
                   backgroundColor: ViroColors.primary,
                   child: const Icon(Icons.add, color: Colors.white),
