@@ -380,74 +380,106 @@ class _ProfileMenuDropdownContentState extends State<ProfileMenuDropdownContent>
       );
     }
 
-    const leadingPlaceholder = SizedBox(width: 40, height: 40);
-    final listChildren = <Widget>[
-      ...items.map((item) => ListTile(
-            leading: _buildLeadingForProfile(
-              role: item.role,
-              clubId: item.clubId,
-              isCurrent: item.isCurrent,
-            ) ?? leadingPlaceholder,
-            title: Text(
-              item.title,
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-            subtitle: Text(item.subtitle),
-            trailing: item.isCurrent
-                ? const Icon(Icons.check_circle, color: Colors.green)
-                : null,
-            onTap: item.isCurrent
-                ? null
-                : () => _switchProfile(item.role, item.clubId),
-          )),
-      const Divider(height: 24),
-      ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        title: const Text(
-          'Rejoindre / créer un club',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        subtitle: const Text('Ajouter un profil ou créer un club'),
-        onTap: () {
-          final navigator = Navigator.of(context);
-          widget.onClose();
-          navigator.push(
-            MaterialPageRoute(
-              builder: (_) => const AddProfilePage(),
-            ),
-          );
-        },
-      ),
-      ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        title: const Text(
-          'Paramètres',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        subtitle: const Text('Profil et préférences'),
-        onTap: () {
-          final navigator = Navigator.of(context);
-          widget.onClose();
-          navigator.push(
-            MaterialPageRoute(
-              builder: (_) => widget.settingsPage,
-            ),
-          );
-        },
-      ),
-    ];
+    // ── Regroupement des profils admin/coach par club ──────────────────────
+    // Map clubId → liste de rôles
+    final Map<String, List<String>> rolesByClub = {};
+    for (final p in otherProfiles) {
+      rolesByClub.putIfAbsent(p.clubId, () => []).add(p.role);
+    }
 
     final listItems = <Widget>[
+      // ── Header ──────────────────────────────────────────────────────────
       Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
         child: Text(
-          'Profil et paramètres',
+          'Profil & comptes',
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.bold,
               ),
         ),
       ),
-      ...listChildren,
+
+      // ── Carte Joueur ────────────────────────────────────────────────────
+      if (playerProfiles.isNotEmpty)
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: _buildPlayerCard(
+            context,
+            isCurrent: currentRole == 'player',
+            targetClubId: (currentRole == 'player' && currentClubId != null)
+                ? currentClubId
+                : playerProfiles.first.clubId,
+            clubCount: playerProfiles.map((p) => p.clubId).toSet().length,
+          ),
+        ),
+
+      // ── Section Gestion ─────────────────────────────────────────────────
+      if (rolesByClub.isNotEmpty) ...[
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 6),
+          child: Row(
+            children: [
+              Text(
+                'GESTION',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.grey[500],
+                  letterSpacing: 1.2,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(child: Divider(color: Colors.grey[300], height: 1)),
+            ],
+          ),
+        ),
+        ...rolesByClub.entries.map((entry) {
+          final clubId = entry.key;
+          final roles = entry.value;
+          final isAnyRoleCurrent = roles.any(
+            (r) => r == currentRole && clubId == currentClubId,
+          );
+          // Rôle actif dans ce club (pour le switch)
+          final activeRole = isAnyRoleCurrent ? currentRole! : roles.first;
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+            child: _buildClubCard(
+              context,
+              clubId: clubId,
+              roles: roles,
+              isCurrent: isAnyRoleCurrent,
+              currentRole: currentRole,
+              activeRole: activeRole,
+            ),
+          );
+        }),
+      ],
+
+      // ── Actions bas ─────────────────────────────────────────────────────
+      const Divider(height: 16),
+      ListTile(
+        dense: true,
+        leading: Icon(Icons.add_circle_outline, color: ViroColors.primary, size: 20),
+        title: const Text('Rejoindre / créer un club',
+            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+        onTap: () {
+          final navigator = Navigator.of(context);
+          widget.onClose();
+          navigator.push(MaterialPageRoute(builder: (_) => const AddProfilePage()));
+        },
+      ),
+      ListTile(
+        dense: true,
+        leading: Icon(Icons.settings_outlined, color: Colors.grey[600], size: 20),
+        title: const Text('Paramètres',
+            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+        onTap: () {
+          final navigator = Navigator.of(context);
+          widget.onClose();
+          navigator.push(MaterialPageRoute(builder: (_) => widget.settingsPage));
+        },
+      ),
+      const SizedBox(height: 8),
     ];
 
     final list = ListView(
@@ -463,5 +495,173 @@ class _ProfileMenuDropdownContentState extends State<ProfileMenuDropdownContent>
       );
     }
     return list;
+  }
+
+  Widget _buildPlayerCard(
+    BuildContext context, {
+    required bool isCurrent,
+    required String targetClubId,
+    required int clubCount,
+  }) {
+    return GestureDetector(
+      onTap: isCurrent ? null : () => _switchProfile('player', targetClubId),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: isCurrent
+              ? ViroColors.primary.withValues(alpha: 0.08)
+              : Colors.grey.shade50,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isCurrent
+                ? ViroColors.primary.withValues(alpha: 0.3)
+                : Colors.grey.shade200,
+            width: isCurrent ? 1.5 : 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            _buildLeadingForProfile(role: 'player', clubId: targetClubId, isCurrent: isCurrent) ??
+                CircleAvatar(
+                  radius: 20,
+                  backgroundColor: ViroColors.primary.withValues(alpha: 0.12),
+                  child: Icon(Icons.person_rounded, color: ViroColors.primary, size: 22),
+                ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Joueur',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                  Text(
+                    clubCount > 1 ? '$clubCount clubs' : '1 club',
+                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                  ),
+                ],
+              ),
+            ),
+            if (isCurrent)
+              Icon(Icons.check_circle_rounded, color: ViroColors.primary, size: 22),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildClubCard(
+    BuildContext context, {
+    required String clubId,
+    required List<String> roles,
+    required bool isCurrent,
+    required String? currentRole,
+    required String activeRole,
+  }) {
+    final clubName = _getClubName(clubId);
+    final sport = _clubSportsCache[clubId];
+    final logoUrl = _getClubLogoUrl(clubId);
+
+    return GestureDetector(
+      onTap: isCurrent ? null : () => _switchProfile(activeRole, clubId),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: isCurrent
+              ? ViroColors.primary.withValues(alpha: 0.08)
+              : Colors.grey.shade50,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isCurrent
+                ? ViroColors.primary.withValues(alpha: 0.3)
+                : Colors.grey.shade200,
+            width: isCurrent ? 1.5 : 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            // Logo club
+            logoUrl != null
+                ? SizedBox(
+                    width: 40,
+                    height: 40,
+                    child: CachedNetworkImage(
+                      imageUrl: logoUrl,
+                      imageBuilder: (_, img) => CircleAvatar(
+                        backgroundColor: isCurrent
+                            ? ViroColors.primary.withValues(alpha: 0.15)
+                            : Colors.grey.shade200,
+                        backgroundImage: img,
+                      ),
+                      placeholder: (_, __) => CircleAvatar(
+                        backgroundColor: Colors.grey.shade200,
+                        child: const SizedBox(
+                          width: 16, height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      ),
+                      errorWidget: (_, __, ___) => _clubFallbackAvatar(sport),
+                      memCacheWidth: 80,
+                      memCacheHeight: 80,
+                    ),
+                  )
+                : _clubFallbackAvatar(sport),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    formatClubNameWithEmoji(clubName, sport),
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 3),
+                  Wrap(
+                    spacing: 4,
+                    children: roles
+                        .map((r) => _buildRoleBadge(r, r == currentRole && isCurrent))
+                        .toList(),
+                  ),
+                ],
+              ),
+            ),
+            if (isCurrent)
+              Icon(Icons.check_circle_rounded, color: ViroColors.primary, size: 22),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _clubFallbackAvatar(String? sport) {
+    return CircleAvatar(
+      radius: 20,
+      backgroundColor: Colors.grey.shade200,
+      child: Text(
+        sportToEmoji(sport),
+        style: const TextStyle(fontSize: 18),
+      ),
+    );
+  }
+
+  Widget _buildRoleBadge(String role, bool isActive) {
+    final label = _getRoleDisplayName(role);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+      decoration: BoxDecoration(
+        color: isActive
+            ? ViroColors.primary.withValues(alpha: 0.12)
+            : Colors.grey.shade200,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: isActive ? ViroColors.primary : Colors.grey[700],
+        ),
+      ),
+    );
   }
 }
