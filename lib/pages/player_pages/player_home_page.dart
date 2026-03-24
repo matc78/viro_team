@@ -6,7 +6,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:viro_team/utils/firestore_instance.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:viro_team/pages/player_pages/player_teams_page.dart';
 import '../../constants/firebase_collections.dart';
 import '../../utils/firebase_error_handler.dart';
 import '../../utils/firebase_helpers.dart';
@@ -235,22 +234,6 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
                             _buildAnnouncements(allClubIds, userData),
                             const SizedBox(height: 28),
                             _buildActiveLoansSection(clubId, allClubIds),
-                            const SizedBox(height: 28),
-                            Row(
-                              children: [
-                                _buildMenuCard(
-                                  "Mes Équipes",
-                                  Icons.group_rounded,
-                                  () => Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) =>
-                                          PlayerTeamsPage(clubId: clubId),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
                             const SizedBox(height: 28),
                           ],
                         ),
@@ -2248,35 +2231,6 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
     );
   }
 
-  Widget _buildMenuCard(String title, IconData icon, VoidCallback onTap) {
-    return Expanded(
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 20),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: ViroColors.borderColor),
-          ),
-          child: Column(
-            children: [
-              Icon(icon, color: ViroColors.primary, size: 32),
-              const SizedBox(height: 8),
-              Text(
-                title,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -11,15 +11,17 @@ import '../../utils/firestore_instance.dart';
 import '../../widget/viro_loader.dart';
 import 'player_home_page.dart';
 import 'player_planning_page.dart';
+import 'player_teams_page.dart';
 import 'player_infos_page.dart';
 import 'player_loan_catalog_page.dart';
 
 // Données statiques des onglets
 const _tabs = [
-  _TabData(label: 'Accueil',   icon: Icons.home_outlined,               selectedIcon: Icons.home_rounded),
-  _TabData(label: 'Planning',  icon: Icons.calendar_month_outlined,     selectedIcon: Icons.calendar_month_rounded),
-  _TabData(label: 'Infos',     icon: Icons.notifications_none_outlined, selectedIcon: Icons.notifications_rounded),
+  _TabData(label: 'Équipes',   icon: Icons.groups_outlined,             selectedIcon: Icons.groups_rounded),
   _TabData(label: 'Catalogue', icon: Icons.inventory_2_outlined,        selectedIcon: Icons.inventory_2_rounded),
+  _TabData(label: 'Accueil',   icon: Icons.home_outlined,               selectedIcon: Icons.home_rounded),
+  _TabData(label: 'Infos',     icon: Icons.notifications_none_outlined, selectedIcon: Icons.notifications_rounded),
+  _TabData(label: 'Planning',  icon: Icons.calendar_month_outlined,     selectedIcon: Icons.calendar_month_rounded),
 ];
 
 class _TabData {
@@ -40,7 +42,7 @@ class PlayerShell extends StatefulWidget {
 
 class _PlayerShellState extends State<PlayerShell>
     with TickerProviderStateMixin {
-  int _currentIndex = 0;
+  int _currentIndex = 2; // Accueil par défaut
   String? _clubId;
   List<Widget>? _pages;
 
@@ -178,10 +180,11 @@ class _PlayerShellState extends State<PlayerShell>
   }
 
   List<Widget> _buildPages(String clubId) => [
-    PlayerHomePage(onSwitchToPlanning: () => _switchTab(1)),
-    PlayerPlanningPage(clubId: clubId),
-    PlayerInfosPage(clubId: clubId),
+    PlayerTeamsPage(clubId: clubId),
     PlayerLoanCatalogPage(clubId: clubId),
+    PlayerHomePage(onSwitchToPlanning: () => _switchTab(4)),
+    PlayerInfosPage(clubId: clubId),
+    PlayerPlanningPage(clubId: clubId),
   ];
 
   Future<void> _switchTab(int index) async {
@@ -219,7 +222,7 @@ class _PlayerShellState extends State<PlayerShell>
       bottomNavigationBar: _PlayerNavBar(
         currentIndex: _currentIndex,
         onTap: _switchTab,
-        badges: [false, _badgePlanning, false, false],
+        badges: [false, false, false, false, _badgePlanning],
       ),
     );
   }
@@ -267,6 +270,7 @@ class _PlayerNavBar extends StatelessWidget {
                   child: _NavItem(
                     tab: _tabs[i],
                     isSelected: i == currentIndex,
+                    isCenter: i == 2,
                     hasBadge: i < badges.length && badges[i],
                     onTap: () => onTap(i),
                   ),
@@ -286,12 +290,14 @@ class _PlayerNavBar extends StatelessWidget {
 class _NavItem extends StatefulWidget {
   final _TabData tab;
   final bool isSelected;
+  final bool isCenter;
   final bool hasBadge;
   final VoidCallback onTap;
 
   const _NavItem({
     required this.tab,
     required this.isSelected,
+    required this.isCenter,
     required this.hasBadge,
     required this.onTap,
   });
@@ -342,6 +348,44 @@ class _NavItemState extends State<_NavItem>
   @override
   Widget build(BuildContext context) {
     final isSelected = widget.isSelected;
+
+    if (widget.isCenter) {
+      return GestureDetector(
+        onTap: widget.onTap,
+        behavior: HitTestBehavior.opaque,
+        child: AnimatedBuilder(
+          animation: _ctrl,
+          builder: (context, _) => Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Transform.scale(
+                scale: isSelected ? _scaleAnim.value : 1.0,
+                child: Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: Color.lerp(Colors.grey.shade200, ViroColors.primary, _pillAnim.value),
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: ViroColors.primary.withValues(alpha: _pillAnim.value * 0.35),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Icon(
+                    isSelected ? widget.tab.selectedIcon : widget.tab.icon,
+                    size: 24,
+                    color: Color.lerp(Colors.grey[500], Colors.white, _pillAnim.value),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
 
     return GestureDetector(
       onTap: widget.onTap,
