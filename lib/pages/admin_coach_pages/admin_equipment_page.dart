@@ -16,6 +16,7 @@ import '../../utils/equipment_helpers.dart';
 import '../../utils/firebase_helpers.dart';
 import '../../utils/firebase_error_handler.dart';
 import '../../utils/photo_permission_helper.dart';
+import 'admin_add_equipment_page.dart';
 import 'admin_loans_page.dart';
 
 class AdminEquipmentPage extends StatefulWidget {
@@ -107,7 +108,14 @@ class _AdminEquipmentPageState extends State<AdminEquipmentPage> {
           body: _InventoryTab(clubId: widget.clubId, sport: widget.sport),
           floatingActionButton: FloatingActionButton(
             heroTag: 'fab_equipment',
-            onPressed: () => _showAddEquipmentDialog(context),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => AdminAddEquipmentPage(
+                  clubId: widget.clubId,
+                  sport: widget.sport,
+                ),
+              ),
+            ),
             backgroundColor: ViroColors.primary,
             child: const Icon(Icons.add, color: Colors.white),
           ),
@@ -116,22 +124,6 @@ class _AdminEquipmentPageState extends State<AdminEquipmentPage> {
     );
   }
 
-  void _showAddEquipmentDialog(BuildContext context) {
-    showDialog<void>(
-      context: context,
-      builder: (_) => _AddEquipmentDialog(
-        clubId: widget.clubId,
-        sport: widget.sport,
-        onAdded: () {
-          if (mounted) {
-            ScaffoldMessenger.of(
-              context,
-            ).showSnackBar(const SnackBar(content: Text("Équipement ajouté.")));
-          }
-        },
-      ),
-    );
-  }
 }
 
 /// Onglet Inventaire : liste matériel, alertes maintenance, FAB ajout.
@@ -335,259 +327,101 @@ class _EquipmentCard extends StatelessWidget {
         data['quantityTotal'] as int? ?? data['quantity'] as int? ?? 0;
     final unitPrice = data['unitPrice'] as num?;
     final loanUnitPrice = data['loanUnitPrice'] as num?;
-    final caution = data['caution'] as num?;
     final condition =
         data['condition'] as String? ?? EquipmentHelpers.conditionBon;
     final availability =
         data['availability'] as String? ??
         EquipmentHelpers.availabilityDisponible;
     final location = data['location'] as String?;
-    final responsibleName = data['responsibleUserName'] as String?;
-    final assignedTeamName = data['assignedTeamName'] as String?;
-    final purchaseDate = data['purchaseDate'] as Timestamp?;
-    final lastMaintenance = data['lastMaintenance'] as Timestamp?;
     final nextMaintenance = data['nextMaintenance'] as Timestamp?;
     final imageUrl = data['imageUrl'] as String?;
 
+    final conditionColor = (condition == EquipmentHelpers.conditionBon || condition == EquipmentHelpers.conditionNeuf)
+        ? ViroColors.primary
+        : (condition == EquipmentHelpers.conditionHorsService ? ViroColors.error : ViroColors.warning);
+    final availabilityColor = availability == EquipmentHelpers.availabilityDisponible
+        ? ViroColors.primary
+        : Colors.grey.shade500;
+
     return Card(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: 8),
       child: InkWell(
         onTap: () => _showEditEquipmentSheet(context),
+        borderRadius: BorderRadius.circular(12),
         child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
+          padding: const EdgeInsets.all(12),
+          child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (imageUrl != null && imageUrl.isNotEmpty) ...[
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: CachedNetworkImage(
-                        imageUrl: imageUrl,
-                        width: 56,
-                        height: 56,
-                        fit: BoxFit.cover,
-                        placeholder: (_, __) => Container(
-                          width: 56,
-                          height: 56,
-                          color: Colors.grey.shade200,
-                          child: const Center(
-                            child: SizedBox(
-                              width: 24,
-                              height: 24,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
-                          ),
-                        ),
-                        errorWidget: (_, __, ___) => Container(
-                          width: 56,
-                          height: 56,
-                          color: Colors.grey.shade200,
-                          child: Icon(
-                            Icons.inventory_2_outlined,
-                            color: Colors.grey.shade600,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                  ],
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          name,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 16,
-                          ),
-                        ),
-                        if (brand != null || model != null) ...[
-                          const SizedBox(height: 4),
-                          Text(
-                            [
-                              if (brand != null) brand,
-                              if (model != null) model,
-                            ].join(' '),
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: Colors.grey[600],
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.edit_outlined),
-                    onPressed: () => _showEditEquipmentSheet(context),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              if (category.isNotEmpty)
-                Text(
-                  EquipmentHelpers.categoryLabel(category),
-                  style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+              // Image ou placeholder
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.grey.shade200, width: 1),
+                  color: ViroColors.primary.withValues(alpha: 0.06),
                 ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                clipBehavior: Clip.antiAlias,
+                child: imageUrl != null && imageUrl.isNotEmpty
+                    ? CachedNetworkImage(
+                        imageUrl: imageUrl,
+                        fit: BoxFit.cover,
+                        placeholder: (_, __) => Icon(Icons.inventory_2_outlined, size: 22, color: ViroColors.primary.withValues(alpha: 0.4)),
+                        errorWidget: (_, __, ___) => Icon(Icons.inventory_2_outlined, size: 22, color: ViroColors.primary.withValues(alpha: 0.4)),
+                      )
+                    : Icon(Icons.inventory_2_outlined, size: 22, color: ViroColors.primary.withValues(alpha: 0.4)),
+              ),
+              const SizedBox(width: 12),
+              // Contenu
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
                       children: [
-                        Text(
-                          'Stock: $quantityTotal${unitPrice != null ? ' • Achat: ${unitPrice.toStringAsFixed(2)} €' : ''}${loanUnitPrice != null ? ' • Prêt: ${loanUnitPrice.toStringAsFixed(2)} €' : ''}${caution != null ? ' • Caution: ${caution.toStringAsFixed(2)} €' : ''}',
-                          style: const TextStyle(fontSize: 13),
+                        Expanded(
+                          child: Text(name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
                         ),
-                        if (location != null) ...[
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.location_on,
-                                size: 14,
-                                color: Colors.grey[600],
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                location,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey[600],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                        if (responsibleName != null) ...[
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.person,
-                                size: 14,
-                                color: Colors.grey[600],
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                responsibleName,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey[600],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                        if (assignedTeamName != null) ...[
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.group,
-                                size: 14,
-                                color: Colors.grey[600],
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                assignedTeamName,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey[600],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                        if (purchaseDate != null) ...[
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.calendar_today,
-                                size: 14,
-                                color: Colors.grey[600],
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                'Achat: ${DateFormat('d MMM yyyy', 'fr_FR').format(purchaseDate.toDate())}',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey[600],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                        if (lastMaintenance != null) ...[
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.build,
-                                size: 14,
-                                color: Colors.grey[600],
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                'Dernière maintenance: ${DateFormat('d MMM yyyy', 'fr_FR').format(lastMaintenance.toDate())}',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey[600],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                        if (nextMaintenance != null) ...[
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.schedule,
-                                size: 14,
-                                color: Colors.grey[600],
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                'Prochaine maintenance: ${DateFormat('d MMM yyyy', 'fr_FR').format(nextMaintenance.toDate())}',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey[600],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
+                        Icon(Icons.edit_outlined, size: 14, color: Colors.grey.shade400),
                       ],
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: [
-                  _chip(
-                    EquipmentHelpers.conditionLabel(condition),
-                    condition == EquipmentHelpers.conditionBon ||
-                            condition == EquipmentHelpers.conditionNeuf
-                        ? ViroColors.success
-                        : ViroColors.warning,
-                  ),
-                  _chip(
-                    EquipmentHelpers.availabilityLabel(availability),
-                    availability == EquipmentHelpers.availabilityDisponible
-                        ? ViroColors.success
-                        : Colors.grey,
-                  ),
-                ],
+                    if (category.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        EquipmentHelpers.categoryLabel(category),
+                        style: TextStyle(fontSize: 11, color: ViroColors.primary.withValues(alpha: 0.75)),
+                      ),
+                    ],
+                    const SizedBox(height: 6),
+                    // Infos compactes sur une ligne
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 3,
+                      children: [
+                        _infoItem(Icons.inventory_2_outlined, 'x$quantityTotal'),
+                        if (location != null) _infoItem(Icons.location_on_outlined, location),
+                        if (unitPrice != null) _infoItem(Icons.euro_outlined, '${unitPrice.toStringAsFixed(2)} €'),
+                        if (loanUnitPrice != null) _infoItem(Icons.handshake_outlined, 'Prêt ${loanUnitPrice.toStringAsFixed(2)} €'),
+                        if (brand != null || model != null)
+                          _infoItem(Icons.label_outline, [if (brand != null) brand, if (model != null) model].join(' ')),
+                        if (nextMaintenance != null)
+                          _infoItem(Icons.build_outlined, 'Maint. ${DateFormat('d MMM', 'fr_FR').format(nextMaintenance.toDate())}', color: ViroColors.warning),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    // Badges
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      children: [
+                        _chip(EquipmentHelpers.conditionLabel(condition), conditionColor),
+                        _chip(EquipmentHelpers.availabilityLabel(availability), availabilityColor),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -596,14 +430,27 @@ class _EquipmentCard extends StatelessWidget {
     );
   }
 
+  Widget _infoItem(IconData icon, String? label, {Color? color}) {
+    final c = color ?? Colors.grey.shade600;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 12, color: c),
+        const SizedBox(width: 3),
+        Text(label ?? '', style: TextStyle(fontSize: 12, color: c)),
+      ],
+    );
+  }
+
   Widget _chip(String label, Color color) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.2),
-        borderRadius: BorderRadius.circular(8),
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
-      child: Text(label, style: TextStyle(fontSize: 12, color: color)),
+      child: Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: color)),
     );
   }
 
@@ -1543,6 +1390,22 @@ class _EditEquipmentSheetState extends State<_EditEquipmentSheet> {
     }
   }
 
+  Widget _dateTile(String label, DateTime? value, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      child: InputDecorator(
+        decoration: InputDecoration(
+          labelText: label,
+          suffixIcon: const Icon(Icons.calendar_today_outlined, size: 18),
+        ),
+        child: Text(
+          value != null ? DateFormat('d MMM yyyy', 'fr_FR').format(value) : '—',
+          style: TextStyle(color: value != null ? null : Colors.grey.shade500),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -1557,517 +1420,324 @@ class _EditEquipmentSheetState extends State<_EditEquipmentSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            // ── Header ───────────────────────────────────────────────────────
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 IconButton(
                   icon: const Icon(Icons.close),
                   onPressed: () => Navigator.of(context).pop(),
-                  tooltip: "Annuler",
                 ),
                 const Expanded(
                   child: Text(
                     "Modifier l'équipement",
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
                   ),
                 ),
-                const SizedBox(
-                  width: 48,
-                ), // Espace pour équilibrer avec le bouton de gauche
+                const SizedBox(width: 48),
               ],
             ),
             const SizedBox(height: 16),
-            const Text(
-              "Identification",
-              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-            ),
-            const SizedBox(height: 8),
-            // Photo de l'objet
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                InkWell(
-                  onTap: _saving ? null : _pickImage,
-                  borderRadius: BorderRadius.circular(12),
-                  child: Container(
-                    width: 100,
-                    height: 100,
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade200,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.grey.shade400),
+
+            // ── ESSENTIELLES ─────────────────────────────────────────────────
+
+            // Photo
+            Center(
+              child: GestureDetector(
+                onTap: _saving ? null : _pickImage,
+                child: Container(
+                  width: 110,
+                  height: 110,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: (_newPhotoFile != null || (_imageUrl != null && !_removePhoto))
+                          ? ViroColors.primary
+                          : Colors.grey.shade300,
+                      width: (_newPhotoFile != null || (_imageUrl != null && !_removePhoto)) ? 2 : 1,
                     ),
-                    child: _newPhotoFile != null
-                        ? ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
-                            child: Image.file(
-                              File(_newPhotoFile!.path),
-                              fit: BoxFit.cover,
-                              width: 100,
-                              height: 100,
-                            ),
-                          )
-                        : (!_removePhoto &&
-                              _imageUrl != null &&
-                              _imageUrl!.isNotEmpty)
-                        ? ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
-                            child: Image.network(
-                              _imageUrl!,
-                              fit: BoxFit.cover,
-                              width: 100,
-                              height: 100,
-                              errorBuilder: (_, __, ___) => _photoPlaceholder(),
-                            ),
-                          )
-                        : _photoPlaceholder(),
                   ),
+                  clipBehavior: Clip.antiAlias,
+                  child: _newPhotoFile != null
+                      ? Image.file(File(_newPhotoFile!.path), fit: BoxFit.cover)
+                      : (!_removePhoto && _imageUrl != null && _imageUrl!.isNotEmpty)
+                          ? Image.network(_imageUrl!, fit: BoxFit.cover, errorBuilder: (_, __, ___) => _photoPlaceholder())
+                          : _photoPlaceholder(),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        "Photo de l'objet",
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Colors.grey.shade700,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      TextButton.icon(
-                        onPressed: _saving ? null : _pickImage,
-                        icon: const Icon(
-                          Icons.photo_library_outlined,
-                          size: 20,
-                        ),
-                        label: const Text("Choisir une photo"),
-                      ),
-                      if ((_imageUrl != null && _imageUrl!.isNotEmpty) ||
-                          _newPhotoFile != null)
-                        TextButton.icon(
-                          onPressed: _saving
-                              ? null
-                              : () => setState(() {
-                                  _newPhotoFile = null;
-                                  _removePhoto = true;
-                                }),
-                          icon: const Icon(Icons.delete_outline, size: 18),
-                          label: const Text("Retirer"),
-                          style: TextButton.styleFrom(
-                            foregroundColor: ViroColors.error,
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: _nameController,
-              decoration: const InputDecoration(
-                labelText: "Nom *",
-                hintText: "ex. Ballons de basket",
               ),
             ),
+            if ((_imageUrl != null && _imageUrl!.isNotEmpty && !_removePhoto) || _newPhotoFile != null)
+              Center(
+                child: TextButton.icon(
+                  onPressed: _saving ? null : () => setState(() { _newPhotoFile = null; _removePhoto = true; }),
+                  icon: const Icon(Icons.delete_outline, size: 16),
+                  label: const Text("Retirer la photo"),
+                  style: TextButton.styleFrom(foregroundColor: ViroColors.error),
+                ),
+              )
+            else
+              Center(
+                child: TextButton.icon(
+                  onPressed: _saving ? null : _pickImage,
+                  icon: const Icon(Icons.add_photo_alternate_outlined, size: 18),
+                  label: const Text("Ajouter une photo"),
+                ),
+              ),
             const SizedBox(height: 12),
+
+            // Nom
+            TextFormField(
+              controller: _nameController,
+              textCapitalization: TextCapitalization.sentences,
+              decoration: const InputDecoration(labelText: "Nom *", hintText: "ex. Ballons de basket"),
+            ),
+            const SizedBox(height: 12),
+
+            // Catégorie
             DropdownButtonFormField<String>(
               initialValue: _category,
               decoration: const InputDecoration(labelText: "Catégorie *"),
               items: EquipmentHelpers.categories
-                  .map(
-                    (c) => DropdownMenuItem(
-                      value: c,
-                      child: Text(EquipmentHelpers.categoryLabel(c)),
-                    ),
-                  )
+                  .map((c) => DropdownMenuItem(value: c, child: Text(EquipmentHelpers.categoryLabel(c))))
                   .toList(),
               onChanged: (v) => setState(() => _category = v ?? _category),
             ),
             const SizedBox(height: 12),
-            TextFormField(
-              controller: _brandController,
-              decoration: const InputDecoration(
-                labelText: "Marque",
-                hintText: "ex. Nike, Adidas",
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _modelController,
-              decoration: const InputDecoration(
-                labelText: "Modèle",
-                hintText: "ex. T90, Predator",
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _serialNumberController,
-              decoration: const InputDecoration(
-                labelText: "Numéro de série",
-                hintText: "ex. SN123456",
-              ),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              "Stock et Localisation",
-              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-            ),
-            const SizedBox(height: 8),
+
+            // Quantité + Localisation
             Row(
               children: [
                 Expanded(
+                  flex: 2,
                   child: TextFormField(
                     controller: _quantityTotalController,
                     keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: "Stock total *",
-                    ),
+                    decoration: const InputDecoration(labelText: "Quantité *"),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  flex: 3,
+                  child: TextFormField(
+                    controller: _locationController,
+                    decoration: const InputDecoration(labelText: "Rangé où", hintText: "ex. Placard A"),
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 12),
-            TextFormField(
-              controller: _locationController,
-              decoration: const InputDecoration(
-                labelText: "Localisation",
-                hintText: "ex. Placard A, Gymnase 1",
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _unitPriceController,
-              keyboardType: TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(
-                labelText: "Prix d'achat à l'unité (€)",
-                hintText: "ex. 15.99",
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _loanUnitPriceController,
-              keyboardType: TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(
-                labelText: "Prix du prêt à l'unité (€) / Jour",
-                hintText: "ex. 2.50 (pour le catalogue)",
-                helperText: "Prix affiché dans le catalogue pour les joueurs",
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _cautionController,
-              keyboardType: TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(
-                labelText: "Caution (€) si perdu ou endommagé",
-                hintText: "ex. 50",
-                helperText: "Montant en cas de perte ou d'endommagement",
-              ),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              "État et Disponibilité",
-              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-            ),
-            const SizedBox(height: 8),
-            DropdownButtonFormField<String>(
-              initialValue: _condition,
-              decoration: const InputDecoration(labelText: "État"),
-              items: EquipmentHelpers.conditions
-                  .map(
-                    (c) => DropdownMenuItem(
-                      value: c,
-                      child: Text(EquipmentHelpers.conditionLabel(c)),
-                    ),
-                  )
-                  .toList(),
-              onChanged: (v) => setState(() => _condition = v ?? _condition),
-            ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
-              initialValue: _availability,
-              decoration: const InputDecoration(labelText: "Disponibilité"),
-              items: EquipmentHelpers.availabilities
-                  .map(
-                    (a) => DropdownMenuItem(
-                      value: a,
-                      child: Text(EquipmentHelpers.availabilityLabel(a)),
-                    ),
-                  )
-                  .toList(),
-              onChanged: (v) =>
-                  setState(() => _availability = v ?? _availability),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              "Achat et Garantie",
-              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-            ),
-            const SizedBox(height: 8),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text("Date d'achat"),
-              subtitle: Text(
-                _purchaseDate != null
-                    ? DateFormat('d MMM yyyy', 'fr_FR').format(_purchaseDate!)
-                    : "Non renseignée",
-              ),
-              trailing: IconButton(
-                icon: const Icon(Icons.calendar_today),
-                onPressed: () async {
-                  final d = await showDatePicker(
-                    context: context,
-                    initialDate: _purchaseDate ?? DateTime.now(),
-                    firstDate: DateTime(2000),
-                    lastDate: DateTime.now(),
-                  );
-                  if (d != null) setState(() => _purchaseDate = d);
-                },
-              ),
-            ),
-            const SizedBox(height: 8),
-            TextFormField(
-              controller: _invoiceReferenceController,
-              decoration: const InputDecoration(
-                labelText: "Référence facture",
-                hintText: "ex. FAC-2024-001 ou URL",
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _estimatedLifespanController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: "Durée de vie estimée (mois)",
-                hintText: "ex. 24",
-              ),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              "Affectation",
-              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-            ),
-            const SizedBox(height: 8),
-            StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-              stream: appFirestore
-                  .collection(FirebaseCollections.users)
-                  .snapshots(),
-              builder: (context, userSnap) {
-                final allDocs = userSnap.data?.docs ?? [];
-                final clubMembers = filterUsersByClub(allDocs, widget.clubId);
-                final members = clubMembers.map((d) {
-                  final data = d.data() ?? {};
-                  final first = (data['firstName'] as String? ?? '').trim();
-                  final last = (data['lastName'] as String? ?? '')
-                      .trim()
-                      .toUpperCase();
-                  final name = [
-                    first,
-                    last,
-                  ].where((e) => e.isNotEmpty).join(' ');
-                  return {
-                    'userId': d.id,
-                    'name': name.isEmpty ? 'Membre' : name,
-                  };
-                }).toList();
-                // Vérifier que la valeur actuelle est dans la liste, sinon utiliser null
-                final validResponsibleId =
-                    _responsibleUserId != null &&
-                        members.any((m) => m['userId'] == _responsibleUserId)
-                    ? _responsibleUserId
-                    : null;
-                // Si la valeur n'est pas valide, mettre à jour l'état
-                if (validResponsibleId != _responsibleUserId) {
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    if (mounted) {
-                      setState(() {
-                        _responsibleUserId = null;
-                        _responsibleUserName = null;
-                      });
-                    }
-                  });
-                }
-                return DropdownButtonFormField<String?>(
-                  initialValue: validResponsibleId,
-                  decoration: const InputDecoration(
-                    labelText: "Responsable",
-                    hintText: "Sélectionner un responsable",
+
+            // État + Disponibilité
+            Row(
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    initialValue: _condition,
+                    decoration: const InputDecoration(labelText: "État"),
+                    items: EquipmentHelpers.conditions
+                        .map((c) => DropdownMenuItem(value: c, child: Text(EquipmentHelpers.conditionLabel(c))))
+                        .toList(),
+                    onChanged: (v) => setState(() => _condition = v ?? _condition),
                   ),
-                  items: [
-                    const DropdownMenuItem<String?>(
-                      value: null,
-                      child: Text("Aucun"),
-                    ),
-                    ...members.map(
-                      (m) => DropdownMenuItem<String?>(
-                        value: m['userId'] as String,
-                        child: Text(m['name'] as String),
-                      ),
-                    ),
-                  ],
-                  onChanged: (v) {
-                    final m = members.firstWhere(
-                      (x) => x['userId'] == v,
-                      orElse: () => {'userId': '', 'name': ''},
-                    );
-                    setState(() {
-                      _responsibleUserId = v;
-                      _responsibleUserName = m['name'];
-                    });
-                  },
-                );
-              },
-            ),
-            const SizedBox(height: 12),
-            StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-              stream: appFirestore
-                  .collection(FirebaseCollections.clubs)
-                  .doc(widget.clubId)
-                  .collection(FirebaseCollections.teams)
-                  .snapshots(),
-              builder: (context, teamSnap) {
-                final teamDocs = teamSnap.data?.docs ?? [];
-                final teams = teamDocs.map((d) {
-                  final data = d.data();
-                  return {
-                    'teamId': d.id,
-                    'name': data['name'] as String? ?? 'Équipe',
-                  };
-                }).toList();
-                // Vérifier que la valeur actuelle est dans la liste, sinon utiliser null
-                final validAssignedTeamId =
-                    _assignedTeamId != null &&
-                        teams.any((t) => t['teamId'] == _assignedTeamId)
-                    ? _assignedTeamId
-                    : null;
-                // Si la valeur n'est pas valide, mettre à jour l'état
-                if (validAssignedTeamId != _assignedTeamId) {
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    if (mounted) {
-                      setState(() {
-                        _assignedTeamId = null;
-                        _assignedTeamName = null;
-                      });
-                    }
-                  });
-                }
-                return DropdownButtonFormField<String?>(
-                  initialValue: validAssignedTeamId,
-                  decoration: const InputDecoration(
-                    labelText: "Équipe affectée",
-                    hintText: "Sélectionner une équipe",
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    initialValue: _availability,
+                    decoration: const InputDecoration(labelText: "Disponibilité"),
+                    items: EquipmentHelpers.availabilities
+                        .map((a) => DropdownMenuItem(value: a, child: Text(EquipmentHelpers.availabilityLabel(a))))
+                        .toList(),
+                    onChanged: (v) => setState(() => _availability = v ?? _availability),
                   ),
-                  items: [
-                    const DropdownMenuItem<String?>(
-                      value: null,
-                      child: Text("Tout le club"),
-                    ),
-                    ...teams.map(
-                      (t) => DropdownMenuItem<String?>(
-                        value: t['teamId'] as String,
-                        child: Text(t['name'] as String),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+
+            // ── OPTIONNELLES (ExpansionTile) ──────────────────────────────────
+            Theme(
+              data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+              child: ExpansionTile(
+                tilePadding: EdgeInsets.zero,
+                childrenPadding: EdgeInsets.zero,
+                title: Text(
+                  "Informations optionnelles",
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: Colors.grey.shade700),
+                ),
+                children: [
+                  const SizedBox(height: 4),
+                  // Marque + Modèle
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextFormField(
+                          controller: _brandController,
+                          textCapitalization: TextCapitalization.sentences,
+                          decoration: const InputDecoration(labelText: "Marque", hintText: "ex. Nike"),
+                        ),
                       ),
-                    ),
-                  ],
-                  onChanged: (v) {
-                    final t = teams.firstWhere(
-                      (x) => x['teamId'] == v,
-                      orElse: () => {'teamId': '', 'name': 'Tout le club'},
-                    );
-                    setState(() {
-                      _assignedTeamId = v;
-                      _assignedTeamName = v != null
-                          ? t['name']
-                          : 'Tout le club';
-                    });
-                  },
-                );
-              },
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              "Maintenance",
-              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-            ),
-            const SizedBox(height: 8),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text("Dernière maintenance"),
-              subtitle: Text(
-                _lastMaintenance != null
-                    ? DateFormat(
-                        'd MMM yyyy',
-                        'fr_FR',
-                      ).format(_lastMaintenance!)
-                    : "Non renseignée",
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: TextFormField(
+                          controller: _modelController,
+                          decoration: const InputDecoration(labelText: "Modèle", hintText: "ex. Predator"),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _serialNumberController,
+                    decoration: const InputDecoration(labelText: "Numéro de série", hintText: "ex. SN123456"),
+                  ),
+                  const SizedBox(height: 16),
+                  // Prix
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextFormField(
+                          controller: _unitPriceController,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          decoration: const InputDecoration(labelText: "Prix achat (€)", hintText: "ex. 15.99"),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: TextFormField(
+                          controller: _loanUnitPriceController,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          decoration: const InputDecoration(labelText: "Prix prêt (€)", hintText: "ex. 2.50"),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _cautionController,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(labelText: "Caution (€)", hintText: "ex. 50"),
+                  ),
+                  const SizedBox(height: 16),
+                  // Dates
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _dateTile("Date d'achat", _purchaseDate, () async {
+                          final d = await showDatePicker(context: context, initialDate: _purchaseDate ?? DateTime.now(), firstDate: DateTime(2000), lastDate: DateTime.now());
+                          if (d != null) setState(() => _purchaseDate = d);
+                        }),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: TextFormField(
+                          controller: _estimatedLifespanController,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(labelText: "Durée de vie (mois)", hintText: "ex. 24"),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _invoiceReferenceController,
+                    decoration: const InputDecoration(labelText: "Réf. facture", hintText: "ex. FAC-2024-001"),
+                  ),
+                  const SizedBox(height: 16),
+                  // Affectation
+                  StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                    stream: appFirestore.collection(FirebaseCollections.users).snapshots(),
+                    builder: (context, userSnap) {
+                      final members = filterUsersByClub(userSnap.data?.docs ?? [], widget.clubId).map((d) {
+                        final ud = d.data() ?? {};
+                        final name = ['${ud['firstName'] ?? ''}'.trim(), '${ud['lastName'] ?? ''}'.trim().toUpperCase()].where((e) => e.isNotEmpty).join(' ');
+                        return {'userId': d.id, 'name': name.isEmpty ? 'Membre' : name};
+                      }).toList();
+                      final validId = _responsibleUserId != null && members.any((m) => m['userId'] == _responsibleUserId) ? _responsibleUserId : null;
+                      if (validId != _responsibleUserId) {
+                        WidgetsBinding.instance.addPostFrameCallback((_) { if (mounted) setState(() { _responsibleUserId = null; _responsibleUserName = null; }); });
+                      }
+                      return DropdownButtonFormField<String?>(
+                        initialValue: validId,
+                        decoration: const InputDecoration(labelText: "Responsable"),
+                        items: [const DropdownMenuItem(value: null, child: Text("Aucun")), ...members.map((m) => DropdownMenuItem(value: m['userId'] as String, child: Text(m['name'] as String)))],
+                        onChanged: (v) { final m = members.firstWhere((x) => x['userId'] == v, orElse: () => {'userId': '', 'name': ''}); setState(() { _responsibleUserId = v; _responsibleUserName = m['name']; }); },
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                    stream: appFirestore.collection(FirebaseCollections.clubs).doc(widget.clubId).collection(FirebaseCollections.teams).snapshots(),
+                    builder: (context, teamSnap) {
+                      final teams = (teamSnap.data?.docs ?? []).map((d) => {'teamId': d.id, 'name': d.data()['name'] as String? ?? 'Équipe'}).toList();
+                      final validId = _assignedTeamId != null && teams.any((t) => t['teamId'] == _assignedTeamId) ? _assignedTeamId : null;
+                      if (validId != _assignedTeamId) {
+                        WidgetsBinding.instance.addPostFrameCallback((_) { if (mounted) setState(() { _assignedTeamId = null; _assignedTeamName = null; }); });
+                      }
+                      return DropdownButtonFormField<String?>(
+                        initialValue: validId,
+                        decoration: const InputDecoration(labelText: "Équipe affectée"),
+                        items: [const DropdownMenuItem(value: null, child: Text("Tout le club")), ...teams.map((t) => DropdownMenuItem(value: t['teamId'] as String, child: Text(t['name'] as String)))],
+                        onChanged: (v) { final t = teams.firstWhere((x) => x['teamId'] == v, orElse: () => {'teamId': '', 'name': 'Tout le club'}); setState(() { _assignedTeamId = v; _assignedTeamName = v != null ? t['name'] : 'Tout le club'; }); },
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  // Maintenance
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _dateTile("Dernière maintenance", _lastMaintenance, () async {
+                          final d = await showDatePicker(context: context, initialDate: _lastMaintenance ?? DateTime.now(), firstDate: DateTime(2020), lastDate: DateTime.now());
+                          if (d != null) setState(() => _lastMaintenance = d);
+                        }),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _dateTile("Prochaine maintenance", _nextMaintenance, () async {
+                          final d = await showDatePicker(context: context, initialDate: _nextMaintenance ?? DateTime.now(), firstDate: DateTime.now(), lastDate: DateTime.now().add(const Duration(days: 730)));
+                          if (d != null) setState(() => _nextMaintenance = d);
+                        }),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _notesController,
+                    maxLines: 3,
+                    textCapitalization: TextCapitalization.sentences,
+                    decoration: const InputDecoration(labelText: "Notes", alignLabelWithHint: true),
+                  ),
+                  const SizedBox(height: 16),
+                ],
               ),
-              trailing: IconButton(
-                icon: const Icon(Icons.calendar_today),
-                onPressed: () async {
-                  final d = await showDatePicker(
-                    context: context,
-                    initialDate: _lastMaintenance ?? DateTime.now(),
-                    firstDate: DateTime(2020),
-                    lastDate: DateTime.now(),
-                  );
-                  if (d != null) setState(() => _lastMaintenance = d);
-                },
-              ),
             ),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text("Prochaine maintenance"),
-              subtitle: Text(
-                _nextMaintenance != null
-                    ? DateFormat(
-                        'd MMM yyyy',
-                        'fr_FR',
-                      ).format(_nextMaintenance!)
-                    : "Non renseignée",
+
+            // ── Actions ───────────────────────────────────────────────────────
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton(
+                onPressed: _saving ? null : _save,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: ViroColors.primary,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                child: _saving
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : const Text("Enregistrer", style: TextStyle(fontWeight: FontWeight.bold)),
               ),
-              trailing: IconButton(
-                icon: const Icon(Icons.calendar_today),
-                onPressed: () async {
-                  final d = await showDatePicker(
-                    context: context,
-                    initialDate: _nextMaintenance ?? DateTime.now(),
-                    firstDate: DateTime.now(),
-                    lastDate: DateTime.now().add(const Duration(days: 365)),
-                  );
-                  if (d != null) setState(() => _nextMaintenance = d);
-                },
-              ),
-            ),
-            const SizedBox(height: 20),
-            TextFormField(
-              controller: _notesController,
-              decoration: const InputDecoration(labelText: "Notes"),
-              maxLines: 2,
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: _saving ? null : _save,
-              child: _saving
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Text("Enregistrer"),
             ),
             if (_availability == EquipmentHelpers.availabilityDisponible) ...[
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
               TextButton(
                 onPressed: _saving ? null : _delete,
-                child: Text(
-                  "Supprimer",
-                  style: TextStyle(color: ViroColors.error),
-                ),
+                child: Text("Supprimer", style: TextStyle(color: ViroColors.error)),
               ),
             ],
+            const SizedBox(height: 8),
           ],
         ),
       ),

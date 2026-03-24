@@ -13,8 +13,16 @@ import '../../utils/avatar_moderation.dart';
 class AdminAddEventPage extends StatefulWidget {
   final String clubId;
   final DateTime? initialDate;
+  final String? eventId;
+  final Map<String, dynamic>? initialData;
 
-  const AdminAddEventPage({super.key, required this.clubId, this.initialDate});
+  const AdminAddEventPage({
+    super.key,
+    required this.clubId,
+    this.initialDate,
+    this.eventId,
+    this.initialData,
+  });
 
   @override
   State<AdminAddEventPage> createState() => _AdminAddEventPageState();
@@ -44,6 +52,7 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
   TimeOfDay _rdvTime = const TimeOfDay(hour: 17, minute: 30);
   bool _allDay = false;
 
+  int _currentStep = 0;
   bool _isRecurring = false;
   int _weeksCount = 4;
   String _recurrenceMode = 'weeks'; // 'weeks' ou 'season_end'
@@ -69,7 +78,54 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
     if (widget.initialDate != null) {
       _date = widget.initialDate!;
     }
+    if (widget.initialData != null) {
+      _prefillFromData(widget.initialData!);
+    }
     _loadClubSport();
+  }
+
+  void _prefillFromData(Map<String, dynamic> d) {
+    final ts = d['date'] as Timestamp?;
+    if (ts != null) _date = ts.toDate();
+
+    _selectedType = (d['type'] as String?) ?? _selectedType;
+    _selectedTeamName = d['teamName'] as String?;
+    _allDay = d['startTime'] == null && d['endTime'] == null;
+    _allTeams = (d['allTeams'] as bool?) ?? false;
+
+    final rawTeamNames = d['teamNames'] as List?;
+    if (rawTeamNames != null) {
+      _selectedTeams
+        ..clear()
+        ..addAll(rawTeamNames.whereType<String>());
+    }
+    final rawCats = d['categories'] as List?;
+    if (rawCats != null) {
+      _selectedCategoriesAudience
+        ..clear()
+        ..addAll(rawCats.whereType<String>());
+    }
+
+    _locationController.text = (d['location'] as String?) ?? '';
+    _titleController.text = (d['title'] as String?) ?? '';
+    _meetingLocationController.text = (d['meetingLocation'] as String?) ?? '';
+
+    TimeOfDay? parseTime(String? s) {
+      if (s == null) return null;
+      final parts = s.split(':');
+      if (parts.length < 2) return null;
+      return TimeOfDay(
+        hour: int.tryParse(parts[0]) ?? 0,
+        minute: int.tryParse(parts[1]) ?? 0,
+      );
+    }
+
+    final st = parseTime(d['startTime'] as String?);
+    if (st != null) _startTime = st;
+    final et = parseTime(d['endTime'] as String?);
+    if (et != null) _endTime = et;
+    final mt = parseTime(d['meetingTime'] as String?);
+    if (mt != null) _rdvTime = mt;
   }
 
   @override
@@ -120,6 +176,84 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
     }
 
     setState(() => _isLoading = true);
+
+    // --- Mode édition : mise à jour de l'événement existant ---
+    if (widget.eventId != null) {
+      try {
+        String? categoryForEvent = _selectedCategoriesAudience.isNotEmpty
+            ? _selectedCategoriesAudience.first
+            : null;
+        if (_selectedType == 'Entraînement' || _selectedType == 'Match') {
+          final snap = await appFirestore
+              .collection(FirebaseCollections.clubs)
+              .doc(widget.clubId)
+              .collection(FirebaseCollections.teams)
+              .where('name', isEqualTo: _selectedTeamName)
+              .limit(1)
+              .get();
+          if (snap.docs.isNotEmpty) {
+            categoryForEvent = snap.docs.first.data()['category'] as String?;
+          }
+        }
+
+        final dateId = DateFormat('yyyyMMdd').format(_date);
+        final startStr = _allDay ? null : _startTime.format(context);
+        final endStr =
+            (_selectedType == 'Match' || _allDay) ? null : _endTime.format(context);
+
+        final updateData = <String, dynamic>{
+          'type': _selectedType,
+          'title': (_selectedType == 'Entraînement' || _selectedType == 'Match')
+              ? null
+              : _titleController.text.trim(),
+          'teamName':
+              (_selectedType == 'Entraînement' || _selectedType == 'Match')
+              ? _selectedTeamName
+              : (_allTeams
+                    ? "Tout le club"
+                    : (_selectedTeams.isNotEmpty
+                          ? _selectedTeams.first
+                          : "Multi-équipes")),
+          'teamNames':
+              (_selectedType == 'Entraînement' || _selectedType == 'Match')
+              ? [_selectedTeamName]
+              : _selectedTeams,
+          'category': categoryForEvent,
+          'categories':
+              (_selectedType == 'Entraînement' || _selectedType == 'Match')
+              ? null
+              : _selectedCategoriesAudience,
+          'allTeams':
+              (_selectedType == 'Entraînement' || _selectedType == 'Match')
+              ? false
+              : _allTeams,
+          'location': _locationController.text.trim(),
+          'date': Timestamp.fromDate(_date),
+          'dateId': dateId,
+          'startTime': startStr,
+          'endTime': endStr,
+        };
+        if (_selectedType == 'Match') {
+          updateData['meetingLocation'] =
+              _meetingLocationController.text.trim();
+          updateData['meetingTime'] = _rdvTime.format(context);
+        }
+
+        await appFirestore
+            .collection(FirebaseCollections.clubs)
+            .doc(widget.clubId)
+            .collection(FirebaseCollections.events)
+            .doc(widget.eventId)
+            .update(updateData);
+
+        if (context.mounted) Navigator.pop(context);
+      } catch (e) {
+        _showError("Erreur lors de la mise à jour : $e");
+      } finally {
+        if (mounted) setState(() => _isLoading = false);
+      }
+      return;
+    }
 
     try {
       // 2. Collecte des IDs des membres concernés pour l'attendance
@@ -648,19 +782,168 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
     return "Lieu du club";
   }
 
+  bool _validateStep1() {
+    if (_selectedType == 'Entraînement' || _selectedType == 'Match') {
+      if (_selectedTeamName == null) {
+        _showError("Choisis une équipe pour cet évènement");
+        return false;
+      }
+      if (_selectedType == 'Match' && !_summonAllPlayers && _selectedPlayersMatch.isEmpty) {
+        _showError("Sélectionne au moins un joueur ou convoque toute l'équipe");
+        return false;
+      }
+    } else {
+      if (_titleController.text.trim().isEmpty) {
+        _showError("Titre requis pour cet évènement");
+        return false;
+      }
+      if (!_allTeams && _selectedTeams.isEmpty && _selectedCategoriesAudience.isEmpty) {
+        _showError("Choisis une audience (équipe ou catégorie)");
+        return false;
+      }
+    }
+    if (!_allDay && _selectedType != 'Match') {
+      final startMinutes = _startTime.hour * 60 + _startTime.minute;
+      final endMinutes = _endTime.hour * 60 + _endTime.minute;
+      if (endMinutes <= startMinutes) {
+        _showError("L'heure de fin doit être après l'heure de début");
+        return false;
+      }
+    }
+    return true;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final stepTitles = ['Évènement', 'Notifications'];
+
     return Scaffold(
-      appBar: AppBar(title: const Text("Ajouter un évènement")),
+      appBar: AppBar(
+        title: Text(widget.eventId != null ? "Modifier l'évènement" : "Ajouter un évènement"),
+        leading: _currentStep == 1
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () => setState(() => _currentStep = 0),
+              )
+            : null,
+      ),
       body: _isLoading
-          ? const Center(
-              child: CircularProgressIndicator(color: ViroColors.primary),
-            )
-          : Form(
-              key: _formKey,
-              child: ListView(
-                padding: const EdgeInsets.all(20),
-                children: [
+          ? const Center(child: CircularProgressIndicator(color: ViroColors.primary))
+          : Column(
+              children: [
+                // ── Barre de progression ──────────────────────────────────
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: List.generate(stepTitles.length, (i) {
+                          final active = i == _currentStep;
+                          final done = i < _currentStep;
+                          return Expanded(
+                            child: Padding(
+                              padding: EdgeInsets.only(right: i < stepTitles.length - 1 ? 8 : 0),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      AnimatedContainer(
+                                        duration: const Duration(milliseconds: 250),
+                                        width: 22,
+                                        height: 22,
+                                        decoration: BoxDecoration(
+                                          color: done || active
+                                              ? ViroColors.primary
+                                              : Colors.grey.shade200,
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: Center(
+                                          child: done
+                                              ? const Icon(Icons.check, size: 13, color: Colors.white)
+                                              : Text(
+                                                  '${i + 1}',
+                                                  style: TextStyle(
+                                                    fontSize: 11,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: active ? Colors.white : Colors.grey,
+                                                  ),
+                                                ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        stepTitles[i],
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: active ? FontWeight.bold : FontWeight.w400,
+                                          color: active ? ViroColors.primary : Colors.grey,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 6),
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(4),
+                                    child: LinearProgressIndicator(
+                                      value: (done || active) ? 1.0 : 0.0,
+                                      minHeight: 3,
+                                      backgroundColor: Colors.grey.shade200,
+                                      valueColor: const AlwaysStoppedAnimation(ViroColors.primary),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        }),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 4),
+                // ── Contenu de l'étape ────────────────────────────────────
+                Expanded(
+                  child: Form(
+                    key: _formKey,
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 220),
+                      child: _currentStep == 0 ? _buildStep1() : _buildStep2(),
+                    ),
+                  ),
+                ),
+                // ── Bouton navigation ─────────────────────────────────────
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: ViroColors.primary,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      onPressed: _currentStep == 0
+                          ? () { if (_validateStep1()) setState(() => _currentStep = 1); }
+                          : _saveEvent,
+                      child: Text(
+                        _currentStep == 0 ? "SUIVANT" : "ENREGISTRER",
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+    );
+  }
+
+  Widget _buildStep1() {
+    return ListView(
+      key: const ValueKey('step1'),
+      padding: const EdgeInsets.all(20),
+      children: [
                   _buildDropdown<String>(
                     label: "Type d'évènement",
                     value: _selectedType,
@@ -1017,64 +1300,48 @@ class _AdminAddEventPageState extends State<AdminAddEventPage> {
                     ],
                   ],
 
-                  const Divider(height: 40),
-                  Text(
-                    _selectedType == 'Entraînement' || _selectedType == 'Match'
-                        ? "Notifications de présence"
-                        : "Notifications de l'événement",
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    _selectedType == 'Entraînement' || _selectedType == 'Match'
-                        ? "0, 1 ou 2 notifications pour demander de donner sa présence (max 10 jours avant ou jour de la semaine avant)."
-                        : "0, 1 ou 2 notifications pour annoncer l'événement (max 10 jours avant ou jour de la semaine avant).",
-                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                  ),
-                  const SizedBox(height: 12),
-                  SegmentedButton<int>(
-                    segments: const [
-                      ButtonSegment(value: 0, label: Text("Aucune")),
-                      ButtonSegment(value: 1, label: Text("1 notif")),
-                      ButtonSegment(value: 2, label: Text("2 notifs")),
-                    ],
-                    selected: {_reminderCount},
-                    onSelectionChanged: (s) =>
-                        setState(() => _reminderCount = s.first),
-                  ),
-                  if (_reminderCount >= 1) ...[
-                    const SizedBox(height: 16),
-                    _buildReminder1Fields(),
-                  ],
-                  if (_reminderCount >= 2) ...[
-                    const SizedBox(height: 12),
-                    _buildReminder2Fields(),
-                  ],
+        ],
+    );
+  }
 
-                  const SizedBox(height: 30),
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: ViroColors.primary,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    onPressed: _saveEvent,
-                    child: const Text(
-                      "ENREGISTRER",
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+  Widget _buildStep2() {
+    return ListView(
+      key: const ValueKey('step2'),
+      padding: const EdgeInsets.all(20),
+      children: [
+        Text(
+          _selectedType == 'Entraînement' || _selectedType == 'Match'
+              ? "Notifications de présence"
+              : "Notifications de l'événement",
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          _selectedType == 'Entraînement' || _selectedType == 'Match'
+              ? "0, 1 ou 2 notifications pour demander de donner sa présence (max 10 jours avant ou jour de la semaine avant)."
+              : "0, 1 ou 2 notifications pour annoncer l'événement (max 10 jours avant ou jour de la semaine avant).",
+          style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+        ),
+        const SizedBox(height: 16),
+        SegmentedButton<int>(
+          segments: const [
+            ButtonSegment(value: 0, label: Text("Aucune")),
+            ButtonSegment(value: 1, label: Text("1 notif")),
+            ButtonSegment(value: 2, label: Text("2 notifs")),
+          ],
+          selected: {_reminderCount},
+          onSelectionChanged: (s) => setState(() => _reminderCount = s.first),
+        ),
+        if (_reminderCount >= 1) ...[
+          const SizedBox(height: 16),
+          _buildReminder1Fields(),
+        ],
+        if (_reminderCount >= 2) ...[
+          const SizedBox(height: 12),
+          _buildReminder2Fields(),
+        ],
+        const SizedBox(height: 8),
+      ],
     );
   }
 

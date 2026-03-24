@@ -390,47 +390,21 @@ class PlayerEventDetailsPage extends StatelessWidget {
     final String currentStatus =
         (attendance[currentUserId] as String?) ?? 'none';
 
-    if (currentUserId.isEmpty) {
-      return _summaryRow(
-        present: present,
-        absent: absent,
-        noResponse: noResponse,
-        currentStatus: currentStatus,
-        isPlayer: false,
-        context: context,
-        clubId: clubId,
-        eventId: eventId,
-      );
-    }
+    // L'utilisateur peut modifier sa présence s'il est convoqué
+    // (son UID figure dans attendance ou teamMemberIds).
+    final bool isConvoked = currentUserId.isNotEmpty &&
+        (attendance.containsKey(currentUserId) ||
+            teamMembers.any((id) => id.toString() == currentUserId));
 
-    return FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-      future: appFirestore
-          .collection(FirebaseCollections.users)
-          .doc(currentUserId)
-          .get(),
-      builder: (context, userSnap) {
-        final bool isPlayer;
-        if (userSnap.hasData && userSnap.data?.data() != null) {
-          final role = getUserRoleInClub(
-            userSnap.data!.data()!,
-            clubId,
-          );
-          isPlayer = role == 'player';
-        } else {
-          isPlayer = false;
-        }
-
-        return _summaryRow(
-          present: present,
-          absent: absent,
-          noResponse: noResponse,
-          currentStatus: currentStatus,
-          isPlayer: isPlayer,
-          context: context,
-          clubId: clubId,
-          eventId: eventId,
-        );
-      },
+    return _summaryRow(
+      present: present,
+      absent: absent,
+      noResponse: noResponse,
+      currentStatus: currentStatus,
+      isPlayer: isConvoked,
+      context: context,
+      clubId: clubId,
+      eventId: eventId,
     );
   }
 

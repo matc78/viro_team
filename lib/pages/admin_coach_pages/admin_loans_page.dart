@@ -10,7 +10,6 @@ import '../../constants/firebase_collections.dart';
 import '../../theme/viro_theme.dart';
 import '../../utils/firebase_helpers.dart';
 import '../../utils/firebase_error_handler.dart';
-import '../../widget/admin_loans/loans_summary_card.dart';
 import '../../widget/slide_to_confirm.dart';
 import '../../widget/user_display_tile.dart';
 import '../../widget/viro_loader.dart';
@@ -43,6 +42,8 @@ class _AdminLoansPageState extends State<AdminLoansPage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   bool _editMode = false;
+  // Filtre onglet Prêts: 'demandes' | 'actifs' | 'retard' | 'historique'
+  String _pretsFilter = 'actifs';
 
   @override
   void initState() {
@@ -76,31 +77,22 @@ class _AdminLoansPageState extends State<AdminLoansPage>
         final userData = userSnap.data?.data();
         final isAdmin = _isAdminForClub(userData, widget.clubId);
         final showCancelButtons = _editMode && isAdmin;
-        // Un coach ne peut pas gérer le catalogue et les prêts
+
         if (userSnap.hasData && userData != null && !isAdmin) {
           return Scaffold(
             backgroundColor: ViroColors.background,
-            appBar: AppBar(
-              title: const Text("Prêts"),
-              centerTitle: true,
-            ),
+            appBar: AppBar(title: const Text("Prêts"), centerTitle: true),
             body: Center(
               child: Padding(
-                padding: const EdgeInsets.all(24.0),
+                padding: const EdgeInsets.all(24),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(
-                      Icons.lock_outline,
-                      size: 64,
-                      color: Colors.grey[400],
-                    ),
+                    Icon(Icons.lock_outline, size: 64, color: Colors.grey[400]),
                     const SizedBox(height: 16),
-                    Text(
-                      "Accès réservé aux administrateurs",
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
+                    Text("Accès réservé aux administrateurs",
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.titleMedium),
                     const SizedBox(height: 8),
                     Text(
                       "La gestion du catalogue et des prêts n'est pas disponible pour les coaches.",
@@ -113,6 +105,7 @@ class _AdminLoansPageState extends State<AdminLoansPage>
             ),
           );
         }
+
         return Scaffold(
           backgroundColor: ViroColors.background,
           appBar: AppBar(
@@ -122,36 +115,73 @@ class _AdminLoansPageState extends State<AdminLoansPage>
               if (isAdmin)
                 ListenableBuilder(
                   listenable: _tabController,
-                  builder: (context, _) {
-                    if (_tabController.index != 1) {
-                      return const SizedBox.shrink();
-                    }
-                    return IconButton(
-                      icon: Icon(
-                        _editMode ? Icons.edit_off : Icons.edit,
-                        color: _editMode ? ViroColors.primary : null,
-                      ),
-                      onPressed: () => setState(() => _editMode = !_editMode),
-                      tooltip: 'Édition',
-                    );
-                  },
+                  builder: (context, _) => _tabController.index == 0
+                      ? PopupMenuButton<String>(
+                          icon: const Icon(Icons.tune_outlined),
+                          tooltip: "Paramètres du catalogue",
+                          itemBuilder: (_) => [
+                            const PopupMenuItem(
+                              value: 'paiement',
+                              child: Row(children: [
+                                Icon(Icons.payment_outlined, size: 18),
+                                SizedBox(width: 10),
+                                Text("Moyens de paiement"),
+                              ]),
+                            ),
+                            const PopupMenuItem(
+                              value: 'recup',
+                              child: Row(children: [
+                                Icon(Icons.calendar_today_outlined, size: 18),
+                                SizedBox(width: 10),
+                                Text("Récup. / Retour"),
+                              ]),
+                            ),
+                          ],
+                          onSelected: (v) {
+                            if (v == 'paiement') {
+                              _LoanCatalogSection.showPaymentMethodsDialog(context, widget.clubId);
+                            } else {
+                              _LoanCatalogSection.showLoanAllowedDaysDialog(context, widget.clubId);
+                            }
+                          },
+                        )
+                      : StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                          stream: appFirestore
+                              .collection(FirebaseCollections.clubs)
+                              .doc(widget.clubId)
+                              .collection(FirebaseCollections.equipmentLoans)
+                              .where('status', isEqualTo: 'active')
+                              .snapshots(),
+                          builder: (context, loanSnap) {
+                            final hasModifiable = (loanSnap.data?.docs.isNotEmpty) ?? false;
+                            if (!hasModifiable) return const SizedBox.shrink();
+                            return IconButton(
+                              icon: Icon(
+                                _editMode ? Icons.edit_off : Icons.edit,
+                                color: _editMode ? ViroColors.primary : null,
+                              ),
+                              onPressed: () => setState(() => _editMode = !_editMode),
+                              tooltip: 'Édition',
+                            );
+                          },
+                        ),
                 ),
             ],
             bottom: TabBar(
               controller: _tabController,
               tabs: const [
                 Tab(text: "Catalogue"),
-                Tab(text: "Prêt"),
+                Tab(text: "Prêts"),
               ],
             ),
           ),
           body: TabBarView(
             controller: _tabController,
             children: [
-              SingleChildScrollView(
-                padding: const EdgeInsets.all(16),
-                child: _LoanCatalogSection(clubId: widget.clubId),
-              ),
+              // ── CATALOGUE ──────────────────────────────────────────────────
+              _LoanCatalogSection(clubId: widget.clubId),
+
+              // ── PRÊTS ──────────────────────────────────────────────────────
               StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                 stream: appFirestore
                     .collection(FirebaseCollections.clubs)
@@ -163,103 +193,59 @@ class _AdminLoansPageState extends State<AdminLoansPage>
                     return const Center(child: ViroLoader(size: 60));
                   }
                   if (snap.hasError) {
-                    return FirebaseErrorHandler.buildErrorWidget(
-                      context,
-                      snap.error,
-                    );
+                    return FirebaseErrorHandler.buildErrorWidget(context, snap.error);
                   }
+
                   final docs = snap.data?.docs ?? [];
                   final allLoans = docs
                       .map((d) => {'id': d.id, ...d.data()})
                       .cast<Map<String, dynamic>>()
                       .toList();
-                  final history =
-                      allLoans
-                          .where(
-                            (l) =>
-                                l['status'] == 'returned' ||
-                                l['status'] == 'lost' ||
-                                l['status'] == 'cancelled',
-                          )
-                          .toList()
-                        ..sort((a, b) {
-                          final ra =
-                              a['returnedAt'] as Timestamp? ??
-                              a['lentAt'] as Timestamp? ??
-                              Timestamp.now();
-                          final rb =
-                              b['returnedAt'] as Timestamp? ??
-                              b['lentAt'] as Timestamp? ??
-                              Timestamp.now();
-                          return rb.compareTo(ra);
-                        });
 
-                  return SingleChildScrollView(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        LoansSummaryCard(
-                          clubId: widget.clubId,
-                          allLoans: allLoans,
-                        ),
-                        const SizedBox(height: 24),
-                        _ActiveLoansSection(
-                          clubId: widget.clubId,
-                          allLoans: allLoans,
-                          showCancelButtons: showCancelButtons,
-                        ),
-                        const SizedBox(height: 8),
-                        _PickupToConfirmSection(
-                          clubId: widget.clubId,
-                          allLoans: allLoans,
-                          showCancelButtons: showCancelButtons,
-                        ),
-                        const SizedBox(height: 8),
-                        _OverdueLoansSection(
-                          clubId: widget.clubId,
-                          allLoans: allLoans,
-                          showCancelButtons: showCancelButtons,
-                        ),
-                        const SizedBox(height: 8),
-                        _UpcomingLoansSection(
-                          clubId: widget.clubId,
-                          showCancelButtons: showCancelButtons,
-                        ),
-                        const SizedBox(height: 24),
-                        _LoanRequestsSection(clubId: widget.clubId),
-                        const SizedBox(height: 24),
-                        _LoanChangeRequestsSection(clubId: widget.clubId),
-                        const SizedBox(height: 24),
-                        const Text(
-                          "Historique d'utilisation",
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        if (history.isEmpty)
-                          Card(
-                            child: Padding(
-                              padding: const EdgeInsets.all(16),
-                              child: Text(
-                                "Aucun historique.",
-                                style: TextStyle(color: Colors.grey[600]),
-                              ),
-                            ),
-                          )
-                        else
-                          ...history
-                              .take(30)
-                              .map(
-                                (l) => _LoanHistoryTile(
-                                  data: l,
-                                  clubId: widget.clubId,
-                                ),
-                              ),
-                      ],
-                    ),
+                  final now = DateTime.now();
+                  final today = DateTime(now.year, now.month, now.day);
+
+                  final overdueLoans = allLoans.where((l) {
+                    if (l['status'] != 'active') return false;
+                    final due = (l['dueAt'] as Timestamp?)?.toDate();
+                    if (due == null) return false;
+                    return DateTime(due.year, due.month, due.day).isBefore(today);
+                  }).toList()..sort((a, b) {
+                    final da = (a['dueAt'] as Timestamp?)?.toDate() ?? DateTime.now();
+                    final db = (b['dueAt'] as Timestamp?)?.toDate() ?? DateTime.now();
+                    return da.compareTo(db);
+                  });
+
+                  final activeLoans = allLoans.where((l) {
+                    if (l['status'] != 'active') return false;
+                    if (!_isPickupConfirmed(l)) return false;
+                    final lent = (l['lentAt'] as Timestamp?)?.toDate();
+                    final due = (l['dueAt'] as Timestamp?)?.toDate();
+                    if (lent == null || due == null) return false;
+                    final lentDay = DateTime(lent.year, lent.month, lent.day);
+                    final dueDay = DateTime(due.year, due.month, due.day);
+                    return !lentDay.isAfter(today) && !dueDay.isBefore(today);
+                  }).toList();
+
+                  final history = allLoans.where((l) =>
+                    l['status'] == 'returned' ||
+                    l['status'] == 'lost' ||
+                    l['status'] == 'cancelled',
+                  ).toList()..sort((a, b) {
+                    final ra = a['returnedAt'] as Timestamp? ?? a['lentAt'] as Timestamp? ?? Timestamp.now();
+                    final rb = b['returnedAt'] as Timestamp? ?? b['lentAt'] as Timestamp? ?? Timestamp.now();
+                    return rb.compareTo(ra);
+                  });
+
+                  return _LoansPretTab(
+                    clubId: widget.clubId,
+                    allLoans: allLoans,
+                    activeLoans: activeLoans,
+                    overdueLoans: overdueLoans,
+                    history: history,
+                    showCancelButtons: showCancelButtons,
+                    filter: _pretsFilter,
+                    onFilterChanged: (f) => setState(() => _pretsFilter = f),
                   );
                 },
               ),
@@ -271,11 +257,97 @@ class _AdminLoansPageState extends State<AdminLoansPage>
   }
 }
 
-/// Section de gestion du catalogue de prêts
+/// Section catalogue de prêts (onglet Catalogue)
 class _LoanCatalogSection extends StatelessWidget {
   final String clubId;
 
   const _LoanCatalogSection({required this.clubId});
+
+  // ── Static helpers appelés depuis l'AppBar ──────────────────────────────────
+
+  static void showPaymentMethodsDialog(BuildContext context, String clubId) {
+    appFirestore.collection(FirebaseCollections.clubs).doc(clubId).get().then((docSnap) {
+      final current = docSnap.data()?['paymentMethods'] as List<dynamic>? ?? [];
+      final selectedMethods = Set<String>.from(current.map((e) => e.toString()));
+      if (!context.mounted) return;
+      showDialog<void>(
+        context: context,
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (ctx, setS) => AlertDialog(
+            title: const Text("Moyens de paiement"),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final entry in [
+                  ('carte', Icons.credit_card_outlined, 'Carte bancaire'),
+                  ('cheque', Icons.article_outlined, 'Chèque'),
+                  ('especes', Icons.payments_outlined, 'Espèces'),
+                ])
+                  CheckboxListTile(
+                    secondary: Icon(entry.$2),
+                    title: Text(entry.$3),
+                    value: selectedMethods.contains(entry.$1),
+                    onChanged: (v) => setS(() {
+                      if (v == true) { selectedMethods.add(entry.$1); } else { selectedMethods.remove(entry.$1); }
+                    }),
+                  ),
+              ],
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: const Text("Annuler")),
+              ElevatedButton(
+                onPressed: () async {
+                  try {
+                    await appFirestore.collection(FirebaseCollections.clubs).doc(clubId).update({'paymentMethods': selectedMethods.toList()});
+                    if (ctx.mounted) { Navigator.of(dialogContext).pop(); ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text("Moyens de paiement mis à jour."))); }
+                  } catch (e) {
+                    if (ctx.mounted) { ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(FirebaseErrorHandler.getErrorMessage(e)))); }
+                  }
+                },
+                child: const Text("Enregistrer"),
+              ),
+            ],
+          ),
+        ),
+      );
+    });
+  }
+
+  static void showLoanAllowedDaysDialog(BuildContext context, String clubId) {
+    appFirestore.collection(FirebaseCollections.clubs).doc(clubId).get().then((docSnap) {
+      final data = docSnap.data() ?? {};
+      final clubAddress = data['address'] as String? ?? '';
+      final current = data['loanAllowedWeekdays'] as List<dynamic>? ?? [];
+      final loanScheduleRaw = data['loanSchedule'] as Map<String, dynamic>? ?? {};
+      final selectedDays = Set<int>.from(
+        current.map((e) => (e is int) ? e : int.tryParse(e.toString()) ?? 0).where((e) => e >= 1 && e <= 7),
+      );
+      if (selectedDays.isEmpty && current.isEmpty) { for (int i = 1; i <= 7; i++) { selectedDays.add(i); } }
+      final Map<int, ({int startHour, int startMinute, int endHour, int endMinute, String place})> schedule = {};
+      for (int d = 1; d <= 7; d++) {
+        final raw = loanScheduleRaw[d.toString()] as Map<String, dynamic>?;
+        schedule[d] = raw != null
+            ? (startHour: raw['startHour'] as int? ?? 8, startMinute: raw['startMinute'] as int? ?? 0, endHour: raw['endHour'] as int? ?? 20, endMinute: raw['endMinute'] as int? ?? 0, place: raw['place'] as String? ?? clubAddress)
+            : (startHour: 8, startMinute: 0, endHour: 20, endMinute: 0, place: clubAddress);
+      }
+      if (!context.mounted) return;
+      showDialog<void>(
+        context: context,
+        builder: (dialogContext) => _LoanAllowedDaysDialog(
+          clubId: clubId,
+          selectedDays: selectedDays,
+          schedule: schedule,
+          defaultPlace: clubAddress,
+          onSave: () {
+            Navigator.of(dialogContext).pop();
+            if (context.mounted) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Jours de récupération/retour mis à jour."))); }
+          },
+        ),
+      );
+    });
+  }
+
+  // ── Build ───────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -288,287 +360,327 @@ class _LoanCatalogSection extends StatelessWidget {
       builder: (context, catalogSnap) {
         final catalogItems = catalogSnap.data?.docs ?? [];
 
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () => _showPaymentMethodsDialog(context),
-                    icon: const Icon(Icons.payment, size: 15),
-                    label: Text(
-                      "Moyens de paiement",
-                      style: const TextStyle(fontSize: 13),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () => _showLoanAllowedDaysDialog(context),
-                    icon: const Icon(Icons.calendar_today, size: 15),
-                    label: Text(
-                      "Infos récup./retour",
-                      style: const TextStyle(fontSize: 13),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Card(
-              color: ViroColors.primary.withValues(alpha: 0.1),
+        return CustomScrollView(
+          slivers: [
+            SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: Row(
                   children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(Icons.inventory_2, color: ViroColors.primary),
-                            const SizedBox(width: 8),
-                            const Text(
-                              "Catalogue de prêts",
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                              ),
-                            ),
-                          ],
-                        ),
-                        OutlinedButton.icon(
-                          onPressed: () => _showManageCatalogDialog(context),
-                          icon: const Icon(Icons.edit, size: 18),
-                          label: const Text("Gérer"),
-                        ),
-                      ],
+                    Text(
+                      catalogItems.isEmpty ? "Catalogue vide" : "${catalogItems.length} équipement${catalogItems.length > 1 ? 's' : ''}",
+                      style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
                     ),
-                    const SizedBox(height: 12),
-                    if (catalogItems.isEmpty)
-                      Text(
-                        "Aucun équipement dans le catalogue. Cliquez sur 'Gérer' pour ajouter des équipements.",
-                        style: TextStyle(color: Colors.grey[600], fontSize: 13),
-                      )
-                    else
-                      ...catalogItems.map((doc) {
-                        final data = doc.data();
-                        final equipmentId = doc.id;
-                        return _CatalogItemCard(
-                          clubId: clubId,
-                          equipmentId: equipmentId,
-                          data: data,
-                        );
-                      }),
+                    const Spacer(),
+                    OutlinedButton.icon(
+                      onPressed: () => showDialog<void>(context: context, builder: (_) => _ManageCatalogDialog(clubId: clubId)),
+                      icon: const Icon(Icons.edit_outlined, size: 16),
+                      label: const Text("Gérer"),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ),
                   ],
                 ),
               ),
             ),
+            if (catalogItems.isEmpty)
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.inventory_2_outlined, size: 56, color: Colors.grey.shade300),
+                        const SizedBox(height: 12),
+                        Text("Aucun équipement dans le catalogue",
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: Colors.grey.shade500)),
+                        const SizedBox(height: 8),
+                        TextButton(
+                          onPressed: () => showDialog<void>(context: context, builder: (_) => _ManageCatalogDialog(clubId: clubId)),
+                          child: const Text("Ajouter depuis l'inventaire"),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              )
+            else
+              SliverPadding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (_, i) {
+                      final doc = catalogItems[i];
+                      return _CatalogItemCard(clubId: clubId, equipmentId: doc.id, data: doc.data());
+                    },
+                    childCount: catalogItems.length,
+                  ),
+                ),
+              ),
+            const SliverToBoxAdapter(child: SizedBox(height: 24)),
           ],
         );
       },
     );
   }
+}
 
-  void _showManageCatalogDialog(BuildContext context) {
-    showDialog<void>(
-      context: context,
-      builder: (_) => _ManageCatalogDialog(clubId: clubId),
+// ── Onglet Prêts avec filter chips ─────────────────────────────────────────────
+
+class _LoansPretTab extends StatelessWidget {
+  final String clubId;
+  final List<Map<String, dynamic>> allLoans;
+  final List<Map<String, dynamic>> activeLoans;
+  final List<Map<String, dynamic>> overdueLoans;
+  final List<Map<String, dynamic>> history;
+  final bool showCancelButtons;
+  final String filter;
+  final ValueChanged<String> onFilterChanged;
+
+  const _LoansPretTab({
+    required this.clubId,
+    required this.allLoans,
+    required this.activeLoans,
+    required this.overdueLoans,
+    required this.history,
+    required this.showCancelButtons,
+    required this.filter,
+    required this.onFilterChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        // ── Filter chips ──────────────────────────────────────────────────────
+        _LoansFilterBar(
+          clubId: clubId,
+          allLoans: allLoans,
+          overdueCount: overdueLoans.length,
+          historyCount: history.length,
+          filter: filter,
+          onFilterChanged: onFilterChanged,
+        ),
+        const Divider(height: 1),
+
+        // ── Contenu filtré ────────────────────────────────────────────────────
+        Expanded(
+          child: _buildFilteredContent(context),
+        ),
+      ],
     );
   }
 
-  void _showPaymentMethodsDialog(BuildContext context) {
-    appFirestore
-        .collection(FirebaseCollections.clubs)
-        .doc(clubId)
-        .get()
-        .then((docSnap) {
-          final current =
-              docSnap.data()?['paymentMethods'] as List<dynamic>? ?? [];
-          final selectedMethods = Set<String>.from(
-            current.map((e) => e.toString()),
+  Widget _buildFilteredContent(BuildContext context) {
+    switch (filter) {
+      case 'demandes':
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              _LoanRequestsSection(clubId: clubId),
+              const SizedBox(height: 16),
+              _LoanChangeRequestsSection(clubId: clubId),
+            ],
+          ),
+        );
+      case 'actifs':
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              _PickupToConfirmSection(clubId: clubId, allLoans: allLoans, showCancelButtons: showCancelButtons),
+              const SizedBox(height: 8),
+              _ActiveLoansSection(clubId: clubId, allLoans: allLoans, showCancelButtons: showCancelButtons),
+              _UpcomingLoansSection(clubId: clubId, showCancelButtons: showCancelButtons),
+            ],
+          ),
+        );
+      case 'retard':
+        if (overdueLoans.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.check_circle_outline, size: 56, color: Colors.grey.shade300),
+                const SizedBox(height: 12),
+                Text("Aucun retard", style: TextStyle(color: Colors.grey.shade500)),
+              ],
+            ),
           );
-          if (!context.mounted) return;
-          showDialog<void>(
-            context: context,
-            builder: (dialogContext) => StatefulBuilder(
-              builder: (context, setDialogState) => AlertDialog(
-                title: const Text("Moyens de paiement acceptés"),
-                content: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        "Sélectionnez les moyens de paiement acceptés pour les prêts :",
-                        style: TextStyle(fontSize: 14),
-                      ),
-                      const SizedBox(height: 16),
-                      CheckboxListTile(
-                        title: const Text("Carte bancaire"),
-                        value: selectedMethods.contains('carte'),
-                        onChanged: (value) {
-                          setDialogState(() {
-                            if (value == true) {
-                              selectedMethods.add('carte');
-                            } else {
-                              selectedMethods.remove('carte');
-                            }
-                          });
-                        },
-                      ),
-                      CheckboxListTile(
-                        title: const Text("Chèque"),
-                        value: selectedMethods.contains('cheque'),
-                        onChanged: (value) {
-                          setDialogState(() {
-                            if (value == true) {
-                              selectedMethods.add('cheque');
-                            } else {
-                              selectedMethods.remove('cheque');
-                            }
-                          });
-                        },
-                      ),
-                      CheckboxListTile(
-                        title: const Text("Espèces"),
-                        value: selectedMethods.contains('especes'),
-                        onChanged: (value) {
-                          setDialogState(() {
-                            if (value == true) {
-                              selectedMethods.add('especes');
-                            } else {
-                              selectedMethods.remove('especes');
-                            }
-                          });
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.of(dialogContext).pop(),
-                    child: const Text("Annuler"),
-                  ),
-                  ElevatedButton(
-                    onPressed: () async {
-                      try {
-                        await appFirestore
-                            .collection(FirebaseCollections.clubs)
-                            .doc(clubId)
-                            .update({
-                              'paymentMethods': selectedMethods.toList(),
-                            });
-                        if (context.mounted) {
-                          Navigator.of(dialogContext).pop();
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                "Moyens de paiement mis à jour avec succès !",
-                              ),
-                            ),
-                          );
-                        }
-                      } catch (e) {
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text(FirebaseErrorHandler.getErrorMessage(e))),
-                          );
-                        }
-                      }
-                    },
-                    child: const Text("Enregistrer"),
-                  ),
-                ],
+        }
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: _OverdueLoansSection(clubId: clubId, allLoans: allLoans, showCancelButtons: showCancelButtons),
+        );
+      case 'historique':
+        if (history.isEmpty) {
+          return Center(
+            child: Text("Aucun historique", style: TextStyle(color: Colors.grey.shade500)),
+          );
+        }
+        return ListView.builder(
+          padding: const EdgeInsets.all(16),
+          itemCount: history.take(50).length,
+          itemBuilder: (_, i) => _LoanHistoryTile(data: history[i], clubId: clubId),
+        );
+      default:
+        return const SizedBox.shrink();
+    }
+  }
+}
+
+class _LoansFilterBar extends StatelessWidget {
+  final String clubId;
+  final List<Map<String, dynamic>> allLoans;
+  final int overdueCount;
+  final int historyCount;
+  final String filter;
+  final ValueChanged<String> onFilterChanged;
+
+  const _LoansFilterBar({
+    required this.clubId,
+    required this.allLoans,
+    required this.overdueCount,
+    required this.historyCount,
+    required this.filter,
+    required this.onFilterChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: appFirestore
+          .collection(FirebaseCollections.clubs)
+          .doc(clubId)
+          .collection(FirebaseCollections.equipmentLoanRequests)
+          .where('status', isEqualTo: 'pending')
+          .snapshots(),
+      builder: (context, reqSnap) {
+        final pendingRequests = reqSnap.data?.docs.length ?? 0;
+
+        final now = DateTime.now();
+        final today = DateTime(now.year, now.month, now.day);
+        final activeCount = allLoans.where((l) {
+          if (l['status'] != 'active') return false;
+          final lent = (l['lentAt'] as Timestamp?)?.toDate();
+          final due = (l['dueAt'] as Timestamp?)?.toDate();
+          if (lent == null || due == null) return false;
+          final lentDay = DateTime(lent.year, lent.month, lent.day);
+          final dueDay = DateTime(due.year, due.month, due.day);
+          return !lentDay.isAfter(today) && !dueDay.isBefore(today);
+        }).length;
+
+        return SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          child: Row(
+            children: [
+              _FilterChip(
+                label: "Demandes",
+                count: pendingRequests,
+                active: filter == 'demandes',
+                urgency: pendingRequests > 0,
+                onTap: () => onFilterChanged('demandes'),
+              ),
+              const SizedBox(width: 8),
+              _FilterChip(
+                label: "Actifs",
+                count: activeCount,
+                active: filter == 'actifs',
+                onTap: () => onFilterChanged('actifs'),
+              ),
+              const SizedBox(width: 8),
+              _FilterChip(
+                label: "En retard",
+                count: overdueCount,
+                active: filter == 'retard',
+                urgency: overdueCount > 0,
+                onTap: () => onFilterChanged('retard'),
+              ),
+              const SizedBox(width: 8),
+              _FilterChip(
+                label: "Historique",
+                count: historyCount,
+                active: filter == 'historique',
+                onTap: () => onFilterChanged('historique'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _FilterChip extends StatelessWidget {
+  final String label;
+  final int count;
+  final bool active;
+  final bool urgency;
+  final VoidCallback onTap;
+
+  const _FilterChip({
+    required this.label,
+    required this.count,
+    required this.active,
+    required this.onTap,
+    this.urgency = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = urgency && !active ? ViroColors.error : ViroColors.primary;
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: active ? ViroColors.primary : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: active ? ViroColors.primary : (urgency ? ViroColors.error : Colors.grey.shade300),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: active ? Colors.white : (urgency ? color : Colors.grey.shade700),
               ),
             ),
-          );
-        });
-  }
-
-  void _showLoanAllowedDaysDialog(BuildContext context) {
-    appFirestore
-        .collection(FirebaseCollections.clubs)
-        .doc(clubId)
-        .get()
-        .then((docSnap) {
-          final data = docSnap.data() ?? {};
-          final clubAddress = data['address'] as String? ?? '';
-          final current = data['loanAllowedWeekdays'] as List<dynamic>? ?? [];
-          final loanScheduleRaw =
-              data['loanSchedule'] as Map<String, dynamic>? ?? {};
-          final selectedDays = Set<int>.from(
-            current
-                .map((e) => (e is int) ? e : int.tryParse(e.toString()) ?? 0)
-                .where((e) => e >= 1 && e <= 7),
-          );
-          if (selectedDays.isEmpty && current.isEmpty) {
-            for (int i = 1; i <= 7; i++) {
-              selectedDays.add(i);
-            }
-          }
-          // Par jour : startHour, startMinute, endHour, endMinute, place (défaut 8h-20h, adresse club)
-          final Map<
-            int,
-            ({
-              int startHour,
-              int startMinute,
-              int endHour,
-              int endMinute,
-              String place,
-            })
-          >
-          schedule = {};
-          for (int d = 1; d <= 7; d++) {
-            final key = d.toString();
-            final raw = loanScheduleRaw[key] as Map<String, dynamic>?;
-            if (raw != null) {
-              schedule[d] = (
-                startHour: raw['startHour'] as int? ?? 8,
-                startMinute: raw['startMinute'] as int? ?? 0,
-                endHour: raw['endHour'] as int? ?? 20,
-                endMinute: raw['endMinute'] as int? ?? 0,
-                place: raw['place'] as String? ?? clubAddress,
-              );
-            } else {
-              schedule[d] = (
-                startHour: 8,
-                startMinute: 0,
-                endHour: 20,
-                endMinute: 0,
-                place: clubAddress,
-              );
-            }
-          }
-          if (!context.mounted) return;
-          showDialog<void>(
-            context: context,
-            builder: (dialogContext) => _LoanAllowedDaysDialog(
-              clubId: clubId,
-              selectedDays: selectedDays,
-              schedule: schedule,
-              defaultPlace: clubAddress,
-              onSave: () {
-                Navigator.of(dialogContext).pop();
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        "Jours de récupération/retour mis à jour avec succès !",
-                      ),
-                    ),
-                  );
-                }
-              },
-            ),
-          );
-        });
+            if (count > 0) ...[
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: active ? Colors.white.withAlpha(50) : color.withAlpha(30),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  '$count',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: active ? Colors.white : color,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -587,17 +699,25 @@ class _DaySchedule {
     this.endMinute = 0,
     this.place = '',
   });
+
+  _DaySchedule copyWith({
+    int? startHour, int? startMinute,
+    int? endHour,   int? endMinute,
+    String? place,
+  }) => _DaySchedule(
+    startHour: startHour ?? this.startHour,
+    startMinute: startMinute ?? this.startMinute,
+    endHour: endHour ?? this.endHour,
+    endMinute: endMinute ?? this.endMinute,
+    place: place ?? this.place,
+  );
 }
 
 /// Dialog pour configurer les jours, horaires et lieux de récup./retour
 class _LoanAllowedDaysDialog extends StatefulWidget {
   final String clubId;
   final Set<int> selectedDays;
-  final Map<
-    int,
-    ({int startHour, int startMinute, int endHour, int endMinute, String place})
-  >
-  schedule;
+  final Map<int, ({int startHour, int startMinute, int endHour, int endMinute, String place})> schedule;
   final String defaultPlace;
   final VoidCallback onSave;
 
@@ -617,15 +737,15 @@ class _LoanAllowedDaysDialogState extends State<_LoanAllowedDaysDialog> {
   late Set<int> _selectedDays;
   late Map<int, _DaySchedule> _schedule;
   final Map<int, TextEditingController> _placeControllers = {};
+  bool _saving = false;
 
   static const _weekdays = [
-    (1, 'Lundi'),
-    (2, 'Mardi'),
-    (3, 'Mercredi'),
-    (4, 'Jeudi'),
-    (5, 'Vendredi'),
-    (6, 'Samedi'),
-    (7, 'Dimanche'),
+    (1, 'Lun'), (2, 'Mar'), (3, 'Mer'),
+    (4, 'Jeu'), (5, 'Ven'), (6, 'Sam'), (7, 'Dim'),
+  ];
+  static const _weekdaysFull = [
+    (1, 'Lundi'), (2, 'Mardi'), (3, 'Mercredi'),
+    (4, 'Jeudi'), (5, 'Vendredi'), (6, 'Samedi'), (7, 'Dimanche'),
   ];
 
   @override
@@ -636,11 +756,8 @@ class _LoanAllowedDaysDialogState extends State<_LoanAllowedDaysDialog> {
     for (int d = 1; d <= 7; d++) {
       final s = widget.schedule[d]!;
       _schedule[d] = _DaySchedule(
-        startHour: s.startHour,
-        startMinute: s.startMinute,
-        endHour: s.endHour,
-        endMinute: s.endMinute,
-        place: s.place,
+        startHour: s.startHour, startMinute: s.startMinute,
+        endHour: s.endHour, endMinute: s.endMinute, place: s.place,
       );
       _placeControllers[d] = TextEditingController(text: s.place);
     }
@@ -648,23 +765,52 @@ class _LoanAllowedDaysDialogState extends State<_LoanAllowedDaysDialog> {
 
   @override
   void dispose() {
-    for (final c in _placeControllers.values) {
-      c.dispose();
-    }
+    for (final c in _placeControllers.values) { c.dispose(); }
     super.dispose();
   }
 
+  String _fmt(int h, int m) =>
+      '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}';
+
+  Future<void> _pickTime(int dayNum, bool isStart) async {
+    final s = _schedule[dayNum]!;
+    final initial = TimeOfDay(
+      hour: isStart ? s.startHour : s.endHour,
+      minute: isStart ? s.startMinute : s.endMinute,
+    );
+    final picked = await showTimePicker(context: context, initialTime: initial);
+    if (picked == null) return;
+    setState(() {
+      if (isStart) {
+        _schedule[dayNum] = s.copyWith(startHour: picked.hour, startMinute: picked.minute);
+      } else {
+        _schedule[dayNum] = s.copyWith(endHour: picked.hour, endMinute: picked.minute);
+      }
+    });
+  }
+
+  void _copyToAll(int sourceDayNum) {
+    final source = _schedule[sourceDayNum]!;
+    final sourcePlace = _placeControllers[sourceDayNum]?.text ?? source.place;
+    setState(() {
+      for (final d in _selectedDays) {
+        if (d == sourceDayNum) continue;
+        _schedule[d] = source.copyWith(place: sourcePlace);
+        _placeControllers[d]?.text = sourcePlace;
+      }
+    });
+  }
+
   Future<void> _save() async {
+    setState(() => _saving = true);
     try {
       final scheduleMap = <String, Map<String, dynamic>>{};
       for (final d in _selectedDays) {
         final s = _schedule[d]!;
         final placeText = _placeControllers[d]?.text.trim() ?? s.place;
         scheduleMap[d.toString()] = {
-          'startHour': s.startHour,
-          'startMinute': s.startMinute,
-          'endHour': s.endHour,
-          'endMinute': s.endMinute,
+          'startHour': s.startHour, 'startMinute': s.startMinute,
+          'endHour': s.endHour, 'endMinute': s.endMinute,
           'place': placeText.isEmpty ? widget.defaultPlace : placeText,
         };
       }
@@ -678,172 +824,264 @@ class _LoanAllowedDaysDialogState extends State<_LoanAllowedDaysDialog> {
       widget.onSave();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(FirebaseErrorHandler.getErrorMessage(e))));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(FirebaseErrorHandler.getErrorMessage(e))),
+        );
       }
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text("Jours pour récupérer ou rendre le prêt"),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              "Sélectionnez les jours et définissez les horaires et le lieu (par défaut 8h-20h, adresse du club).",
-              style: TextStyle(fontSize: 13),
-            ),
-            const SizedBox(height: 16),
-            ..._weekdays.map((e) {
-              final dayNum = e.$1;
-              final label = e.$2;
-              final isSelected = _selectedDays.contains(dayNum);
-              final s = _schedule[dayNum]!;
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  CheckboxListTile(
-                    title: Text(label),
-                    value: isSelected,
-                    onChanged: (value) {
-                      setState(() {
-                        if (value == true) {
-                          _selectedDays.add(dayNum);
-                        } else {
-                          _selectedDays.remove(dayNum);
-                        }
-                      });
-                    },
+    final sortedSelected = _selectedDays.toList()..sort();
+
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 32),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Titre
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+            child: Row(
+              children: [
+                const Icon(Icons.calendar_today_outlined, size: 20),
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Text(
+                    "Récupération / Retour",
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                   ),
-                  if (isSelected) ...[
-                    Padding(
-                      padding: const EdgeInsets.only(
-                        left: 16,
-                        right: 16,
-                        bottom: 12,
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close, size: 20),
+                  onPressed: () => Navigator.of(context).pop(),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Text(
+              "Définissez les jours et horaires auxquels les joueurs peuvent récupérer ou rendre le matériel.",
+              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Sélecteur de jours (chips)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: _weekdays.map((e) {
+                final dayNum = e.$1;
+                final label = e.$2;
+                final selected = _selectedDays.contains(dayNum);
+                return GestureDetector(
+                  onTap: () => setState(() {
+                    if (selected) {
+                      _selectedDays.remove(dayNum);
+                    } else {
+                      _selectedDays.add(dayNum);
+                    }
+                  }),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 150),
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: selected ? ViroColors.primary : Colors.grey.shade100,
+                      border: Border.all(
+                        color: selected ? ViroColors.primary : Colors.grey.shade300,
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            child: Row(
+                    ),
+                    child: Center(
+                      child: Text(
+                        label,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: selected ? Colors.white : Colors.grey.shade600,
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+          const SizedBox(height: 16),
+          const Divider(height: 1),
+
+          // Liste des jours sélectionnés
+          Flexible(
+            child: sortedSelected.isEmpty
+                ? Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Text(
+                      "Aucun jour sélectionné",
+                      style: TextStyle(color: Colors.grey.shade500, fontSize: 13),
+                      textAlign: TextAlign.center,
+                    ),
+                  )
+                : ListView.separated(
+                    shrinkWrap: true,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    itemCount: sortedSelected.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    itemBuilder: (context, i) {
+                      final dayNum = sortedSelected[i];
+                      final dayLabel = _weekdaysFull.firstWhere((e) => e.$1 == dayNum).$2;
+                      final s = _schedule[dayNum]!;
+                      return Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade50,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.grey.shade200),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
                               children: [
-                                const Text(
-                                  "De ",
-                                  style: TextStyle(fontSize: 13),
+                                Text(
+                                  dayLabel,
+                                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
                                 ),
-                                _hourDropdown(
-                                  value: s.startHour,
-                                  onChanged: (v) =>
-                                      setState(() => s.startHour = v ?? 8),
+                                const Spacer(),
+                                if (sortedSelected.length > 1)
+                                  TextButton.icon(
+                                    onPressed: () => _copyToAll(dayNum),
+                                    icon: const Icon(Icons.copy_all_outlined, size: 14),
+                                    label: const Text("Copier sur tous", style: TextStyle(fontSize: 11)),
+                                    style: TextButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      minimumSize: Size.zero,
+                                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            // Plage horaire
+                            Row(
+                              children: [
+                                const Icon(Icons.schedule_outlined, size: 16, color: Colors.grey),
+                                const SizedBox(width: 6),
+                                _TimeChip(
+                                  label: _fmt(s.startHour, s.startMinute),
+                                  onTap: () => _pickTime(dayNum, true),
                                 ),
-                                const Text(
-                                  " h ",
-                                  style: TextStyle(fontSize: 13),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                                  child: Text('→', style: TextStyle(color: Colors.grey.shade500, fontWeight: FontWeight.bold)),
                                 ),
-                                _minuteDropdown(
-                                  value: s.startMinute,
-                                  onChanged: (v) =>
-                                      setState(() => s.startMinute = v ?? 0),
-                                ),
-                                const Text(
-                                  " à ",
-                                  style: TextStyle(fontSize: 13),
-                                ),
-                                _hourDropdown(
-                                  value: s.endHour,
-                                  onChanged: (v) =>
-                                      setState(() => s.endHour = v ?? 20),
-                                ),
-                                const Text(
-                                  " h ",
-                                  style: TextStyle(fontSize: 13),
-                                ),
-                                _minuteDropdown(
-                                  value: s.endMinute,
-                                  onChanged: (v) =>
-                                      setState(() => s.endMinute = v ?? 0),
+                                _TimeChip(
+                                  label: _fmt(s.endHour, s.endMinute),
+                                  onTap: () => _pickTime(dayNum, false),
                                 ),
                               ],
                             ),
-                          ),
-                          const SizedBox(height: 6),
-                          TextField(
-                            decoration: InputDecoration(
-                              labelText: "Lieu",
-                              hintText: widget.defaultPlace.isEmpty
-                                  ? "Lieu de récup./retour"
-                                  : "Par défaut : adresse du club",
-                              isDense: true,
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 8,
+                            const SizedBox(height: 10),
+                            // Lieu
+                            TextField(
+                              controller: _placeControllers[dayNum],
+                              onChanged: (v) => _schedule[dayNum] = s.copyWith(place: v),
+                              decoration: InputDecoration(
+                                isDense: true,
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                hintText: widget.defaultPlace.isEmpty
+                                    ? "Lieu de récup./retour"
+                                    : widget.defaultPlace,
+                                hintStyle: const TextStyle(fontSize: 13),
+                                prefixIcon: const Icon(Icons.location_on_outlined, size: 18),
                               ),
+                              style: const TextStyle(fontSize: 13),
                             ),
-                            controller: _placeControllers[dayNum],
-                            onChanged: (v) => s.place = v,
-                            maxLines: 2,
-                            style: const TextStyle(fontSize: 13),
-                          ),
-                        ],
-                      ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+          ),
+
+          // Actions
+          const Divider(height: 1),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+            child: Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: _saving ? null : () => Navigator.of(context).pop(),
+                    child: const Text("Annuler"),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: _saving ? null : _save,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: ViroColors.primary,
+                      foregroundColor: Colors.white,
                     ),
-                  ],
-                ],
-              );
-            }),
+                    child: _saving
+                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        : const Text("Enregistrer"),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TimeChip extends StatelessWidget {
+  final String label;
+  final VoidCallback onTap;
+
+  const _TimeChip({required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: ViroColors.primary.withAlpha(20),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: ViroColors.primary.withAlpha(80)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
+                color: ViroColors.primary,
+              ),
+            ),
+            const SizedBox(width: 4),
+            Icon(Icons.edit_outlined, size: 12, color: ViroColors.primary.withAlpha(180)),
           ],
         ),
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text("Annuler"),
-        ),
-        ElevatedButton(onPressed: _save, child: const Text("Enregistrer")),
-      ],
-    );
-  }
-
-  Widget _hourDropdown({
-    required int value,
-    required ValueChanged<int?> onChanged,
-  }) {
-    return DropdownButton<int>(
-      value: value.clamp(0, 23),
-      isDense: true,
-      items: List.generate(
-        24,
-        (i) => DropdownMenuItem(value: i, child: Text('$i')),
-      ),
-      onChanged: onChanged,
-    );
-  }
-
-  Widget _minuteDropdown({
-    required int value,
-    required ValueChanged<int?> onChanged,
-  }) {
-    const minutes = [0, 15, 30, 45];
-    final v = minutes.contains(value) ? value : 0;
-    return DropdownButton<int>(
-      value: v,
-      isDense: true,
-      items: minutes
-          .map(
-            (m) => DropdownMenuItem(
-              value: m,
-              child: Text(m.toString().padLeft(2, '0')),
-            ),
-          )
-          .toList(),
-      onChanged: onChanged,
     );
   }
 }
@@ -1316,63 +1554,20 @@ class _CatalogItemDialogState extends State<_CatalogItemDialog> {
     );
     final catalogPrice = widget.existingCatalogData?['price'] as num?;
     final equipmentLoanPrice = widget.equipmentData['loanUnitPrice'] as num?;
-    final initialPrice = catalogPrice ?? equipmentLoanPrice;
     _priceController = TextEditingController(
-      text: initialPrice?.toString() ?? '',
+      text: (catalogPrice ?? equipmentLoanPrice)?.toString() ?? '',
     );
     final catalogCaution = widget.existingCatalogData?['caution'] as num?;
     final equipmentCaution = widget.equipmentData['caution'] as num?;
-    final initialCaution = catalogCaution ?? equipmentCaution;
     _cautionController = TextEditingController(
-      text: initialCaution?.toString() ?? '',
+      text: (catalogCaution ?? equipmentCaution)?.toString() ?? '',
     );
     _priceUnit = widget.existingCatalogData?['priceUnit'] as String? ?? 'jour';
     final maxLoanDurationDays =
         widget.existingCatalogData?['maxLoanDurationDays'] as int?;
-    String? initialDurationText;
-    if (maxLoanDurationDays != null) {
-      switch (_priceUnit) {
-        case 'jour':
-          initialDurationText = maxLoanDurationDays.toString();
-          break;
-        case 'semaine':
-          initialDurationText = (maxLoanDurationDays / 7).round().toString();
-          break;
-        case 'mois':
-          initialDurationText = (maxLoanDurationDays / 30).round().toString();
-          break;
-      }
-    }
     _maxLoanDurationController = TextEditingController(
-      text: initialDurationText ?? '',
+      text: maxLoanDurationDays != null ? _daysToUnit(maxLoanDurationDays, _priceUnit).toString() : '',
     );
-  }
-
-  int? _convertDurationToDays(int? value) {
-    if (value == null) return null;
-    switch (_priceUnit) {
-      case 'jour':
-        return value;
-      case 'semaine':
-        return value * 7;
-      case 'mois':
-        return value * 30;
-      default:
-        return value;
-    }
-  }
-
-  String _getDurationUnitLabel() {
-    switch (_priceUnit) {
-      case 'jour':
-        return 'jours';
-      case 'semaine':
-        return 'semaines';
-      case 'mois':
-        return 'mois';
-      default:
-        return 'jours';
-    }
   }
 
   @override
@@ -1384,6 +1579,49 @@ class _CatalogItemDialogState extends State<_CatalogItemDialog> {
     super.dispose();
   }
 
+  static int _daysToUnit(int days, String unit) {
+    switch (unit) {
+      case 'semaine': return (days / 7).round();
+      case 'mois': return (days / 30).round();
+      default: return days;
+    }
+  }
+
+  static int _unitToDays(int value, String unit) {
+    switch (unit) {
+      case 'semaine': return value * 7;
+      case 'mois': return value * 30;
+      default: return value;
+    }
+  }
+
+  void _changeUnit(String newUnit) {
+    if (newUnit == _priceUnit) return;
+    final currentValue = int.tryParse(_maxLoanDurationController.text.trim());
+    if (currentValue != null && currentValue > 0) {
+      final days = _unitToDays(currentValue, _priceUnit);
+      final converted = _daysToUnit(days, newUnit);
+      _maxLoanDurationController.text = converted > 0 ? converted.toString() : '';
+    }
+    setState(() => _priceUnit = newUnit);
+  }
+
+  String get _unitShort {
+    switch (_priceUnit) {
+      case 'semaine': return 'sem.';
+      case 'mois': return 'mois';
+      default: return 'jour';
+    }
+  }
+
+  String get _unitPlural {
+    switch (_priceUnit) {
+      case 'semaine': return 'semaines';
+      case 'mois': return 'mois';
+      default: return 'jours';
+    }
+  }
+
   Future<void> _save() async {
     final maxQty = int.tryParse(_maxQuantityController.text.trim());
     final price = _priceController.text.trim().isEmpty
@@ -1392,50 +1630,32 @@ class _CatalogItemDialogState extends State<_CatalogItemDialog> {
     final caution = _cautionController.text.trim().isEmpty
         ? null
         : double.tryParse(_cautionController.text.trim().replaceAll(',', '.'));
-    final maxLoanDurationValue = _maxLoanDurationController.text.trim().isEmpty
+    final durationValue = _maxLoanDurationController.text.trim().isEmpty
         ? null
         : int.tryParse(_maxLoanDurationController.text.trim());
-    final maxLoanDurationDays = _convertDurationToDays(maxLoanDurationValue);
-
-    if (maxQty == null || maxQty < 1) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Le nombre maximum doit être au moins 1."),
-          ),
-        );
-      }
-      return;
-    }
-
-    if (maxLoanDurationValue != null && maxLoanDurationValue < 1) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              "La durée de prêt maximum doit être au moins 1 ${_getDurationUnitLabel().replaceAll('s', '')}.",
-            ),
-          ),
-        );
-      }
-      return;
-    }
+    final maxLoanDurationDays = durationValue != null ? _unitToDays(durationValue, _priceUnit) : null;
 
     final quantityTotal =
         widget.equipmentData['quantityTotal'] as int? ??
         widget.equipmentData['quantity'] as int? ??
         0;
 
+    if (maxQty == null || maxQty < 1) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("La quantité doit être au moins 1.")),
+      );
+      return;
+    }
     if (maxQty > quantityTotal) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              "Le nombre maximum ne peut pas dépasser $quantityTotal disponible(s).",
-            ),
-          ),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Maximum disponible : $quantityTotal.")),
+      );
+      return;
+    }
+    if (durationValue != null && durationValue < 1) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("La durée doit être au moins 1.")),
+      );
       return;
     }
 
@@ -1470,14 +1690,12 @@ class _CatalogItemDialogState extends State<_CatalogItemDialog> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(FirebaseErrorHandler.getErrorMessage(e))));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(FirebaseErrorHandler.getErrorMessage(e))),
+        );
       }
     } finally {
-      if (mounted) {
-        setState(() => _saving = false);
-      }
+      if (mounted) setState(() => _saving = false);
     }
   }
 
@@ -1487,127 +1705,150 @@ class _CatalogItemDialogState extends State<_CatalogItemDialog> {
         widget.equipmentData['quantityTotal'] as int? ??
         widget.equipmentData['quantity'] as int? ??
         0;
+    final imageUrl = widget.equipmentData['imageUrl'] as String?;
+    final name = widget.equipmentData['name'] as String? ?? 'Équipement';
 
     return AlertDialog(
       title: Text(
-        widget.existingCatalogData == null
-            ? "Ajouter au catalogue"
-            : "Modifier le catalogue",
+        widget.existingCatalogData == null ? "Ajouter au catalogue" : "Modifier",
       ),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              widget.equipmentData['name'] as String? ?? 'Équipement',
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: _maxQuantityController,
-              keyboardType: TextInputType.number,
-              enabled: !_saving,
-              decoration: InputDecoration(
-                labelText: "Nombre maximum de prêt",
-                hintText: "ex. 5",
-                helperText: "Maximum: $quantityTotal disponible(s)",
+      contentPadding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // En-tête équipement
+              Row(
+                children: [
+                  if (imageUrl != null && imageUrl.isNotEmpty)
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: CachedNetworkImage(
+                        imageUrl: imageUrl,
+                        width: 44,
+                        height: 44,
+                        fit: BoxFit.cover,
+                        errorWidget: (_, __, ___) => const SizedBox(),
+                      ),
+                    )
+                  else
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade100,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(Icons.inventory_2_outlined, size: 22, color: Colors.grey.shade400),
+                    ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                        Text(
+                          '$quantityTotal en stock',
+                          style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _priceController,
-              keyboardType: TextInputType.numberWithOptions(decimal: true),
-              enabled: !_saving,
-              decoration: const InputDecoration(
-                labelText: "Prix du prêt à l'unité (€)",
-                hintText: "ex. 2.50",
+              const SizedBox(height: 20),
+
+              // Quantité proposable
+              TextField(
+                controller: _maxQuantityController,
+                keyboardType: TextInputType.number,
+                enabled: !_saving,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                decoration: InputDecoration(
+                  labelText: "Quantité disponible au prêt",
+                  hintText: "ex. 3",
+                  helperText: "Max. $quantityTotal",
+                  suffixText: "/ $quantityTotal",
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _cautionController,
-              keyboardType: TextInputType.numberWithOptions(decimal: true),
-              enabled: !_saving,
-              decoration: const InputDecoration(
-                labelText: "Caution (€)",
-                hintText: "ex. 50",
+              const SizedBox(height: 20),
+
+              // Prix + unité de temps (inline)
+              Text(
+                "Tarification",
+                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.grey.shade700),
               ),
-            ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
-              initialValue: _priceUnit,
-              decoration: const InputDecoration(
-                labelText: "Unité de temps",
-                helperText: "Prix par jour, semaine ou mois",
+              const SizedBox(height: 10),
+
+              // Sélecteur d'unité (SegmentedButton)
+              SegmentedButton<String>(
+                segments: const [
+                  ButtonSegment(value: 'jour',    label: Text('/ jour')),
+                  ButtonSegment(value: 'semaine', label: Text('/ semaine')),
+                  ButtonSegment(value: 'mois',    label: Text('/ mois')),
+                ],
+                selected: {_priceUnit},
+                onSelectionChanged: _saving ? null : (s) => _changeUnit(s.first),
+                style: ButtonStyle(
+                  visualDensity: VisualDensity.compact,
+                  textStyle: WidgetStateProperty.all(const TextStyle(fontSize: 12)),
+                ),
               ),
-              items: const [
-                DropdownMenuItem(value: 'jour', child: Text('Par jour')),
-                DropdownMenuItem(value: 'semaine', child: Text('Par semaine')),
-                DropdownMenuItem(value: 'mois', child: Text('Par mois')),
-              ],
-              onChanged: _saving
-                  ? null
-                  : (v) {
-                      if (v != null && v != _priceUnit) {
-                        final currentValue = int.tryParse(
-                          _maxLoanDurationController.text.trim(),
-                        );
-                        if (currentValue != null) {
-                          int? days;
-                          switch (_priceUnit) {
-                            case 'jour':
-                              days = currentValue;
-                              break;
-                            case 'semaine':
-                              days = currentValue * 7;
-                              break;
-                            case 'mois':
-                              days = currentValue * 30;
-                              break;
-                          }
-                          if (days != null) {
-                            int? newValue;
-                            switch (v) {
-                              case 'jour':
-                                newValue = days;
-                                break;
-                              case 'semaine':
-                                newValue = (days / 7).round();
-                                break;
-                              case 'mois':
-                                newValue = (days / 30).round();
-                                break;
-                            }
-                            if (newValue != null && newValue > 0) {
-                              _maxLoanDurationController.text = newValue
-                                  .toString();
-                            } else {
-                              _maxLoanDurationController.clear();
-                            }
-                          }
-                        }
-                        setState(() => _priceUnit = v);
-                      }
-                    },
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _maxLoanDurationController,
-              keyboardType: TextInputType.number,
-              enabled: !_saving,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              decoration: InputDecoration(
-                labelText: "Durée de prêt maximum (${_getDurationUnitLabel()})",
-                hintText:
-                    "ex. ${_priceUnit == 'jour'
-                        ? '7'
-                        : _priceUnit == 'semaine'
-                        ? '2'
-                        : '1'} (optionnel)",
+              const SizedBox(height: 12),
+
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _priceController,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      enabled: !_saving,
+                      decoration: InputDecoration(
+                        labelText: "Prix",
+                        hintText: "ex. 2.50",
+                        suffixText: "€/$_unitShort",
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextField(
+                      controller: _cautionController,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      enabled: !_saving,
+                      decoration: const InputDecoration(
+                        labelText: "Caution",
+                        hintText: "ex. 50",
+                        suffixText: "€",
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ),
-          ],
+              const SizedBox(height: 20),
+
+              // Durée max (hérite de l'unité du prix)
+              Text(
+                "Durée maximale",
+                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.grey.shade700),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _maxLoanDurationController,
+                keyboardType: TextInputType.number,
+                enabled: !_saving,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                decoration: InputDecoration(
+                  hintText: "Illimitée si vide",
+                  suffixText: _unitPlural,
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
         ),
       ),
       actions: [
@@ -1618,14 +1859,8 @@ class _CatalogItemDialogState extends State<_CatalogItemDialog> {
         ElevatedButton(
           onPressed: _saving ? null : _save,
           child: _saving
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : Text(
-                  widget.existingCatalogData == null ? "Ajouter" : "Modifier",
-                ),
+              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+              : Text(widget.existingCatalogData == null ? "Ajouter" : "Modifier"),
         ),
       ],
     );

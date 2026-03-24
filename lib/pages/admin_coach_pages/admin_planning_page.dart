@@ -21,7 +21,6 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
   DateTime _selectedDate = DateTime.now();
   String _filterTeam = "Choisir une équipe";
   String _filterCategory = "Choisir une catégorie";
-  bool _deleteMode = false;
   final ScrollController _dayScrollController = ScrollController();
 
   /// Date du premier événement recensé (chargée une fois au démarrage).
@@ -77,7 +76,9 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
       DateTime.now().month,
       DateTime.now().day,
     );
-    final startDay = _firstEventDate!.isBefore(today) ? _firstEventDate! : today;
+    final startDay = _firstEventDate!.isBefore(today)
+        ? _firstEventDate!
+        : today;
     final endDay = today.add(const Duration(days: 28));
 
     final days = <DateTime>[];
@@ -100,7 +101,8 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
 
   // Vérifie si un filtre est actif
   bool _hasActiveFilter() {
-    return !_filterTeam.startsWith("Choisir") || !_filterCategory.startsWith("Choisir");
+    return !_filterTeam.startsWith("Choisir") ||
+        !_filterCategory.startsWith("Choisir");
   }
 
   void _scrollToCenterSelectedDay(int selectedIndex) {
@@ -129,15 +131,6 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
         title: const Text("Planning du Club"),
         centerTitle: true,
         automaticallyImplyLeading: false,
-        actions: [
-          IconButton(
-            icon: Icon(
-              _deleteMode ? Icons.close : Icons.edit,
-              color: _deleteMode ? Colors.redAccent : null,
-            ),
-            onPressed: () => setState(() => _deleteMode = !_deleteMode),
-          ),
-        ],
       ),
       body: Column(
         children: [
@@ -189,7 +182,9 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
           // Utiliser la date du premier event comme borne inférieure (inclut les jours passés)
           final lowerBound = _firstEventDate != null
               ? Timestamp.fromDate(_firstEventDate!)
-              : Timestamp.fromDate(DateTime.now().subtract(const Duration(days: 365 * 2)));
+              : Timestamp.fromDate(
+                  DateTime.now().subtract(const Duration(days: 365 * 2)),
+                );
 
           return StreamBuilder<QuerySnapshot>(
             stream: appFirestore
@@ -197,7 +192,10 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
                 .doc(widget.clubId)
                 .collection(FirebaseCollections.events)
                 .where('date', isGreaterThanOrEqualTo: lowerBound)
-                .where('date', isLessThanOrEqualTo: Timestamp.fromDate(seasonEndDate))
+                .where(
+                  'date',
+                  isLessThanOrEqualTo: Timestamp.fromDate(seasonEndDate),
+                )
                 .snapshots(),
             builder: (context, snapshot) {
               if (!snapshot.hasData) {
@@ -212,20 +210,29 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
               final filteredEvents = snapshot.data!.docs.where((doc) {
                 final data = doc.data() as Map<String, dynamic>;
                 final bool placeholderTeam = _filterTeam.startsWith("Choisir");
-                final bool placeholderCat = _filterCategory.startsWith("Choisir");
+                final bool placeholderCat = _filterCategory.startsWith(
+                  "Choisir",
+                );
                 final teamNames =
-                    (data['teamNames'] as List?)?.whereType<String>().toList() ?? [];
+                    (data['teamNames'] as List?)
+                        ?.whereType<String>()
+                        .toList() ??
+                    [];
                 final lcFilterTeam = _normalize(_filterTeam);
                 bool matchTeam =
                     placeholderTeam ||
                     _normalize(data['teamName'] ?? '') == lcFilterTeam ||
-                    teamNames.any((name) => _normalize(name).contains(lcFilterTeam));
+                    teamNames.any(
+                      (name) => _normalize(name).contains(lcFilterTeam),
+                    );
                 final eventCategory = (data['category'] as String?) ?? "";
                 final lcFilterCat = _normalize(_filterCategory);
                 bool matchCat =
                     placeholderCat ||
                     _normalize(eventCategory) == lcFilterCat ||
-                    teamNames.any((name) => _normalize(name).contains(lcFilterCat));
+                    teamNames.any(
+                      (name) => _normalize(name).contains(lcFilterCat),
+                    );
                 return matchTeam && matchCat;
               }).toList();
 
@@ -240,17 +247,21 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
               }
 
               // Convertir les dateIds en DateTime
-              final filteredDays = dateIds.map((dateId) {
-                try {
-                  final year = int.parse(dateId.substring(0, 4));
-                  final month = int.parse(dateId.substring(4, 6));
-                  final day = int.parse(dateId.substring(6, 8));
-                  return DateTime(year, month, day);
-                } catch (e) {
-                  return null;
-                }
-              }).whereType<DateTime>().toList()
-                ..sort();
+              final filteredDays =
+                  dateIds
+                      .map((dateId) {
+                        try {
+                          final year = int.parse(dateId.substring(0, 4));
+                          final month = int.parse(dateId.substring(4, 6));
+                          final day = int.parse(dateId.substring(6, 8));
+                          return DateTime(year, month, day);
+                        } catch (e) {
+                          return null;
+                        }
+                      })
+                      .whereType<DateTime>()
+                      .toList()
+                    ..sort();
 
               if (filteredDays.isEmpty) {
                 return Container(
@@ -267,15 +278,19 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
 
               // Si la date sélectionnée n'est pas dans les jours filtrés,
               // préférer aujourd'hui ou le premier jour futur disponible
-              if (!filteredDays.any((day) => DateUtils.isSameDay(day, _selectedDate))) {
+              if (!filteredDays.any(
+                (day) => DateUtils.isSameDay(day, _selectedDate),
+              )) {
                 WidgetsBinding.instance.addPostFrameCallback((_) {
                   if (mounted && filteredDays.isNotEmpty) {
                     final todayOrAfter = filteredDays.firstWhere(
-                      (d) => !d.isBefore(DateTime(
-                        DateTime.now().year,
-                        DateTime.now().month,
-                        DateTime.now().day,
-                      )),
+                      (d) => !d.isBefore(
+                        DateTime(
+                          DateTime.now().year,
+                          DateTime.now().month,
+                          DateTime.now().day,
+                        ),
+                      ),
                       orElse: () => filteredDays.last,
                     );
                     setState(() => _selectedDate = todayOrAfter);
@@ -319,7 +334,9 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
                     Color monthColor;
 
                     if (isSelected) {
-                      bgColor = isPast ? Colors.grey.shade500 : ViroColors.primary;
+                      bgColor = isPast
+                          ? Colors.grey.shade500
+                          : ViroColors.primary;
                       borderColor = bgColor;
                       dayNumColor = Colors.white;
                       dayLabelColor = Colors.white;
@@ -359,7 +376,10 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Text(
-                              DateFormat('E', 'fr_FR').format(date).toUpperCase(),
+                              DateFormat(
+                                'E',
+                                'fr_FR',
+                              ).format(date).toUpperCase(),
                               style: TextStyle(
                                 color: dayLabelColor,
                                 fontSize: 12,
@@ -376,7 +396,10 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
                               ),
                             ),
                             Text(
-                              DateFormat('MMM', 'fr_FR').format(date).toUpperCase(),
+                              DateFormat(
+                                'MMM',
+                                'fr_FR',
+                              ).format(date).toUpperCase(),
                               style: TextStyle(color: monthColor, fontSize: 10),
                             ),
                             if (isToday && !isSelected)
@@ -550,8 +573,10 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
           }
         }
 
-        final sortedTeams = teamNamesSet.toList()..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
-        final sortedCategories = categoriesSet.toList()..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+        final sortedTeams = teamNamesSet.toList()
+          ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+        final sortedCategories = categoriesSet.toList()
+          ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
 
         final teamsList = ["Choisir une équipe", ...sortedTeams];
         final catList = ["Choisir une catégorie", ...sortedCategories];
@@ -662,7 +687,7 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
         if (!snapshot.hasData) return const Center(child: ViroLoader(size: 40));
 
         var docs = snapshot.data!.docs;
-        
+
         // Récupérer la date de fin de saison du club
         return FutureBuilder<DocumentSnapshot>(
           future: appFirestore
@@ -696,26 +721,33 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
                 "Choisir",
               ); // pas de filtre
               final teamNames =
-                  (data['teamNames'] as List?)?.whereType<String>().toList() ?? [];
+                  (data['teamNames'] as List?)?.whereType<String>().toList() ??
+                  [];
               final lcFilterTeam = _normalize(_filterTeam);
               bool matchTeam =
                   placeholderTeam ||
                   _normalize(data['teamName'] ?? '') == lcFilterTeam ||
-                  teamNames.any((name) => _normalize(name).contains(lcFilterTeam));
+                  teamNames.any(
+                    (name) => _normalize(name).contains(lcFilterTeam),
+                  );
               final eventCategory = (data['category'] as String?) ?? "";
               final lcFilterCat = _normalize(_filterCategory);
               bool matchCat =
                   placeholderCat ||
                   _normalize(eventCategory) == lcFilterCat ||
-                  teamNames.any((name) => _normalize(name).contains(lcFilterCat));
+                  teamNames.any(
+                    (name) => _normalize(name).contains(lcFilterCat),
+                  );
               return matchTeam && matchCat;
             }).toList();
 
             filteredDocs.sort((a, b) {
               final da = a.data() as Map<String, dynamic>;
               final db = b.data() as Map<String, dynamic>;
-              final bool aAllDay = da['startTime'] == null && da['endTime'] == null;
-              final bool bAllDay = db['startTime'] == null && db['endTime'] == null;
+              final bool aAllDay =
+                  da['startTime'] == null && da['endTime'] == null;
+              final bool bAllDay =
+                  db['startTime'] == null && db['endTime'] == null;
               if (aAllDay && !bAllDay) return -1;
               if (!aAllDay && bAllDay) return 1;
               return _timeToMinutes(
@@ -724,13 +756,16 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
             });
 
             if (filteredDocs.isEmpty) {
-              return const Center(child: Text("Aucun événement prévu ce jour."));
+              return const Center(
+                child: Text("Aucun événement prévu ce jour."),
+              );
             }
 
             final teamNames = filteredDocs
                 .map((d) {
                   final data = d.data() as Map<String, dynamic>;
-                  final name = data['teamName'] as String? ??
+                  final name =
+                      data['teamName'] as String? ??
                       (data['teamNames'] as List?)
                           ?.whereType<String>()
                           .firstOrNull;
@@ -751,7 +786,8 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
                     final data =
                         filteredDocs[index].data() as Map<String, dynamic>;
                     final docId = filteredDocs[index].id;
-                    final teamName = data['teamName'] as String? ??
+                    final teamName =
+                        data['teamName'] as String? ??
                         (data['teamNames'] as List?)
                             ?.whereType<String>()
                             .firstOrNull ??
@@ -762,33 +798,38 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
                     bool isSeasonCompleted = false;
                     if (seasonEndDate != null &&
                         data['type'] == 'Entraînement') {
-                      final eventDate =
-                          (data['date'] as Timestamp?)?.toDate();
+                      final eventDate = (data['date'] as Timestamp?)?.toDate();
                       if (eventDate != null &&
                           eventDate.isAfter(seasonEndDate)) {
                         isSeasonCompleted = true;
                       }
                     }
 
-                    return _buildEventCard(
-                      data,
-                      editing: _deleteMode,
-                      isSeasonCompleted: isSeasonCompleted,
-                      pendingCount: pendingCount,
-                      onTap: () {
-                        if (_deleteMode) {
-                          _onEventTap(docId, data);
-                        } else {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => AdminEventDetailsPage(
-                                clubId: widget.clubId,
-                                eventId: docId,
-                              ),
+                    return _EventSlidableTile(
+                      key: ValueKey(docId),
+                      onEditTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => AdminAddEventPage(
+                            clubId: widget.clubId,
+                            eventId: docId,
+                            initialData: data,
+                          ),
+                        ),
+                      ),
+                      onActionTap: () => _onEventTap(docId, data),
+                      child: _buildEventCard(
+                        data,
+                        isSeasonCompleted: isSeasonCompleted,
+                        pendingCount: pendingCount,
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => AdminEventDetailsPage(
+                              clubId: widget.clubId,
+                              eventId: docId,
                             ),
-                          );
-                        }
-                      },
+                          ),
+                        ),
+                      ),
                     );
                   },
                 );
@@ -826,7 +867,6 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
 
   Widget _buildEventCard(
     Map<String, dynamic> data, {
-    bool editing = false,
     bool isSeasonCompleted = false,
     int pendingCount = 0,
     VoidCallback? onTap,
@@ -835,16 +875,19 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
     final bool isMatch = data['type'] == 'Match';
     final bool allDay = data['startTime'] == null && data['endTime'] == null;
     final String time = isMatch
-        ? (data['meetingTime']?.toString() ?? data['startTime']?.toString() ?? "--:--")
+        ? (data['meetingTime']?.toString() ??
+              data['startTime']?.toString() ??
+              "--:--")
         : (allDay ? "ALL DAY" : (data['startTime']?.toString() ?? "--:--"));
     final String? endTimeStr = data['endTime']?.toString();
-    final String type = (data['title'] ?? data['type'] ?? "Événement").toString();
+    final String type = (data['title'] ?? data['type'] ?? "Événement")
+        .toString();
     final String teamName = _audienceText(data);
     final String? meetingLoc = data['meetingLocation']?.toString().trim();
     final String locationDisplay = isMatch
         ? ((meetingLoc != null && meetingLoc.isNotEmpty)
-            ? "RDV $meetingLoc"
-            : (data['location']?.toString() ?? "Stade du club"))
+              ? "RDV $meetingLoc"
+              : (data['location']?.toString() ?? "Stade du club"))
         : (data['location']?.toString() ?? "Stade du club");
 
     final String eventCategory = (data['category'] as String?)?.trim() ?? '';
@@ -871,8 +914,8 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
     final Color borderColor = canceled
         ? Colors.grey
         : (isSeasonCompleted
-            ? Colors.grey.shade400
-            : teamColor.withValues(alpha: 0.5));
+              ? Colors.grey.shade400
+              : teamColor.withValues(alpha: 0.5));
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -903,20 +946,6 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (editing)
-                      Padding(
-                        padding: const EdgeInsets.only(right: 10),
-                        child: CircleAvatar(
-                          radius: 14,
-                          backgroundColor:
-                              Colors.redAccent.withValues(alpha: 0.9),
-                          child: const Icon(
-                            Icons.remove,
-                            color: Colors.white,
-                            size: 18,
-                          ),
-                        ),
-                      ),
                     Container(
                       width: 50,
                       decoration: BoxDecoration(
@@ -927,11 +956,7 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(
-                            Icons.access_time,
-                            size: 16,
-                            color: teamColor,
-                          ),
+                          Icon(Icons.access_time, size: 16, color: teamColor),
                           Text(
                             time,
                             style: TextStyle(
@@ -980,42 +1005,6 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
                                 fontSize: 11,
                               ),
                             ),
-                          const SizedBox(height: 4),
-                          Center(
-                            child: Text(
-                              _truncate(teamName),
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.black,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Center(
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(
-                                  Icons.location_on_outlined,
-                                  size: 14,
-                                  color: Colors.grey,
-                                ),
-                                const SizedBox(width: 4),
-                                Flexible(
-                                  child: Text(
-                                    _truncate(locationDisplay, max: 50),
-                                    style: const TextStyle(
-                                      color: Colors.grey,
-                                      fontSize: 13,
-                                    ),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
                         ],
                       ),
                     ),
@@ -1031,11 +1020,7 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
                           mainAxisAlignment: MainAxisAlignment.center,
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(
-                              Icons.access_time,
-                              size: 16,
-                              color: teamColor,
-                            ),
+                            Icon(Icons.access_time, size: 16, color: teamColor),
                             Text(
                               endTimeStr,
                               style: TextStyle(
@@ -1048,6 +1033,41 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
                         ),
                       ),
                     ],
+                  ],
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: Text(
+                    _truncate(teamName),
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(
+                      Icons.location_on_outlined,
+                      size: 14,
+                      color: Colors.grey,
+                    ),
+                    const SizedBox(width: 4),
+                    Flexible(
+                      child: Text(
+                        _truncate(locationDisplay, max: 50),
+                        style: const TextStyle(
+                          color: Colors.grey,
+                          fontSize: 13,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 10),
@@ -1100,7 +1120,11 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
       }
       return 0;
     } catch (e) {
-      AppLogger.instance.error('_timeToMinutes parse failed', error: e, context: {'time': str});
+      AppLogger.instance.error(
+        '_timeToMinutes parse failed',
+        error: e,
+        context: {'time': str},
+      );
       return 0;
     }
   }
@@ -1274,10 +1298,10 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
     final team = data['teamName'];
     final type = data['type'];
     final startTime = data['startTime'];
-    
+
     // Si on a le seriesId (nouvelle méthode), on l'utilise
     final seriesId = data['seriesId'] as String?;
-    
+
     Query query;
     if (seriesId != null && seriesId.isNotEmpty) {
       query = appFirestore
@@ -1336,5 +1360,149 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
     if (names.length == 1) return names.first;
     if (data['category'] != null) return "Tout : ${data['category']}";
     return teamName ?? 'Équipe';
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Slide-to-reveal tile pour les cartes d'événement
+// ---------------------------------------------------------------------------
+
+class _EventSlidableTile extends StatefulWidget {
+  final Widget child;
+  final VoidCallback onEditTap;
+  final VoidCallback onActionTap;
+
+  const _EventSlidableTile({
+    required super.key,
+    required this.child,
+    required this.onEditTap,
+    required this.onActionTap,
+  });
+
+  @override
+  State<_EventSlidableTile> createState() => _EventSlidableTileState();
+}
+
+class _EventSlidableTileState extends State<_EventSlidableTile>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  static const double _buttonSize = 48.0;
+  // Layout : [10px gap] [48px btn] [8px gap] [48px btn] [12px right padding] = 126px
+  static const double _revealWidth = 126.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 260),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _open() => _controller.animateTo(1.0, curve: Curves.easeOut);
+  void _close() => _controller.animateTo(0.0, curve: Curves.easeOut);
+
+  void _onDragStart(DragStartDetails _) => _controller.stop();
+
+  void _onDragUpdate(DragUpdateDetails details) {
+    _controller.value = (_controller.value - details.delta.dx / _revealWidth)
+        .clamp(0.0, 1.0);
+  }
+
+  void _onDragEnd(DragEndDetails details) {
+    final vx = details.velocity.pixelsPerSecond.dx;
+    if (vx < -400) {
+      _open();
+    } else if (vx > 400) {
+      _close();
+    } else if (_controller.value >= 0.4) {
+      _open();
+    } else {
+      _close();
+    }
+  }
+
+  Widget _roundButton({
+    required IconData icon,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: color,
+      shape: const CircleBorder(),
+      elevation: 2,
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: () {
+          _close();
+          onTap();
+        },
+        child: SizedBox(
+          width: _buttonSize,
+          height: _buttonSize,
+          child: Icon(icon, color: Colors.white, size: 22),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onHorizontalDragStart: _onDragStart,
+      onHorizontalDragUpdate: _onDragUpdate,
+      onHorizontalDragEnd: _onDragEnd,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(
+            child: AnimatedBuilder(
+              animation: _controller,
+              builder: (context, child) => MediaQuery(
+                data: MediaQuery.of(context).copyWith(
+                  textScaler: TextScaler.linear(
+                    1.0 - (_controller.value * 0.18),
+                  ),
+                ),
+                child: child!,
+              ),
+              child: widget.child,
+            ),
+          ),
+          SizeTransition(
+            axis: Axis.horizontal,
+            sizeFactor: _controller,
+            axisAlignment: -1.0,
+            child: Padding(
+              padding: const EdgeInsets.only(left: 10, right: 12, bottom: 12),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _roundButton(
+                    icon: Icons.edit_outlined,
+                    color: Colors.indigo.shade400,
+                    onTap: widget.onEditTap,
+                  ),
+                  const SizedBox(width: 8),
+                  _roundButton(
+                    icon: Icons.event_busy_outlined,
+                    color: Colors.red.shade400,
+                    onTap: widget.onActionTap,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
