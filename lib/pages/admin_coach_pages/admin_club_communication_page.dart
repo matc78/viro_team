@@ -264,6 +264,7 @@ class _AdminClubCommunicationPageState
         centerTitle: true,
         backgroundColor: ViroColors.background,
         elevation: 0,
+        automaticallyImplyLeading: false,
       ),
       body: Stack(
         children: [

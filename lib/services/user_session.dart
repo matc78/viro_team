@@ -35,6 +35,19 @@ class UserSession extends ChangeNotifier {
   /// Club actuel basé sur activeContext
   String? get currentClubId => _currentUser?.activeContext?.clubId;
 
+  /// Tous les clubIds où l'utilisateur a le rôle player
+  List<String> get playerClubIds {
+    final u = _currentUser;
+    if (u == null) return [];
+    final ids = u.profileSummaries
+        .where((s) => s.role == 'player')
+        .map((s) => s.clubId)
+        .toSet();
+    final active = currentClubId;
+    if (active != null) ids.add(active);
+    return ids.toList();
+  }
+
   /// Vérifie si le contexte actif est valide
   bool get hasValidContext => _currentUser?.activeContext?.isValid ?? false;
 

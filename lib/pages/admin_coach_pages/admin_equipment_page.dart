@@ -16,6 +16,7 @@ import '../../utils/equipment_helpers.dart';
 import '../../utils/firebase_helpers.dart';
 import '../../utils/firebase_error_handler.dart';
 import '../../utils/photo_permission_helper.dart';
+import 'admin_loans_page.dart';
 
 class AdminEquipmentPage extends StatefulWidget {
   final String clubId;
@@ -34,7 +35,7 @@ class _AdminEquipmentPageState extends State<AdminEquipmentPage> {
     if (userId == null) {
       return Scaffold(
         backgroundColor: ViroColors.background,
-        appBar: AppBar(title: const Text("Équipement"), centerTitle: true),
+        appBar: AppBar(title: const Text("Équipement"), centerTitle: true, automaticallyImplyLeading: false),
         body: const Center(child: Text("Non connecté")),
       );
     }
@@ -52,7 +53,7 @@ class _AdminEquipmentPageState extends State<AdminEquipmentPage> {
         if (userSnap.hasData && userData != null && !canManageEquipment) {
           return Scaffold(
             backgroundColor: ViroColors.background,
-            appBar: AppBar(title: const Text("Équipement"), centerTitle: true),
+            appBar: AppBar(title: const Text("Équipement"), centerTitle: true, automaticallyImplyLeading: false),
             body: Center(
               child: Padding(
                 padding: const EdgeInsets.all(24.0),
@@ -84,7 +85,25 @@ class _AdminEquipmentPageState extends State<AdminEquipmentPage> {
         }
         return Scaffold(
           backgroundColor: ViroColors.background,
-          appBar: AppBar(title: const Text("Équipement"), centerTitle: true),
+          appBar: AppBar(
+            title: const Text("Équipement"),
+            centerTitle: true,
+            automaticallyImplyLeading: false,
+            actions: [
+              TextButton.icon(
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => AdminLoansPage(clubId: widget.clubId),
+                  ),
+                ),
+                icon: const Icon(Icons.handshake_outlined, size: 18),
+                label: const Text("Prêts"),
+                style: TextButton.styleFrom(
+                  foregroundColor: ViroColors.primary,
+                ),
+              ),
+            ],
+          ),
           body: _InventoryTab(clubId: widget.clubId, sport: widget.sport),
           floatingActionButton: FloatingActionButton(
             onPressed: () => _showAddEquipmentDialog(context),

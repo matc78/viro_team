@@ -12,7 +12,7 @@ import 'package:viro_team/services/user_session.dart';
 import 'package:viro_team/theme/viro_theme.dart';
 import 'package:viro_team/utils/avatar_moderation.dart';
 import 'package:viro_team/pages/add_profile_page.dart';
-import 'package:viro_team/pages/admin_coach_pages/admin_home_page.dart';
+import 'package:viro_team/pages/admin_coach_pages/admin_shell.dart';
 import 'package:viro_team/pages/player_pages/player_shell.dart';
 
 /// Affiche le menu déroulant profil sous le bouton (avatar).
@@ -303,7 +303,7 @@ class _ProfileMenuDropdownContentState extends State<ProfileMenuDropdownContent>
       );
     } else {
       navigator.pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const AdminHomePage()),
+        MaterialPageRoute(builder: (_) => const AdminShell()),
         (route) => false,
       );
     }

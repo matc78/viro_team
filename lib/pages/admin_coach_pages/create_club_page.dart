@@ -10,7 +10,7 @@ import '../../utils/app_logger.dart';
 import '../../utils/firebase_error_handler.dart';
 import '../../services/membership_service.dart';
 import '../../services/user_session.dart';
-import 'admin_home_page.dart';
+import 'admin_shell.dart';
 
 class CreateClubPage extends StatefulWidget {
   const CreateClubPage({super.key});
@@ -129,7 +129,7 @@ class _CreateClubPageState extends State<CreateClubPage> {
       }
       if (mounted) {
         Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const AdminHomePage()),
+          MaterialPageRoute(builder: (_) => const AdminShell()),
           (route) => false,
         );
       }

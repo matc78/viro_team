@@ -11,7 +11,7 @@ import '../theme/viro_theme.dart';
 import '../widget/viro_loader.dart';
 import '../widget/club_search_widget.dart';
 import 'player_pages/player_home_page.dart';
-import 'admin_coach_pages/admin_home_page.dart';
+import 'admin_coach_pages/admin_shell.dart';
 import 'admin_coach_pages/create_club_page.dart';
 
 /// Page d'onboarding pour les utilisateurs sans profil
@@ -74,7 +74,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
           activeRole == 'coach' ||
           activeRole == 'admin_fondateur') {
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const AdminHomePage()),
+          MaterialPageRoute(builder: (_) => const AdminShell()),
         );
       } else if (activeRole == 'player') {
         Navigator.of(context).pushReplacement(
@@ -118,7 +118,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
           firstRole == 'coach' ||
           firstRole == 'admin_fondateur') {
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const AdminHomePage()),
+          MaterialPageRoute(builder: (_) => const AdminShell()),
         );
       } else {
         Navigator.of(context).pushReplacement(

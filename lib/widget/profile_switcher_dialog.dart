@@ -7,7 +7,7 @@ import 'package:viro_team/constants/firebase_collections.dart';
 import '../services/user_session.dart';
 import '../theme/viro_theme.dart';
 import '../pages/player_pages/player_home_page.dart';
-import '../pages/admin_coach_pages/admin_home_page.dart';
+import '../pages/admin_coach_pages/admin_shell.dart';
 
 /// Dialog pour changer de profil/contexte
 class ProfileSwitcherDialog extends StatefulWidget {
@@ -242,7 +242,7 @@ class _ProfileSwitcherDialogState extends State<ProfileSwitcherDialog> {
           role == 'admin_fondateur') {
         // Rediriger vers AdminHomePage
         Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const AdminHomePage()),
+          MaterialPageRoute(builder: (_) => const AdminShell()),
           (route) => false,
         );
       }

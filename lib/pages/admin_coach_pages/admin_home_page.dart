@@ -4,14 +4,11 @@ import 'package:viro_team/utils/club_emoji_utils.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:viro_team/utils/firestore_instance.dart';
 import 'package:flutter/material.dart';
-import 'package:viro_team/pages/admin_coach_pages/admin_club_communication_page.dart';
-import 'package:viro_team/pages/admin_coach_pages/admin_equipment_page.dart';
+import 'package:viro_team/pages/admin_coach_pages/admin_event_details_page.dart';
 import 'package:viro_team/pages/admin_coach_pages/admin_loans_page.dart';
-import 'package:viro_team/pages/admin_coach_pages/admin_planning_page.dart';
+import 'package:viro_team/pages/admin_coach_pages/admin_members_page.dart';
 import 'package:viro_team/pages/admin_coach_pages/admin_teams_page.dart';
 import 'package:viro_team/pages/admin_coach_pages/profil_request_page.dart';
-import 'admin_coach_mode_page.dart';
-import 'admin_members_page.dart';
 import 'admin_profil_page.dart';
 import 'package:intl/intl.dart';
 import '../../constants/firebase_collections.dart';
@@ -128,16 +125,20 @@ class _AdminHomePageState extends State<AdminHomePage> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
+                                  _buildTodaySection(clubId),
+                                  const SizedBox(height: 28),
+                                  _buildQuickAccessRow(
+                                    clubId,
+                                    clubName,
+                                    clubData,
+                                    viewerRole,
+                                    canManageEquipmentAndLoans,
+                                  ),
+                                  const SizedBox(height: 28),
                                   _buildNotToMissSection(
                                     clubId,
                                     clubName,
                                     userSnapshot.data?.data() ?? {},
-                                    canManageEquipmentAndLoans,
-                                  ),
-                                  const SizedBox(height: 28),
-                                  _buildActionsSection(
-                                    clubId,
-                                    club,
                                     canManageEquipmentAndLoans,
                                   ),
                                   const SizedBox(height: 28),
@@ -331,128 +332,6 @@ class _AdminHomePageState extends State<AdminHomePage> {
     );
   }
 
-  Widget _buildActionsSection(
-    String clubId,
-    Map<String, dynamic> club,
-    bool canManageEquipmentAndLoans,
-  ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(bottom: 14),
-          child: Text(
-            "Actions",
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: ViroColors.primary,
-            ),
-          ),
-        ),
-        GridView.count(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          crossAxisCount: 2,
-          crossAxisSpacing: 14,
-          mainAxisSpacing: 14,
-          childAspectRatio: 1.15,
-          children: [
-            _adminCard(
-              title: "Mode Coach",
-              count: "",
-              icon: Icons.sports_score,
-              color: ViroColors.accent,
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => AdminCoachModePage(
-                    clubId: clubId,
-                    sport: club['sport'] as String?,
-                  ),
-                ),
-              ),
-            ),
-            _MembersCountCard(
-              clubId: clubId,
-              clubName: club['name'] as String? ?? 'Mon Club',
-              clubSport: club['sport'] as String?,
-              userId: user?.uid,
-            ),
-            _TeamsCountCard(clubId: clubId),
-            _adminCard(
-              title: "Planning",
-              count: DateFormat('d MMM', 'fr_FR').format(DateTime.now()),
-              icon: Icons.calendar_today_rounded,
-              color: ViroColors.primary,
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => AdminPlanningPage(clubId: clubId),
-                ),
-              ),
-            ),
-            _adminCard(
-              title: "Communiquer",
-              count: "",
-              icon: Icons.campaign_rounded,
-              color: ViroColors.accent,
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => AdminClubCommunicationPage(clubId: clubId),
-                ),
-              ),
-            ),
-            if (canManageEquipmentAndLoans)
-              _adminCard(
-                title: "Équipement",
-                count: "",
-                icon: Icons.inventory_2,
-                color: ViroColors.primary,
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => AdminEquipmentPage(
-                      clubId: clubId,
-                      sport: club['sport'] as String?,
-                    ),
-                  ),
-                ),
-              ),
-            if (canManageEquipmentAndLoans)
-              _adminCard(
-                title: "Prêts",
-                count: "",
-                icon: Icons.handshake_outlined,
-                color: ViroColors.accent,
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => AdminLoansPage(
-                      clubId: clubId,
-                      initialTabIndex: 1,
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _adminCard({
-    required String title,
-    required String count,
-    required IconData icon,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    return _AdminCard(
-      title: title,
-      count: count,
-      icon: icon,
-      color: color,
-      onTap: onTap,
-    );
-  }
-
   /// Rôle effectif du viewer dans le club (admin_fondateur > admin > coach).
   String? _viewerRoleInClub(Map<String, dynamic> userData, String clubId) {
     final rolesInClub = getAllUserRolesInClub(userData, clubId);
@@ -475,6 +354,253 @@ class _AdminHomePageState extends State<AdminHomePage> {
       return r == 'player';
     }
     return false;
+  }
+
+  Widget _buildTodaySection(String clubId) {
+    final todayId = DateFormat('yyyyMMdd').format(DateTime.now());
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: appFirestore
+          .collection(FirebaseCollections.clubs)
+          .doc(clubId)
+          .collection(FirebaseCollections.events)
+          .where('dateId', isEqualTo: todayId)
+          .snapshots(),
+      builder: (context, snap) {
+        if (snap.connectionState == ConnectionState.waiting) {
+          return const SizedBox.shrink();
+        }
+        final docs = snap.data?.docs ?? [];
+        final events = docs.where((d) => d.data()['canceled'] != true).toList();
+        // Tri par heure de début
+        events.sort((a, b) {
+          final ta = a.data()['startTime']?.toString() ?? '';
+          final tb = b.data()['startTime']?.toString() ?? '';
+          return ta.compareTo(tb);
+        });
+        if (events.isEmpty) return const SizedBox.shrink();
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              "Aujourd'hui",
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: ViroColors.primary,
+              ),
+            ),
+            const SizedBox(height: 12),
+            ...events.map((doc) => _buildTodayEventCard(clubId, doc.id, doc.data())),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildTodayEventCard(
+    String clubId,
+    String eventId,
+    Map<String, dynamic> data,
+  ) {
+    final bool isMatch = data['type'] == 'Match';
+    final String title = (data['title'] ?? data['type'] ?? 'Événement').toString();
+    final String time = isMatch
+        ? (data['meetingTime']?.toString() ?? data['startTime']?.toString() ?? '--:--')
+        : (data['startTime']?.toString() ?? '--:--');
+    final String? endTime = data['endTime']?.toString();
+    final String location = isMatch
+        ? (data['meetingLocation']?.toString().trim().isNotEmpty == true
+            ? data['meetingLocation'].toString().trim()
+            : (data['location']?.toString() ?? ''))
+        : (data['location']?.toString() ?? '');
+    final teamNames = (data['teamNames'] as List?)?.whereType<String>().toList() ??
+        (data['teamName'] != null ? [data['teamName'].toString()] : <String>[]);
+    final String teamLabel = teamNames.isEmpty ? '' : teamNames.join(', ');
+
+    final String category = (data['category'] as String?)?.trim() ?? '';
+    final Color color = category.isNotEmpty
+        ? ViroColors.getCategoryColor(category)
+        : (isMatch ? Colors.orange.shade700 : ViroColors.primary);
+
+    return GestureDetector(
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => AdminEventDetailsPage(clubId: clubId, eventId: eventId),
+        ),
+      ),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            // Barre colorée à gauche
+            Container(
+              width: 5,
+              height: 72,
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(16),
+                  bottomLeft: Radius.circular(16),
+                ),
+              ),
+            ),
+            const SizedBox(width: 14),
+            // Icône
+            CircleAvatar(
+              radius: 20,
+              backgroundColor: color.withValues(alpha: 0.1),
+              child: Icon(
+                isMatch ? Icons.sports_soccer : Icons.fitness_center,
+                color: color,
+                size: 18,
+              ),
+            ),
+            const SizedBox(width: 12),
+            // Titre + équipe + lieu
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                    ),
+                  ),
+                  if (teamLabel.isNotEmpty)
+                    Text(
+                      teamLabel,
+                      style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  if (location.isNotEmpty)
+                    Text(
+                      location,
+                      style: TextStyle(fontSize: 11, color: Colors.grey[400]),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            // Heure
+            Padding(
+              padding: const EdgeInsets.only(right: 14),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    time,
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                      color: color,
+                    ),
+                  ),
+                  if (endTime != null && endTime.isNotEmpty)
+                    Text(
+                      endTime,
+                      style: TextStyle(fontSize: 11, color: Colors.grey[400]),
+                    ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right, color: Colors.grey, size: 20),
+            const SizedBox(width: 4),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQuickAccessRow(
+    String clubId,
+    String clubName,
+    Map<String, dynamic> clubData,
+    String? viewerRole,
+    bool canManageEquipmentAndLoans,
+  ) {
+    final clubSport = clubData['sport'] as String?;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 14),
+          child: Text(
+            "Gérer",
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: ViroColors.primary,
+            ),
+          ),
+        ),
+        Row(
+          children: [
+            Expanded(
+              child: _QuickAccessButton(
+                icon: Icons.group_outlined,
+                label: "Membres",
+                color: ViroColors.accent,
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => AdminMembersPage(
+                      clubId: clubId,
+                      clubName: clubName,
+                      clubSport: clubSport,
+                      currentViewerRole: viewerRole,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: _QuickAccessButton(
+                icon: Icons.groups_rounded,
+                label: "Équipes",
+                color: ViroColors.primary,
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => AdminTeamsPage(clubId: clubId),
+                  ),
+                ),
+              ),
+            ),
+            if (canManageEquipmentAndLoans) ...[
+              const SizedBox(width: 14),
+              Expanded(
+                child: _QuickAccessButton(
+                  icon: Icons.handshake_outlined,
+                  label: "Prêts",
+                  color: ViroColors.accent,
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => AdminLoansPage(clubId: clubId),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ],
+    );
   }
 
   Widget _buildNotToMissSection(
@@ -528,11 +654,31 @@ class _AdminHomePageState extends State<AdminHomePage> {
                       .where('status', isEqualTo: 'active')
                       .snapshots(),
                   builder: (context, loansSnap) {
-                    final hasLoanReqs = (loanReqSnap.data?.docs ?? []).isNotEmpty;
-                    final hasLoans = (loansSnap.data?.docs ?? []).isNotEmpty;
-                    final hasContent = hasJoin || hasLeaves || hasLoanReqs || hasLoans;
-                    return _buildNotToMissContent(
-                      clubId, clubName, userData, canManageEquipmentAndLoans, hasContent,
+                    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                      stream: appFirestore
+                          .collection(FirebaseCollections.clubs)
+                          .doc(clubId)
+                          .collection(FirebaseCollections.equipmentLoanRequests)
+                          .where('status', isEqualTo: 'accepted')
+                          .snapshots(),
+                      builder: (context, acceptedSnap) {
+                        final now = DateTime.now();
+                        final today = DateTime(now.year, now.month, now.day);
+                        final tomorrow = today.add(const Duration(days: 1));
+                        final hasLoanReqs = (loanReqSnap.data?.docs ?? []).isNotEmpty;
+                        final hasLoans = (loansSnap.data?.docs ?? []).isNotEmpty;
+                        final hasUpcomingLoans = (acceptedSnap.data?.docs ?? []).any((doc) {
+                          final ts = doc.data()['requestedPickupDate'] as Timestamp?;
+                          if (ts == null) return false;
+                          final d = ts.toDate();
+                          final day = DateTime(d.year, d.month, d.day);
+                          return !day.isBefore(today) && !day.isAfter(tomorrow);
+                        });
+                        final hasContent = hasJoin || hasLeaves || hasLoanReqs || hasLoans || hasUpcomingLoans;
+                        return _buildNotToMissContent(
+                          clubId, clubName, userData, canManageEquipmentAndLoans, hasContent,
+                        );
+                      },
                     );
                   },
                 );
@@ -2102,7 +2248,8 @@ class _AdminHomePageState extends State<AdminHomePage> {
 
         final requests = snapshot.data!.docs;
 
-        // Filtrer les prêts acceptés dont la date de récupération est dans le futur
+        // Afficher à partir de J-1 : pickupDay >= aujourd'hui - 1 jour
+        final yesterday = today.subtract(const Duration(days: 1));
         final upcomingLoans = requests.where((doc) {
           final data = doc.data();
           final requestedPickupDate = data['requestedPickupDate'] as Timestamp?;
@@ -2113,7 +2260,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
             pickupDate.month,
             pickupDate.day,
           );
-          return pickupDay.isAfter(today);
+          return !pickupDay.isBefore(yesterday);
         }).toList();
 
         if (upcomingLoans.isEmpty) {
@@ -2279,66 +2426,6 @@ class _AdminHomePageState extends State<AdminHomePage> {
   }
 }
 
-class _AdminCard extends StatelessWidget {
-  final String title;
-  final String count;
-  final IconData icon;
-  final Color color;
-  final VoidCallback onTap;
-
-  const _AdminCard({
-    required this.title,
-    required this.count,
-    required this.icon,
-    required this.color,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(15),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 5),
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            CircleAvatar(
-              backgroundColor: color.withValues(alpha: 0.1),
-              child: Icon(icon, color: color),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              title,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-            ),
-            if (count.isNotEmpty)
-              Text(
-                count,
-                style: TextStyle(
-                  color: color,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 12,
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class _InfoCard extends StatelessWidget {
   final Widget child;
   const _InfoCard({required this.child});
@@ -2358,122 +2445,56 @@ class _InfoCard extends StatelessWidget {
   }
 }
 
-// Widgets extraits pour optimiser les rebuilds
-class _MembersCountCard extends StatelessWidget {
-  final String clubId;
-  final String clubName;
-  final String? clubSport;
-  final String? userId;
+class _QuickAccessButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
 
-  const _MembersCountCard({
-    required this.clubId,
-    required this.clubName,
-    this.clubSport,
-    this.userId,
+  const _QuickAccessButton({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    if (userId == null) {
-      return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: appFirestore.collection(FirebaseCollections.users).snapshots(),
-        builder: (context, snap) {
-          final allDocs = snap.data?.docs ?? [];
-          final clubMembers = filterUsersByClub(allDocs, clubId);
-          final count = clubMembers.length;
-          return _AdminCard(
-            title: "Membres",
-            count: count == 0 ? "" : "$count",
-            icon: Icons.group_outlined,
-            color: ViroColors.accent,
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => AdminMembersPage(
-                    clubId: clubId,
-                    clubName: clubName,
-                    clubSport: clubSport,
-                    currentViewerRole: null,
-                  ),
-                ),
-              );
-            },
-          );
-        },
-      );
-    }
-    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-      stream: appFirestore
-          .collection(FirebaseCollections.users)
-          .doc(userId)
-          .snapshots(),
-      builder: (context, userSnap) {
-        final userData = userSnap.data?.data();
-        final rolesInClub =
-            userData != null ? getAllUserRolesInClub(userData, clubId) : <String>[];
-        final currentViewerRole = rolesInClub.contains('admin_fondateur')
-            ? 'admin_fondateur'
-            : (rolesInClub.contains('admin')
-                ? 'admin'
-                : (rolesInClub.contains('coach') ? 'coach' : null));
-        return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-          stream: appFirestore.collection(FirebaseCollections.users).snapshots(),
-          builder: (context, snap) {
-            final allDocs = snap.data?.docs ?? [];
-            final clubMembers = filterUsersByClub(allDocs, clubId);
-            final count = clubMembers.length;
-            return _AdminCard(
-              title: "Membres",
-              count: count == 0 ? "" : "$count",
-              icon: Icons.group_outlined,
-              color: ViroColors.accent,
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => AdminMembersPage(
-                      clubId: clubId,
-                      clubName: clubName,
-                      clubSport: clubSport,
-                      currentViewerRole: currentViewerRole,
-                    ),
-                  ),
-                );
-              },
-            );
-          },
-        );
-      },
-    );
-  }
-}
-
-class _TeamsCountCard extends StatelessWidget {
-  final String clubId;
-
-  const _TeamsCountCard({required this.clubId});
-
-  @override
-  Widget build(BuildContext context) {
-    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: appFirestore
-          .collection(FirebaseCollections.clubs)
-          .doc(clubId)
-          .collection(FirebaseCollections.teams)
-          .snapshots(),
-      builder: (context, snap) {
-        final teamCount = snap.data?.docs.length ?? 0;
-        return _AdminCard(
-          title: "Équipes",
-          count: teamCount == 0 ? "" : "$teamCount",
-          icon: Icons.groups_rounded,
-          color: ViroColors.primary,
-          onTap: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => AdminTeamsPage(clubId: clubId)),
-            );
-          },
-        );
-      },
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircleAvatar(
+              radius: 22,
+              backgroundColor: color.withValues(alpha: 0.1),
+              child: Icon(icon, color: color, size: 22),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              label,
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

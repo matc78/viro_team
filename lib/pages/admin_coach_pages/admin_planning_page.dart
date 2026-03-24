@@ -128,6 +128,7 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
       appBar: AppBar(
         title: const Text("Planning du Club"),
         centerTitle: true,
+        automaticallyImplyLeading: false,
         actions: [
           IconButton(
             icon: Icon(
@@ -1087,10 +1088,16 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
 
   int _timeToMinutes(dynamic time) {
     if (time == null) return 0;
-    final str = time.toString();
+    final str = time.toString().trim();
     try {
-      final parsed = DateFormat.jm('en_US').parse(str);
-      return parsed.hour * 60 + parsed.minute;
+      // Format 24h "HH:mm" (ex: "18:00")
+      final parts = str.split(':');
+      if (parts.length >= 2) {
+        final h = int.parse(parts[0]);
+        final m = int.parse(parts[1]);
+        return h * 60 + m;
+      }
+      return 0;
     } catch (e) {
       AppLogger.instance.error('_timeToMinutes parse failed', error: e, context: {'time': str});
       return 0;

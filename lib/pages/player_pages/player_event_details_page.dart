@@ -251,6 +251,8 @@ class PlayerEventDetailsPage extends StatelessWidget {
     final endTime = event['endTime'];
     final bool allDay = startTime == null && endTime == null;
     final clubName = event['clubName'] as String? ?? "Club";
+    final bool isMatch = (event['type'] as String?) == 'Match';
+    final String meetingTime = event['meetingTime']?.toString() ?? '--:--';
 
     return Container(
       margin: const EdgeInsets.all(16),
@@ -262,15 +264,25 @@ class PlayerEventDetailsPage extends StatelessWidget {
       ),
       child: Column(
         children: [
-          _infoRow(
-            Icons.access_time_rounded,
-            "Horaire",
-            allDay
-                ? "Toute la journée"
-                : "${startTime ?? '--:--'} - ${endTime ?? '--:--'}",
-          ),
-          const Divider(height: 30),
-          _infoRow(Icons.location_on_outlined, "Lieu", location),
+          if (isMatch) ...[
+            _infoRow(Icons.groups_outlined, "Rendez-vous", "$meetingTime · $location"),
+            const Divider(height: 30),
+            _infoRow(
+              Icons.sports_score_outlined,
+              "Match",
+              "${allDay ? 'Toute la journée' : '${startTime ?? '--:--'}${endTime != null ? ' - $endTime' : ''}'} · $location",
+            ),
+          ] else ...[
+            _infoRow(
+              Icons.access_time_rounded,
+              "Horaire",
+              allDay
+                  ? "Toute la journée"
+                  : "${startTime ?? '--:--'} - ${endTime ?? '--:--'}",
+            ),
+            const Divider(height: 30),
+            _infoRow(Icons.location_on_outlined, "Lieu", location),
+          ],
           const Divider(height: 30),
           _infoRow(Icons.emoji_events_outlined, "Club", formatClubNameWithEmoji(clubName, event['clubSport'] as String?)),
         ],

@@ -16,7 +16,7 @@ import 'package:provider/provider.dart';
 import 'package:viro_team/pages/onboarding_page.dart';
 import 'firebase_options.dart';
 import 'pages/admin_coach_pages/admin_club_communication_page.dart';
-import 'pages/admin_coach_pages/admin_home_page.dart';
+import 'pages/admin_coach_pages/admin_shell.dart';
 import 'pages/admin_coach_pages/admin_loans_page.dart';
 import 'pages/admin_coach_pages/admin_event_details_page.dart';
 import 'pages/auth_page.dart';
@@ -208,7 +208,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     JoinRequestNotification.onOpen = (_) {
       _navigatorKey.currentState?.push(
         MaterialPageRoute<void>(
-          builder: (_) => const AdminHomePage(),
+          builder: (_) => const AdminShell(),
         ),
       );
     };
@@ -630,7 +630,7 @@ class _AuthGateState extends State<_AuthGate> {
               if (activeRole == 'admin' ||
                   activeRole == 'coach' ||
                   activeRole == 'admin_fondateur') {
-                return const AdminHomePage();
+                return const AdminShell();
               }
               if (activeRole == 'player') {
                 return const PlayerShell();

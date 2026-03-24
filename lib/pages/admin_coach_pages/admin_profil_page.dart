@@ -28,7 +28,7 @@ import '../../utils/photo_permission_helper.dart';
 import '../../services/user_session.dart';
 import '../auth_page.dart';
 import '../onboarding_page.dart';
-import 'admin_home_page.dart';
+import 'admin_shell.dart';
 import 'widgets/admin_profil_menu_card.dart';
 import '../player_pages/player_home_page.dart';
 
@@ -1118,7 +1118,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
           );
         } else {
           Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(builder: (_) => const AdminHomePage()),
+            MaterialPageRoute(builder: (_) => const AdminShell()),
             (route) => false,
           );
         }
@@ -1346,7 +1346,7 @@ class _AdminProfilPageState extends State<AdminProfilPage> {
           );
         } else {
           Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(builder: (_) => const AdminHomePage()),
+            MaterialPageRoute(builder: (_) => const AdminShell()),
             (route) => false,
           );
         }

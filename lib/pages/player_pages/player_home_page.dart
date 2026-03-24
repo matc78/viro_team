@@ -28,7 +28,8 @@ import '../../widget/user_display_tile.dart';
 import '../../widget/viro_loader.dart';
 
 class PlayerHomePage extends StatefulWidget {
-  const PlayerHomePage({super.key});
+  final VoidCallback? onSwitchToPlanning;
+  const PlayerHomePage({super.key, this.onSwitchToPlanning});
 
   @override
   State<PlayerHomePage> createState() => _PlayerHomePageState();
@@ -839,6 +840,20 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
   }
 
   Widget _buildNextEventCardFromEvent(Map<String, dynamic>? eventInfo) {
+    // L'event est aujourd'hui → déjà affiché dans la section "Aujourd'hui"
+    if (eventInfo != null) {
+      final data = eventInfo['eventData'] as Map<String, dynamic>;
+      final eventDate = (data['date'] as Timestamp?)?.toDate();
+      if (eventDate != null) {
+        final now = DateTime.now();
+        final startOfDay = DateTime(now.year, now.month, now.day);
+        final endOfDay = startOfDay.add(const Duration(days: 1));
+        if (!eventDate.isBefore(startOfDay) && eventDate.isBefore(endOfDay)) {
+          return const SizedBox.shrink();
+        }
+      }
+    }
+
     if (eventInfo == null) {
       return Container(
         width: double.infinity,
@@ -1465,7 +1480,9 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
     final now = DateTime.now();
     final startOfDay = DateTime(now.year, now.month, now.day);
     final endOfDay = startOfDay.add(const Duration(days: 1));
-    final primaryClubId = allClubIds.isNotEmpty ? allClubIds.first : clubId;
+
+    // Requête sur TOUS les clubs du joueur (comme _buildNextEventCard)
+    final clubIdsToQuery = allClubIds.isNotEmpty ? allClubIds : [clubId];
 
     final activeLoansStream = appFirestore
         .collection(FirebaseCollections.clubs)
@@ -1475,49 +1492,87 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
         .where('status', isEqualTo: 'active')
         .snapshots();
 
-    final todayEventsStream = appFirestore
-        .collection(FirebaseCollections.clubs)
-        .doc(primaryClubId)
-        .collection(FirebaseCollections.events)
-        .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
-        .where('date', isLessThan: Timestamp.fromDate(endOfDay))
-        .snapshots();
+    final eventStreams = clubIdsToQuery
+        .map(
+          (cid) => appFirestore
+              .collection(FirebaseCollections.clubs)
+              .doc(cid)
+              .collection(FirebaseCollections.events)
+              .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
+              .where('date', isLessThan: Timestamp.fromDate(endOfDay))
+              .snapshots(),
+        )
+        .toList();
+
+    Column buildContent(
+      List<QuerySnapshot?> eventSnaps,
+      QuerySnapshot? loansSnap,
+    ) {
+      final hasLoans = loansSnap != null && loansSnap.docs.isNotEmpty;
+      final uid = _currentUserId;
+      final List<Map<String, dynamic>> todayEvents = [];
+      for (var i = 0; i < eventSnaps.length && i < clubIdsToQuery.length; i++) {
+        final snap = eventSnaps[i];
+        if (snap == null) continue;
+        final cid = clubIdsToQuery[i];
+        for (final doc in snap.docs) {
+          final data = doc.data() as Map<String, dynamic>;
+          if (data['canceled'] == true) continue;
+          final memberIds = (data['teamMemberIds'] as List?) ?? [];
+          if (memberIds.isEmpty || memberIds.contains(uid)) {
+            todayEvents.add({'eventId': doc.id, 'eventData': data, 'clubId': cid});
+          }
+        }
+      }
+      todayEvents.sort((a, b) {
+        final ta = (a['eventData'] as Map)['startTime']?.toString() ?? '';
+        final tb = (b['eventData'] as Map)['startTime']?.toString() ?? '';
+        return ta.compareTo(tb);
+      });
+      final hasEvents = todayEvents.isNotEmpty;
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildSectionTitleLarge("Aujourd'hui"),
+          if (!hasLoans && !hasEvents)
+            _buildTodayEmptyStateCard(clubId)
+          else ...[
+            _buildTodayLoansFromSnapshot(loansSnap, clubId),
+            const SizedBox(height: 12),
+            _buildTodayEventsFromEventList(todayEvents),
+          ],
+        ],
+      );
+    }
 
     return StreamBuilder<QuerySnapshot>(
       stream: activeLoansStream,
       builder: (context, loansSnap) {
+        if (eventStreams.length == 1) {
+          return StreamBuilder<QuerySnapshot>(
+            stream: eventStreams[0],
+            builder: (_, s0) => buildContent([s0.data], loansSnap.data),
+          );
+        }
+        if (eventStreams.length == 2) {
+          return StreamBuilder<QuerySnapshot>(
+            stream: eventStreams[0],
+            builder: (_, s0) => StreamBuilder<QuerySnapshot>(
+              stream: eventStreams[1],
+              builder: (_, s1) => buildContent([s0.data, s1.data], loansSnap.data),
+            ),
+          );
+        }
         return StreamBuilder<QuerySnapshot>(
-          stream: todayEventsStream,
-          builder: (context, eventsSnap) {
-            final hasLoans =
-                loansSnap.data != null && loansSnap.data!.docs.isNotEmpty;
-            return FutureBuilder<List<Map<String, dynamic>>>(
-              future: _extractEventsFromSnapshots(
-                [eventsSnap.data],
-                [primaryClubId],
-                userData,
-                onlyNeedingAction: false,
-              ),
-              builder: (context, todaySnap) {
-                final todayEvents = todaySnap.data ?? [];
-                final hasEvents = todayEvents.isNotEmpty;
-
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildSectionTitleLarge("Aujourd'hui"),
-                    if (!hasLoans && !hasEvents) ...[
-                      _buildTodayEmptyStateCard(clubId),
-                    ] else ...[
-                      _buildTodayLoansFromSnapshot(loansSnap.data, clubId),
-                      const SizedBox(height: 12),
-                      _buildTodayEventsFromEventList(todayEvents),
-                    ],
-                  ],
-                );
-              },
-            );
-          },
+          stream: eventStreams[0],
+          builder: (_, s0) => StreamBuilder<QuerySnapshot>(
+            stream: eventStreams[1],
+            builder: (_, s1) => StreamBuilder<QuerySnapshot>(
+              stream: eventStreams.length > 2 ? eventStreams[2] : eventStreams[1],
+              builder: (_, s2) =>
+                  buildContent([s0.data, s1.data, s2.data], loansSnap.data),
+            ),
+          ),
         );
       },
     );
@@ -1561,12 +1616,18 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
           ),
           const SizedBox(height: 12),
           TextButton.icon(
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => PlayerPlanningPage(clubId: clubId),
-              ),
-            ),
+            onPressed: () {
+              if (widget.onSwitchToPlanning != null) {
+                widget.onSwitchToPlanning!();
+              } else {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => PlayerPlanningPage(clubId: clubId),
+                  ),
+                );
+              }
+            },
             icon: const Icon(Icons.calendar_month, size: 18),
             label: const Text("Voir le planning"),
           ),

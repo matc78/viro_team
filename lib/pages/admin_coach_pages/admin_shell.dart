@@ -9,17 +9,19 @@ import '../../services/user_session.dart';
 import '../../theme/viro_theme.dart';
 import '../../utils/firestore_instance.dart';
 import '../../widget/viro_loader.dart';
-import 'player_home_page.dart';
-import 'player_planning_page.dart';
-import 'player_infos_page.dart';
-import 'player_loan_catalog_page.dart';
+import 'admin_home_page.dart';
+import 'admin_planning_page.dart';
+import 'admin_equipment_page.dart';
+import 'admin_club_communication_page.dart';
+import 'admin_coach_mode_page.dart';
 
 // Données statiques des onglets
 const _tabs = [
-  _TabData(label: 'Accueil',   icon: Icons.home_outlined,               selectedIcon: Icons.home_rounded),
-  _TabData(label: 'Planning',  icon: Icons.calendar_month_outlined,     selectedIcon: Icons.calendar_month_rounded),
-  _TabData(label: 'Infos',     icon: Icons.notifications_none_outlined, selectedIcon: Icons.notifications_rounded),
-  _TabData(label: 'Catalogue', icon: Icons.inventory_2_outlined,        selectedIcon: Icons.inventory_2_rounded),
+  _TabData(label: 'Équipement', icon: Icons.inventory_2_outlined,        selectedIcon: Icons.inventory_2_rounded),
+  _TabData(label: 'Communiquer', icon: Icons.campaign_outlined,           selectedIcon: Icons.campaign_rounded),
+  _TabData(label: 'Accueil',     icon: Icons.home_outlined,               selectedIcon: Icons.home_rounded),
+  _TabData(label: 'Coach',       icon: Icons.sports_score_outlined,       selectedIcon: Icons.sports_score),
+  _TabData(label: 'Planning',    icon: Icons.calendar_month_outlined,     selectedIcon: Icons.calendar_month_rounded),
 ];
 
 class _TabData {
@@ -31,16 +33,15 @@ class _TabData {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-class PlayerShell extends StatefulWidget {
-  const PlayerShell({super.key});
+class AdminShell extends StatefulWidget {
+  const AdminShell({super.key});
 
   @override
-  State<PlayerShell> createState() => _PlayerShellState();
+  State<AdminShell> createState() => _AdminShellState();
 }
 
-class _PlayerShellState extends State<PlayerShell>
-    with TickerProviderStateMixin {
-  int _currentIndex = 0;
+class _AdminShellState extends State<AdminShell> with TickerProviderStateMixin {
+  int _currentIndex = 2; // Accueil par défaut
   String? _clubId;
   List<Widget>? _pages;
 
@@ -49,13 +50,13 @@ class _PlayerShellState extends State<PlayerShell>
   late final Animation<double> _pageOpacity;
   late final Animation<Offset> _pageSlide;
 
-  // Pastille Planning
+  // Pastilles de notification
+  bool _badgeEquipement = false;
   bool _badgePlanning = false;
-  StreamSubscription<QuerySnapshot>? _badgeSubMember;
-  StreamSubscription<QuerySnapshot>? _badgeSubToday;
-  // Résultats intermédiaires des deux streams
-  bool _badgeFromMember = false;
-  bool _badgeFromToday = false;
+
+  Set<String> _coachedTeamNames = {};
+  List<Map<String, dynamic>> _todayEvents = [];
+  final List<StreamSubscription> _badgeSubs = [];
 
   @override
   void initState() {
@@ -75,21 +76,19 @@ class _PlayerShellState extends State<PlayerShell>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final session = Provider.of<UserSession>(context, listen: false);
-    final newClubId = session.currentClubId;
+    final newClubId = Provider.of<UserSession>(context, listen: false).currentClubId;
     if (newClubId != null && newClubId != _clubId) {
       _clubId = newClubId;
       _pages = _buildPages(newClubId);
-      _setupBadgeStream(session.playerClubIds.isNotEmpty
-          ? session.playerClubIds
-          : [newClubId]);
+      _setupBadgeStreams(newClubId);
     }
   }
 
   @override
   void dispose() {
-    _badgeSubMember?.cancel();
-    _badgeSubToday?.cancel();
+    for (final sub in _badgeSubs) {
+      sub.cancel();
+    }
     _pageCtrl.dispose();
     super.dispose();
   }
@@ -99,105 +98,158 @@ class _PlayerShellState extends State<PlayerShell>
     return '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
   }
 
-  void _setupBadgeStream(List<String> clubIds) {
-    _badgeSubMember?.cancel();
-    _badgeSubToday?.cancel();
-    _badgeFromMember = false;
-    _badgeFromToday = false;
+  void _setupBadgeStreams(String clubId) {
+    for (final sub in _badgeSubs) {
+      sub.cancel();
+    }
+    _badgeSubs.clear();
+    _coachedTeamNames = {};
+    _todayEvents = [];
 
     final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null || clubIds.isEmpty) return;
+    if (uid == null) return;
 
-    final now = DateTime.now();
-    final startOfToday = DateTime(now.year, now.month, now.day);
     final todayId = _todayId();
 
-    // Pour chaque club, on accumule les snapshots et on recompute
-    final Map<String, List<QueryDocumentSnapshot<Map<String, dynamic>>>> memberSnapsByClub = {};
-    final Map<String, List<QueryDocumentSnapshot<Map<String, dynamic>>>> todaySnapsByClub = {};
-
-    void recomputeMember() {
-      final allDocs = memberSnapsByClub.values.expand((d) => d).toList();
-      _badgeFromMember = allDocs.any((doc) {
-        final data = doc.data();
-        if (data['canceled'] == true) return false;
-        final date = (data['date'] as Timestamp?)?.toDate();
-        if (date == null || date.isBefore(startOfToday)) return false;
-        final attendance = (data['attendance'] as Map<String, dynamic>?) ?? {};
-        final myStatus = attendance[uid] as String?;
-        final hasResponded = myStatus == 'present' || myStatus == 'absent';
-        final isToday = (data['dateId'] as String?) == todayId;
-        return !hasResponded || isToday;
-      });
-      if (mounted) setState(() => _badgePlanning = _badgeFromMember || _badgeFromToday);
-    }
-
-    void recomputeToday() {
-      final allDocs = todaySnapsByClub.values.expand((d) => d).toList();
-      _badgeFromToday = allDocs.any((doc) {
-        final data = doc.data();
-        if (data['canceled'] == true) return false;
-        final memberIds = (data['teamMemberIds'] as List?) ?? [];
-        if (memberIds.contains(uid)) return false; // géré par stream member
-        if (memberIds.isNotEmpty) return false;
-        final attendance = (data['attendance'] as Map<String, dynamic>?) ?? {};
-        final myStatus = attendance[uid] as String?;
-        return myStatus != 'present' && myStatus != 'absent';
-      });
-      if (mounted) setState(() => _badgePlanning = _badgeFromMember || _badgeFromToday);
-    }
-
-    for (final cid in clubIds) {
-      memberSnapsByClub[cid] = [];
-      todaySnapsByClub[cid] = [];
-
-      // Stream 1 : teamMemberIds contient le joueur
-      _badgeSubMember = appFirestore
+    // Stream 1 : équipes où l'utilisateur est coach
+    _badgeSubs.add(
+      appFirestore
           .collection(FirebaseCollections.clubs)
-          .doc(cid)
-          .collection(FirebaseCollections.events)
-          .where('teamMemberIds', arrayContains: uid)
+          .doc(clubId)
+          .collection(FirebaseCollections.teams)
+          .where('coachIds', arrayContains: uid)
           .snapshots()
           .listen((snap) {
-        memberSnapsByClub[cid] = snap.docs;
-        recomputeMember();
-      });
+        _coachedTeamNames = snap.docs
+            .map((d) => (d.data()['name'] as String?) ?? '')
+            .where((n) => n.isNotEmpty)
+            .toSet();
+        _recomputeEventBadges();
+      }),
+    );
 
-      // Stream 2 : events du jour (teamMemberIds vide = event global)
-      _badgeSubToday = appFirestore
+    // Stream 2 : événements aujourd'hui
+    _badgeSubs.add(
+      appFirestore
           .collection(FirebaseCollections.clubs)
-          .doc(cid)
+          .doc(clubId)
           .collection(FirebaseCollections.events)
           .where('dateId', isEqualTo: todayId)
           .snapshots()
           .listen((snap) {
-        todaySnapsByClub[cid] = snap.docs;
-        recomputeToday();
+        _todayEvents = snap.docs.map((d) => d.data()).toList();
+        _recomputeEventBadges();
+      }),
+    );
+
+    // Stream 3 : prêts actifs dont le retour est aujourd'hui
+    _badgeSubs.add(
+      appFirestore
+          .collection(FirebaseCollections.clubs)
+          .doc(clubId)
+          .collection(FirebaseCollections.equipmentLoans)
+          .where('status', isEqualTo: 'active')
+          .snapshots()
+          .listen((snap) {
+        _recomputeEquipementBadge(snap.docs, null);
+      }),
+    );
+
+    // Stream 4 : demandes de prêt acceptées dont le retrait est aujourd'hui
+    _badgeSubs.add(
+      appFirestore
+          .collection(FirebaseCollections.clubs)
+          .doc(clubId)
+          .collection(FirebaseCollections.equipmentLoanRequests)
+          .where('status', isEqualTo: 'accepted')
+          .snapshots()
+          .listen((snap) {
+        _recomputeEquipementBadge(null, snap.docs);
+      }),
+    );
+  }
+
+  // Garde le résultat des deux streams d'équipement pour combiner
+  bool _hasLoanReturn = false;
+  bool _hasLoanPickup = false;
+
+  void _recomputeEquipementBadge(
+    List<QueryDocumentSnapshot<Map<String, dynamic>>>? loanDocs,
+    List<QueryDocumentSnapshot<Map<String, dynamic>>>? requestDocs,
+  ) {
+    final now = DateTime.now();
+    final startOfToday = DateTime(now.year, now.month, now.day);
+    final endOfToday = startOfToday.add(const Duration(days: 1));
+
+    if (loanDocs != null) {
+      _hasLoanReturn = loanDocs.any((d) {
+        final dueAt = (d.data()['dueAt'] as Timestamp?)?.toDate();
+        if (dueAt == null) return false;
+        return !dueAt.isBefore(startOfToday) && dueAt.isBefore(endOfToday);
+      });
+    }
+    if (requestDocs != null) {
+      _hasLoanPickup = requestDocs.any((d) {
+        final pickup = (d.data()['requestedPickupDate'] as Timestamp?)?.toDate();
+        if (pickup == null) return false;
+        return !pickup.isBefore(startOfToday) && pickup.isBefore(endOfToday);
+      });
+    }
+    if (mounted) setState(() => _badgeEquipement = _hasLoanReturn || _hasLoanPickup);
+  }
+
+  void _recomputeEventBadges() {
+    bool planning = false;
+
+    for (final event in _todayEvents) {
+      final type = (event['type'] as String?) ?? '';
+      final isTrainingOrMatch = type == 'Entraînement' || type == 'Match';
+
+      if (isTrainingOrMatch) {
+        final teamName = event['teamName'] as String?;
+        final teamNames = (event['teamNames'] as List?)
+            ?.map((e) => e.toString())
+            .toList();
+        final eventTeams = <String>{
+          if (teamName != null && teamName.isNotEmpty) teamName,
+          ...?teamNames,
+        };
+        if (eventTeams.any(_coachedTeamNames.contains)) {
+          planning = true;
+        }
+      } else {
+        planning = true;
+      }
+    }
+
+    if (mounted) {
+      setState(() {
+        _badgePlanning = planning;
       });
     }
   }
 
+  // sport est optionnel dans les deux pages qui en ont besoin — elles le
+  // récupèrent elles-mêmes depuis Firestore si non fourni.
   List<Widget> _buildPages(String clubId) => [
-    PlayerHomePage(onSwitchToPlanning: () => _switchTab(1)),
-    PlayerPlanningPage(clubId: clubId),
-    PlayerInfosPage(clubId: clubId),
-    PlayerLoanCatalogPage(clubId: clubId),
+    AdminEquipmentPage(clubId: clubId),
+    AdminClubCommunicationPage(clubId: clubId),
+    const AdminHomePage(),
+    AdminCoachModePage(clubId: clubId),
+    AdminPlanningPage(clubId: clubId),
   ];
 
   Future<void> _switchTab(int index) async {
     if (index == _currentIndex) return;
-    // Fondu sortant
     await _pageCtrl.reverse();
     if (!mounted) return;
     setState(() => _currentIndex = index);
-    // Fondu entrant avec slide depuis le bas (subtil)
     _pageCtrl.forward();
   }
 
   @override
   Widget build(BuildContext context) {
-    final session = Provider.of<UserSession>(context);
-    final clubId = session.currentClubId;
+    final clubId = Provider.of<UserSession>(context).currentClubId;
 
     if (clubId == null || _pages == null) {
       return const Scaffold(body: Center(child: ViroLoader(size: 60)));
@@ -216,10 +268,10 @@ class _PlayerShellState extends State<PlayerShell>
           child: IndexedStack(index: _currentIndex, children: _pages!),
         ),
       ),
-      bottomNavigationBar: _PlayerNavBar(
+      bottomNavigationBar: _AdminNavBar(
         currentIndex: _currentIndex,
         onTap: _switchTab,
-        badges: [false, _badgePlanning, false, false],
+        badges: [_badgeEquipement, false, false, false, _badgePlanning],
       ),
     );
   }
@@ -229,12 +281,12 @@ class _PlayerShellState extends State<PlayerShell>
 // Barre de navigation custom
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _PlayerNavBar extends StatelessWidget {
+class _AdminNavBar extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int> onTap;
   final List<bool> badges;
 
-  const _PlayerNavBar({
+  const _AdminNavBar({
     required this.currentIndex,
     required this.onTap,
     required this.badges,
@@ -267,6 +319,7 @@ class _PlayerNavBar extends StatelessWidget {
                   child: _NavItem(
                     tab: _tabs[i],
                     isSelected: i == currentIndex,
+                    isCenter: i == 2,
                     hasBadge: i < badges.length && badges[i],
                     onTap: () => onTap(i),
                   ),
@@ -286,12 +339,14 @@ class _PlayerNavBar extends StatelessWidget {
 class _NavItem extends StatefulWidget {
   final _TabData tab;
   final bool isSelected;
+  final bool isCenter;
   final bool hasBadge;
   final VoidCallback onTap;
 
   const _NavItem({
     required this.tab,
     required this.isSelected,
+    required this.isCenter,
     required this.hasBadge,
     required this.onTap,
   });
@@ -300,8 +355,7 @@ class _NavItem extends StatefulWidget {
   State<_NavItem> createState() => _NavItemState();
 }
 
-class _NavItemState extends State<_NavItem>
-    with SingleTickerProviderStateMixin {
+class _NavItemState extends State<_NavItem> with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl;
   late final Animation<double> _scaleAnim;
   late final Animation<double> _pillAnim;
@@ -314,7 +368,6 @@ class _NavItemState extends State<_NavItem>
       duration: const Duration(milliseconds: 300),
       value: widget.isSelected ? 1.0 : 0.0,
     );
-    // Bounce : légère surtension à 1.15 puis retour à 1.1
     _scaleAnim = TweenSequence<double>([
       TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.18), weight: 40),
       TweenSequenceItem(tween: Tween(begin: 1.18, end: 1.08), weight: 30),
@@ -343,6 +396,57 @@ class _NavItemState extends State<_NavItem>
   Widget build(BuildContext context) {
     final isSelected = widget.isSelected;
 
+    // L'onglet central (Accueil) a un bouton surélevé
+    if (widget.isCenter) {
+      return GestureDetector(
+        onTap: widget.onTap,
+        behavior: HitTestBehavior.opaque,
+        child: AnimatedBuilder(
+          animation: _ctrl,
+          builder: (context, _) {
+            return Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Transform.scale(
+                  scale: isSelected ? _scaleAnim.value : 1.0,
+                  child: Container(
+                    width: 52,
+                    height: 52,
+                    decoration: BoxDecoration(
+                      color: Color.lerp(
+                        Colors.grey.shade200,
+                        ViroColors.primary,
+                        _pillAnim.value,
+                      ),
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: ViroColors.primary.withValues(
+                            alpha: _pillAnim.value * 0.35,
+                          ),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Icon(
+                      isSelected ? widget.tab.selectedIcon : widget.tab.icon,
+                      size: 24,
+                      color: Color.lerp(
+                        Colors.grey[500],
+                        Colors.white,
+                        _pillAnim.value,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      );
+    }
+
     return GestureDetector(
       onTap: widget.onTap,
       behavior: HitTestBehavior.opaque,
@@ -352,7 +456,6 @@ class _NavItemState extends State<_NavItem>
           AnimatedBuilder(
             animation: _ctrl,
             builder: (context, child) {
-              // Icône : grandit quand sélectionné (22 → 28), rétrécit sinon
               final iconSize = 22.0 + _pillAnim.value * 6.0;
 
               return Column(
@@ -363,7 +466,7 @@ class _NavItemState extends State<_NavItem>
                     children: [
                       Container(
                         padding: EdgeInsets.symmetric(
-                          horizontal: 16,
+                          horizontal: 12,
                           vertical: isSelected ? 6 : 4,
                         ),
                         decoration: BoxDecoration(
@@ -401,7 +504,6 @@ class _NavItemState extends State<_NavItem>
                         ),
                     ],
                   ),
-                  // Label : disparaît quand sélectionné
                   SizedBox(
                     height: 16,
                     child: Opacity(
