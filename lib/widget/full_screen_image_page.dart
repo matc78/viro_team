@@ -8,6 +8,7 @@ void showFullScreenImage(
   String imageUrl, {
   Future<void> Function(BuildContext)? onEditTap,
 }) {
+  final hasImage = imageUrl.trim().isNotEmpty;
   Navigator.of(context).push(
     MaterialPageRoute<void>(
       builder: (context) => Scaffold(
@@ -34,16 +35,31 @@ void showFullScreenImage(
               ),
           ],
         ),
-        body: InteractiveViewer(
-          minScale: 0.5,
-          maxScale: 4.0,
-          child: Center(
-            child: CachedNetworkImage(
-              imageUrl: imageUrl,
-              fit: BoxFit.contain,
-            ),
-          ),
-        ),
+        body: hasImage
+            ? InteractiveViewer(
+                minScale: 0.5,
+                maxScale: 4.0,
+                child: Center(
+                  child: CachedNetworkImage(
+                    imageUrl: imageUrl,
+                    fit: BoxFit.contain,
+                  ),
+                ),
+              )
+            : const Center(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 24),
+                  child: Text(
+                    "Ajoute une photo d'équipe toi meme !",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
       ),
     ),
   );

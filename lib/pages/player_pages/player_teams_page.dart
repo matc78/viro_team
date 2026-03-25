@@ -336,6 +336,19 @@ class _PlayerTeamsPageState extends State<PlayerTeamsPage> {
       }
     }
 
+    allTeamsWithClub.sort((a, b) {
+      final clubA = (a['clubId'] as String? ?? '').toLowerCase();
+      final clubB = (b['clubId'] as String? ?? '').toLowerCase();
+      final clubCompare = clubA.compareTo(clubB);
+      if (clubCompare != 0) return clubCompare;
+
+      final teamDataA = a['teamData'] as Map<String, dynamic>? ?? {};
+      final teamDataB = b['teamData'] as Map<String, dynamic>? ?? {};
+      final teamNameA = (teamDataA['name'] as String? ?? '').toLowerCase();
+      final teamNameB = (teamDataB['name'] as String? ?? '').toLowerCase();
+      return teamNameA.compareTo(teamNameB);
+    });
+
     if (allTeamsWithClub.isEmpty) {
       return const Center(
         child: Text(
@@ -430,18 +443,16 @@ class _PlayerTeamsPageState extends State<PlayerTeamsPage> {
         shape:
             const Border(), // Retire la bordure par défaut de l'ExpansionTile
         leading: GestureDetector(
-          onTap: hasTeamAvatar
-              ? () => showFullScreenImage(
-                    context,
-                    teamAvatarUrl,
-                    onEditTap: (ctx) => pickAndUploadTeamAvatar(
-                      ctx,
-                      clubId: clubId,
-                      teamId: teamId,
-                      teamName: teamData['name'] as String?,
-                    ),
-                  )
-              : null,
+          onTap: () => showFullScreenImage(
+            context,
+            teamAvatarUrl ?? '',
+            onEditTap: (ctx) => pickAndUploadTeamAvatar(
+              ctx,
+              clubId: clubId,
+              teamId: teamId,
+              teamName: teamData['name'] as String?,
+            ),
+          ),
           child: CircleAvatar(
             backgroundColor: clubColor.withValues(alpha: 0.1),
             backgroundImage: hasTeamAvatar

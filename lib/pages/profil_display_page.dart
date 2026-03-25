@@ -18,41 +18,56 @@ class ProfilDisplayPage extends StatelessWidget {
 
   const ProfilDisplayPage({super.key, required this.userId});
 
-  // Vérifie si l'utilisateur actuel a le droit de voir les infos privées (email, téléphone)
-  Future<Map<String, dynamic>> _viewerInfo() async {
+  // Vérifie si l'utilisateur actuel peut gérer un membre dans un club donné
+  // en se basant uniquement sur les rôles club (sans activeContext).
+  Future<bool> _canManageMemberInClub(String clubId) async {
     final currentUid = FirebaseAuth.instance.currentUser?.uid;
-    if (currentUid == null) return {'hasAccess': false, 'role': null};
-    if (currentUid == userId) {
-      return {'hasAccess': true, 'role': null};
-    }
+    if (currentUid == null) return false;
 
     final currentUserDoc = await appFirestore
         .collection(FirebaseCollections.users)
         .doc(currentUid)
         .get();
     final currentUserData = currentUserDoc.data();
-    if (currentUserData == null) return {'hasAccess': false, 'role': null};
+    if (currentUserData == null) return false;
 
-    // Utiliser activeContext pour le rôle actuel
-    final activeContext =
-        currentUserData['activeContext'] as Map<String, dynamic>?;
-    final role = activeContext?['role'] as String?;
-    final legacyRole = currentUserData['role'] as String?;
-    final finalRole = role ?? legacyRole;
+    final roles = getAllUserRolesInClub(currentUserData, clubId);
+    return roles.contains('coach') ||
+        roles.contains('admin') ||
+        roles.contains('admin_fondateur');
+  }
 
-    // Admins et coachs voient les coordonnées ; un joueur ne les voit jamais (sauf les siennes)
-    if (finalRole == 'admin' ||
-        finalRole == 'admin_fondateur' ||
-        finalRole == 'coach') {
-      return {'hasAccess': true, 'role': finalRole};
+  List<String> _extractClubIdsFromUserData(Map<String, dynamic> userData) {
+    final clubIds = <String>{};
+    final summaries = (userData['profileSummaries'] as List?)
+            ?.whereType<Map>()
+            .toList() ??
+        [];
+    for (final e in summaries) {
+      final clubId = e['clubId'] as String?;
+      if (clubId != null && clubId.isNotEmpty) {
+        clubIds.add(clubId);
+      }
     }
-
-    // Un joueur ne peut jamais voir les coordonnées d'un autre utilisateur
-    if (finalRole == 'player') {
-      return {'hasAccess': false, 'role': finalRole};
+    final legacyClubId = userData['clubId'] as String?;
+    if (legacyClubId != null && legacyClubId.isNotEmpty) {
+      clubIds.add(legacyClubId);
     }
+    return clubIds.toList();
+  }
 
-    return {'hasAccess': false, 'role': finalRole};
+  Future<bool> _canManageMemberProfile(Map<String, dynamic> targetUserData) async {
+    final currentUid = FirebaseAuth.instance.currentUser?.uid;
+    if (currentUid == null) return false;
+    if (currentUid == userId) return true;
+
+    final targetClubIds = _extractClubIdsFromUserData(targetUserData);
+    for (final clubId in targetClubIds) {
+      if (await _canManageMemberInClub(clubId)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   void _showFullScreenAvatar(BuildContext context, String imageUrl) {
@@ -66,67 +81,12 @@ class ProfilDisplayPage extends StatelessWidget {
 
   // Vérifie si l'utilisateur actuel peut modifier la licence d'un joueur dans un club
   Future<bool> _canEditLicense(String clubId) async {
-    final currentUid = FirebaseAuth.instance.currentUser?.uid;
-    if (currentUid == null) return false;
+    return _canManageMemberInClub(clubId);
+  }
 
-    // Récupérer les données de l'utilisateur actuel
-    final currentUserDoc = await appFirestore
-        .collection(FirebaseCollections.users)
-        .doc(currentUid)
-        .get();
-    final currentUserData = currentUserDoc.data();
-    if (currentUserData == null) return false;
-
-    final role = getUserRoleInClub(currentUserData, clubId);
-    if (role == 'admin' || role == 'admin_fondateur') {
-      return true;
-    }
-
-    // Vérifier aussi dans activeContext et legacy role
-    final activeContext =
-        currentUserData['activeContext'] as Map<String, dynamic>?;
-    final activeRole = activeContext?['role'] as String?;
-    final activeClubId = activeContext?['clubId'] as String?;
-    if (activeClubId == clubId &&
-        (activeRole == 'admin' || activeRole == 'admin_fondateur')) {
-      return true;
-    }
-
-    final legacyRole = currentUserData['role'] as String?;
-    final legacyClubId = currentUserData['clubId'] as String?;
-    if (legacyClubId == clubId &&
-        (legacyRole == 'admin' || legacyRole == 'admin_fondateur')) {
-      return true;
-    }
-
-    // Si coach, vérifier qu'il est coach d'au moins une équipe contenant ce joueur
-    if (role == 'coach') {
-      try {
-        // Récupérer toutes les équipes où le coach est dans coachIds
-        final teamsSnapshot = await appFirestore
-            .collection(FirebaseCollections.clubs)
-            .doc(clubId)
-            .collection(FirebaseCollections.teams)
-            .where('coachIds', arrayContains: currentUid)
-            .get();
-
-        // Vérifier si au moins une équipe contient le joueur dans playerIds
-        for (var teamDoc in teamsSnapshot.docs) {
-          final teamData = teamDoc.data();
-          final playerIds =
-              (teamData['playerIds'] as List?)?.whereType<String>().toList() ??
-              [];
-          if (playerIds.contains(userId)) {
-            return true;
-          }
-        }
-      } catch (e) {
-        // En cas d'erreur, retourner false par sécurité
-        return false;
-      }
-    }
-
-    return false;
+  // Vérifie si l'utilisateur actuel peut voir la licence d'un joueur dans un club
+  Future<bool> _canViewLicense(String clubId) async {
+    return _canManageMemberInClub(clubId);
   }
 
   Future<void> _editLicense(
@@ -229,11 +189,9 @@ class ProfilDisplayPage extends StatelessWidget {
           final String formattedName = _formatName(firstName, lastName);
 
           return FutureBuilder<bool>(
-            future: _viewerInfo().then((v) => v['hasAccess'] as bool),
+            future: _canManageMemberProfile(data),
             builder: (context, accessSnapshot) {
               final bool hasAccess = accessSnapshot.data ?? false;
-              final Future<Map<String, dynamic>> viewerInfoFuture =
-                  _viewerInfo();
 
               return SingleChildScrollView(
                 padding: const EdgeInsets.all(24),
@@ -331,7 +289,6 @@ class ProfilDisplayPage extends StatelessWidget {
                                 clubInfo,
                                 userId,
                                 data,
-                                viewerInfoFuture,
                               );
                             }),
                           ],
@@ -531,7 +488,6 @@ class ProfilDisplayPage extends StatelessWidget {
     Map<String, dynamic> clubInfo,
     String userId,
     Map<String, dynamic> userData,
-    Future<Map<String, dynamic>> viewerInfoFuture,
   ) {
     final clubId = clubInfo['clubId'] as String;
     final clubName = clubInfo['clubName'] as String? ?? "Club inconnu";
@@ -624,65 +580,72 @@ class ProfilDisplayPage extends StatelessWidget {
             ),
           ),
           const Divider(height: 1),
-          // Licence pour ce club (affichée si l'utilisateur est joueur ou si un admin/coach peut modifier)
+          // Licence pour ce club (visible uniquement pour coach/admin/admin_fondateur du même club)
           if (roles.contains('player'))
             FutureBuilder<bool>(
-              future: _canEditLicense(clubId),
-              builder: (context, canEditSnap) {
-                final canEdit = canEditSnap.data ?? false;
+              future: _canViewLicense(clubId),
+              builder: (context, canViewSnap) {
+                final canView = canViewSnap.data ?? false;
+                if (!canView) return const SizedBox.shrink();
                 final displayLicense = license ?? "";
                 final hasLicense = displayLicense.isNotEmpty;
-                return Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.credit_card,
-                        size: 18,
-                        color: Colors.grey[600],
+                return FutureBuilder<bool>(
+                  future: _canEditLicense(clubId),
+                  builder: (context, canEditSnap) {
+                    final canEdit = canEditSnap.data ?? false;
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              "Numéro de licence",
-                              style: TextStyle(
-                                color: Colors.grey[600],
-                                fontSize: 11,
-                              ),
-                            ),
-                            Text(
-                              hasLicense ? displayLicense : "Non renseigné",
-                              style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 14,
-                                color: hasLicense ? Colors.black : Colors.grey,
-                                fontStyle: hasLicense
-                                    ? FontStyle.normal
-                                    : FontStyle.italic,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      if (canEdit)
-                        IconButton(
-                          icon: const Icon(Icons.edit, size: 18),
-                          onPressed: () => _editLicense(
-                            context,
-                            hasLicense ? displayLicense : null,
-                            clubId,
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.credit_card,
+                            size: 18,
+                            color: Colors.grey[600],
                           ),
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
-                        ),
-                    ],
-                  ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  "Numéro de licence",
+                                  style: TextStyle(
+                                    color: Colors.grey[600],
+                                    fontSize: 11,
+                                  ),
+                                ),
+                                Text(
+                                  hasLicense ? displayLicense : "Non renseigné",
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 14,
+                                    color: hasLicense ? Colors.black : Colors.grey,
+                                    fontStyle: hasLicense
+                                        ? FontStyle.normal
+                                        : FontStyle.italic,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (canEdit)
+                            IconButton(
+                              icon: const Icon(Icons.edit, size: 18),
+                              onPressed: () => _editLicense(
+                                context,
+                                hasLicense ? displayLicense : null,
+                                clubId,
+                              ),
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                            ),
+                        ],
+                      ),
+                    );
+                  },
                 );
               },
             ),

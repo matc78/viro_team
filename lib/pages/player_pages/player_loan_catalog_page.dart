@@ -312,8 +312,6 @@ class _CatalogTab extends StatelessWidget {
               .get(),
           builder: (context, clubSnap) {
             final clubData = clubSnap.data?.data() ?? {};
-            final paymentMethods =
-                clubData['paymentMethods'] as List<dynamic>? ?? [];
             final loanAllowedWeekdays =
                 clubData['loanAllowedWeekdays'] as List<dynamic>? ?? [];
             final loanScheduleRaw =
@@ -343,7 +341,6 @@ class _CatalogTab extends StatelessWidget {
                       clubId: clubId,
                       equipmentId: equipmentId,
                       catalogData: catalogData,
-                      paymentMethods: paymentMethods,
                       currentUserId: currentUserId,
                       allowedWeekdays: effectiveWeekdays,
                     ),
@@ -358,11 +355,18 @@ class _CatalogTab extends StatelessWidget {
   }
 }
 
-/// Récap des horaires/jours/lieu et moyens de paiement pour les prêts
-class _LoanRecapCard extends StatelessWidget {
+/// Récap des jours de prêt (interactif) et moyens de paiement
+class _LoanRecapCard extends StatefulWidget {
   final Map<String, dynamic> clubData;
 
   const _LoanRecapCard({required this.clubData});
+
+  @override
+  State<_LoanRecapCard> createState() => _LoanRecapCardState();
+}
+
+class _LoanRecapCardState extends State<_LoanRecapCard> {
+  int? _selectedDay;
 
   static const _weekdayLabels = [
     'Lundi',
@@ -373,6 +377,8 @@ class _LoanRecapCard extends StatelessWidget {
     'Samedi',
     'Dimanche',
   ];
+
+  static const _weekdayShortLabels = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
 
   String _formatTime(int hour, int minute) {
     return '${hour.toString().padLeft(2, '0')}h${minute.toString().padLeft(2, '0')}';
@@ -400,50 +406,44 @@ class _LoanRecapCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final address = clubData['address'] as String? ?? '';
+    final address = widget.clubData['address'] as String? ?? '';
     final loanScheduleRaw =
-        clubData['loanSchedule'] as Map<String, dynamic>? ?? {};
+        widget.clubData['loanSchedule'] as Map<String, dynamic>? ?? {};
     final loanAllowedWeekdays =
-        clubData['loanAllowedWeekdays'] as List<dynamic>? ?? [];
-    final paymentMethods = clubData['paymentMethods'] as List<dynamic>? ?? [];
+        widget.clubData['loanAllowedWeekdays'] as List<dynamic>? ?? [];
+    final paymentMethods =
+        widget.clubData['paymentMethods'] as List<dynamic>? ?? [];
 
-    // Construire la liste des jours avec horaires et lieu (loanSchedule ou défaut 8h-20h + adresse)
-    final List<String> dayLines = [];
     final Set<int> allowedDays = loanAllowedWeekdays
         .map((e) => e is int ? e : int.tryParse(e.toString()) ?? 0)
         .where((e) => e >= 1 && e <= 7)
         .toSet();
-    if (allowedDays.isEmpty && loanScheduleRaw.isEmpty) {
-      // Pas de config : on affiche rien ou "Non renseigné"
-      dayLines.add("Jours et horaires non renseignés.");
-    } else {
-      final effectiveDays = allowedDays.isEmpty
-          ? loanScheduleRaw.keys
-                .map((k) => int.tryParse(k) ?? 0)
-                .where((e) => e >= 1 && e <= 7)
-                .toSet()
-          : allowedDays;
-      if (effectiveDays.isEmpty) {
-        dayLines.add("Aucun jour configuré.");
-      } else {
-        for (int d = 1; d <= 7; d++) {
-          if (!effectiveDays.contains(d)) continue;
-          final key = d.toString();
-          final raw = loanScheduleRaw[key] as Map<String, dynamic>?;
-          final startHour = raw?['startHour'] as int? ?? 8;
-          final startMinute = raw?['startMinute'] as int? ?? 0;
-          final endHour = raw?['endHour'] as int? ?? 20;
-          final endMinute = raw?['endMinute'] as int? ?? 0;
-          final place = raw?['place'] as String? ?? address;
-          final label = _weekdayLabels[d - 1];
-          final timeStr =
-              '${_formatTime(startHour, startMinute)} - ${_formatTime(endHour, endMinute)}';
-          if (place.isNotEmpty) {
-            dayLines.add('$label : $timeStr — $place');
-          } else {
-            dayLines.add('$label : $timeStr');
-          }
-        }
+
+    final Set<int> effectiveDays = allowedDays.isEmpty
+        ? loanScheduleRaw.keys
+              .map((k) => int.tryParse(k) ?? 0)
+              .where((e) => e >= 1 && e <= 7)
+              .toSet()
+        : allowedDays;
+
+    final hasAnyDay = effectiveDays.isNotEmpty;
+    final selectedDay = (_selectedDay != null && effectiveDays.contains(_selectedDay))
+        ? _selectedDay
+        : null;
+
+    String? selectedDetails;
+    String? selectedPlace;
+    if (selectedDay != null) {
+      final raw = loanScheduleRaw[selectedDay.toString()] as Map<String, dynamic>?;
+      final startHour = raw?['startHour'] as int? ?? 8;
+      final startMinute = raw?['startMinute'] as int? ?? 0;
+      final endHour = raw?['endHour'] as int? ?? 20;
+      final endMinute = raw?['endMinute'] as int? ?? 0;
+      final place = raw?['place'] as String? ?? address;
+      selectedDetails =
+          '${_weekdayLabels[selectedDay - 1]} : ${_formatTime(startHour, startMinute)} - ${_formatTime(endHour, endMinute)}';
+      if (place.isNotEmpty) {
+        selectedPlace = place;
       }
     }
 
@@ -460,45 +460,103 @@ class _LoanRecapCard extends StatelessWidget {
                 Icon(Icons.info_outline, size: 20, color: ViroColors.primary),
                 const SizedBox(width: 8),
                 const Text(
-                  "Récap prêts de la semaine",
+                  "Infos prêt",
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                 ),
               ],
             ),
             const SizedBox(height: 12),
             const Text(
-              "Jours et horaires de récupération / retour",
+              "Jours de récupération / retour",
               style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
             ),
-            const SizedBox(height: 6),
-            ...dayLines.map(
-              (line) => Padding(
-                padding: const EdgeInsets.only(bottom: 4),
+            const SizedBox(height: 8),
+            Center(
+              child: Wrap(
+                alignment: WrapAlignment.center,
+                spacing: 8,
+                runSpacing: 8,
+                children: List.generate(7, (index) {
+                  final day = index + 1;
+                  final isAllowed = effectiveDays.contains(day);
+                  final isSelected = selectedDay == day;
+                  return InkWell(
+                    borderRadius: BorderRadius.circular(999),
+                    onTap: isAllowed
+                        ? () {
+                            setState(() {
+                              _selectedDay = isSelected ? null : day;
+                            });
+                          }
+                        : null,
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 150),
+                      width: 34,
+                      height: 34,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: isAllowed
+                            ? (isSelected
+                                  ? ViroColors.primary
+                                  : ViroColors.primary.withValues(alpha: 0.2))
+                            : Colors.grey.withValues(alpha: 0.2),
+                        border: Border.all(
+                          color: isSelected
+                              ? ViroColors.primary
+                              : Colors.grey.withValues(alpha: 0.35),
+                          width: isSelected ? 2 : 1,
+                        ),
+                      ),
+                      child: Text(
+                        _weekdayShortLabels[index],
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: isAllowed
+                              ? (isSelected ? Colors.white : ViroColors.primary)
+                              : Colors.grey[500],
+                        ),
+                      ),
+                    ),
+                  );
+                }),
+              ),
+            ),
+            if (!hasAnyDay) ...[
+              const SizedBox(height: 8),
+              Text(
+                "Jours non renseignés.",
+                style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+              ),
+            ],
+            if (selectedDetails != null) ...[
+              const SizedBox(height: 10),
+              Center(
                 child: Text(
-                  line,
+                  selectedDetails,
+                  textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 12,
                     color: Colors.grey[800],
-                    height: 1.3,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
-            ),
-            if (address.isNotEmpty &&
-                !dayLines.any((l) => l.contains(address))) ...[
-              const SizedBox(height: 4),
-              Text(
-                "Adresse du club : $address",
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey[700],
-                  fontStyle: FontStyle.italic,
+              if (selectedPlace != null) ...[
+                const SizedBox(height: 2),
+                Center(
+                  child: Text(
+                    selectedPlace,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+                  ),
                 ),
-              ),
+              ],
             ],
             const SizedBox(height: 12),
             const Text(
-              "Moyens de paiement acceptés",
+              "Paiements possibles",
               style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
             ),
             const SizedBox(height: 6),
@@ -508,26 +566,29 @@ class _LoanRecapCard extends StatelessWidget {
                 style: TextStyle(fontSize: 12, color: Colors.grey[600]),
               )
             else
-              Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: paymentMethods
-                    .map(
-                      (method) => Chip(
-                        label: Text(
-                          _getPaymentMethodLabel(method.toString()),
-                          style: const TextStyle(fontSize: 11),
+              Center(
+                child: Wrap(
+                  alignment: WrapAlignment.center,
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: paymentMethods
+                      .map(
+                        (method) => Chip(
+                          label: Text(
+                            _getPaymentMethodLabel(method.toString()),
+                            style: const TextStyle(fontSize: 11),
+                          ),
+                          backgroundColor: ViroColors.primary.withValues(
+                            alpha: 0.15,
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
                         ),
-                        backgroundColor: ViroColors.primary.withValues(
-                          alpha: 0.15,
-                        ),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                      ),
-                    )
-                    .toList(),
+                      )
+                      .toList(),
+                ),
               ),
           ],
         ),
@@ -593,7 +654,6 @@ class _EquipmentCard extends StatelessWidget {
   final String clubId;
   final String equipmentId;
   final Map<String, dynamic> catalogData;
-  final List<dynamic> paymentMethods;
   final String currentUserId;
   final Set<int> allowedWeekdays;
 
@@ -601,30 +661,9 @@ class _EquipmentCard extends StatelessWidget {
     required this.clubId,
     required this.equipmentId,
     required this.catalogData,
-    required this.paymentMethods,
     required this.currentUserId,
     required this.allowedWeekdays,
   });
-
-  String _getPaymentMethodLabel(String method) {
-    final m = method.toString().toLowerCase();
-    switch (m) {
-      case 'cash':
-      case 'especes':
-        return 'Espèces';
-      case 'card':
-      case 'carte':
-        return 'Carte bancaire';
-      case 'transfer':
-      case 'virement':
-        return 'Virement';
-      case 'check':
-      case 'cheque':
-        return 'Chèque';
-      default:
-        return method.toString();
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -679,192 +718,199 @@ class _EquipmentCard extends StatelessWidget {
           }
         }
 
+        String formatEquipmentName(String value) {
+          final trimmed = value.trim();
+          if (trimmed.isEmpty) return value;
+          return trimmed[0].toUpperCase() + trimmed.substring(1).toLowerCase();
+        }
+
+        final formattedName = formatEquipmentName(name);
         final isAvailable = maxQuantity > 0;
+
+        final description =
+            equipmentData['description'] as String? ??
+            catalogData['description'] as String? ??
+            '';
 
         return Card(
           margin: const EdgeInsets.only(bottom: 12),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (imageUrl != null && imageUrl.isNotEmpty) ...[
-                      GestureDetector(
-                        onTap: () => _showImageFullScreen(context, imageUrl),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: CachedNetworkImage(
-                            imageUrl: imageUrl,
-                            width: 64,
-                            height: 64,
-                            fit: BoxFit.cover,
-                            placeholder: (_, __) => Container(
-                              width: 64,
-                              height: 64,
-                              color: Colors.grey.shade200,
-                              child: const Center(
-                                child: SizedBox(
-                                  width: 24,
-                                  height: 24,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                ),
+          elevation: 6,
+          shadowColor: Colors.black.withValues(alpha: 0.18),
+          surfaceTintColor: Colors.white,
+          color: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              GestureDetector(
+                onTap: imageUrl != null && imageUrl.isNotEmpty
+                    ? () => _showImageFullScreen(context, imageUrl)
+                    : null,
+                child: SizedBox(
+                  height: 168,
+                  width: double.infinity,
+                  child: imageUrl != null && imageUrl.isNotEmpty
+                      ? CachedNetworkImage(
+                          imageUrl: imageUrl,
+                          fit: BoxFit.cover,
+                          placeholder: (_, __) => Container(
+                            color: Colors.grey.shade200,
+                            child: const Center(
+                              child: SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(strokeWidth: 2),
                               ),
                             ),
-                            errorWidget: (_, __, ___) => Container(
-                              width: 64,
-                              height: 64,
-                              color: Colors.grey.shade200,
-                              child: Icon(
-                                Icons.inventory_2_outlined,
-                                color: Colors.grey.shade600,
-                              ),
+                          ),
+                          errorWidget: (_, __, ___) => Container(
+                            color: Colors.grey.shade200,
+                            child: Icon(
+                              Icons.inventory_2_outlined,
+                              size: 36,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                        )
+                      : Container(
+                          color: Colors.grey.shade200,
+                          child: Icon(
+                            Icons.inventory_2_outlined,
+                            size: 36,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            formattedName,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 30 / 2,
+                              height: 1.2,
                             ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                    ],
-                    Expanded(
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Expanded(
-                            child: Text(
-                              name,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 18,
+                        if (price != null) ...[
+                          const SizedBox(width: 10),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                '${price.toStringAsFixed(0)}€',
+                                style: const TextStyle(
+                                  fontSize: 28 / 2,
+                                  fontWeight: FontWeight.w800,
+                                  color: ViroColors.primary,
+                                ),
                               ),
-                            ),
+                              Text(
+                                'PAR ${priceUnitLabel(priceUnit).toUpperCase()}',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.grey[500],
+                                  letterSpacing: 0.6,
+                                ),
+                              ),
+                            ],
                           ),
-                          if (!isAvailable)
-                            Chip(
-                              label: const Text(
-                                "Indisponible",
-                                style: TextStyle(fontSize: 12),
-                              ),
-                              backgroundColor: ViroColors.error.withValues(
-                                alpha: 0.15,
-                              ),
-                            )
-                          else
-                            Chip(
-                              label: Text(
-                                "$maxQuantity disponible(s)",
-                                style: const TextStyle(fontSize: 12),
-                              ),
-                              backgroundColor: ViroColors.success.withValues(
-                                alpha: 0.15,
-                              ),
-                            ),
                         ],
+                      ],
+                    ),
+                    if (description.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        description,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.grey[700],
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: isAvailable
+                                ? const Color(0xFF20C05C)
+                                : ViroColors.error,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          isAvailable
+                              ? '$maxQuantity lot(s) disponible(s)'
+                              : 'Indisponible',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.grey[700],
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (maxLoanDurationDays != null || caution != null) ...[
+                      const SizedBox(height: 10),
+                      Divider(height: 1, color: Colors.grey[200]),
+                      const SizedBox(height: 8),
+                    ],
+                    if (maxLoanDurationDays != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Text(
+                          'Durée max : ${formatMaxLoanDuration(maxLoanDurationDays, priceUnit)}',
+                          style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+                        ),
+                      ),
+                    if (caution != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 2),
+                        child: Text(
+                          'Caution : ${caution.toStringAsFixed(2)} €',
+                          style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+                        ),
+                      ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: isAvailable
+                            ? () => _showRequestLoanDialog(
+                                context,
+                                clubId,
+                                equipmentId,
+                                formattedName,
+                                catalogData,
+                                maxQuantity,
+                              )
+                            : null,
+                        child: const Text("Demander"),
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
-                if (price != null)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 4),
-                    child: Row(
-                      children: [
-                        Icon(Icons.euro, size: 16, color: Colors.grey[700]),
-                        const SizedBox(width: 4),
-                        Text(
-                          '${price.toStringAsFixed(2)} €/${priceUnitLabel(priceUnit)}',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.grey[800],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                if (maxLoanDurationDays != null)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 4),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.calendar_today,
-                          size: 16,
-                          color: Colors.grey[700],
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Durée max: ${formatMaxLoanDuration(maxLoanDurationDays, priceUnit)}',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: Colors.grey[700],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                if (caution != null)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 4),
-                    child: Row(
-                      children: [
-                        Icon(Icons.security, size: 16, color: Colors.grey[700]),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Caution: ${caution.toStringAsFixed(2)} € (si perdu ou endommagé)',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: Colors.grey[700],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                if (paymentMethods.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: [
-                      Icon(Icons.payment, size: 14, color: Colors.grey[600]),
-                      ...paymentMethods.map((method) {
-                        return Chip(
-                          label: Text(
-                            _getPaymentMethodLabel(method.toString()),
-                            style: const TextStyle(fontSize: 11),
-                          ),
-                          backgroundColor: ViroColors.primary.withValues(
-                            alpha: 0.1,
-                          ),
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                        );
-                      }),
-                    ],
-                  ),
-                ],
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: isAvailable
-                        ? () => _showRequestLoanDialog(
-                            context,
-                            clubId,
-                            equipmentId,
-                            name,
-                            catalogData,
-                            maxQuantity,
-                          )
-                        : null,
-                    child: const Text("Demander"),
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         );
       },
