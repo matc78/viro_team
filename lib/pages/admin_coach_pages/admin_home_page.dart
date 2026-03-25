@@ -90,68 +90,77 @@ class _AdminHomePageState extends State<AdminHomePage> {
               final clubData = clubSnapshot.data?.data() ?? {};
               final club = {...clubData, 'id': clubId};
               final clubName = club['name'] as String? ?? "Mon Club";
-              final viewerRole =
-                  _viewerRoleInClub(userSnapshot.data?.data() ?? {}, clubId);
+              final viewerRole = _viewerRoleInClub(
+                userSnapshot.data?.data() ?? {},
+                clubId,
+              );
               final canManageEquipmentAndLoans =
                   viewerRole == 'admin' || viewerRole == 'admin_fondateur';
 
               return SafeArea(
                 child: RepaintBoundary(
-                child: Stack(
-                  children: [
-                    Positioned(
-                      bottom: 0,
-                      left: 0,
-                      right: 0,
-                      child: Opacity(
-                        opacity: 0.10,
-                        child: Image.asset(
-                          'assets/logo/logo_seul.png',
-                          fit: BoxFit.contain,
-                          alignment: Alignment.bottomCenter,
+                  child: Stack(
+                    children: [
+                      Positioned(
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        child: Opacity(
+                          opacity: 0.10,
+                          child: Image.asset(
+                            'assets/logo/logo_seul.png',
+                            fit: BoxFit.contain,
+                            alignment: Alignment.bottomCenter,
+                          ),
                         ),
                       ),
-                    ),
-                    RefreshIndicator(
-                      onRefresh: _refreshAdminHome,
-                      child: SingleChildScrollView(
-                        physics: const AlwaysScrollableScrollPhysics(),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _buildAdminHeader(userData, clubData, clubId, viewerRole),
-                            Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 20),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  _buildTodaySection(clubId),
-                                  const SizedBox(height: 28),
-                                  _buildQuickAccessRow(
-                                    clubId,
-                                    clubName,
-                                    clubData,
-                                    viewerRole,
-                                    canManageEquipmentAndLoans,
-                                  ),
-                                  const SizedBox(height: 28),
-                                  _buildNotToMissSection(
-                                    clubId,
-                                    clubName,
-                                    userSnapshot.data?.data() ?? {},
-                                    canManageEquipmentAndLoans,
-                                  ),
-                                  const SizedBox(height: 28),
-                                ],
+                      RefreshIndicator(
+                        onRefresh: _refreshAdminHome,
+                        child: SingleChildScrollView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildAdminHeader(
+                                userData,
+                                clubData,
+                                clubId,
+                                viewerRole,
                               ),
-                            ),
-                          ],
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 20,
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    _buildTodaySection(clubId),
+                                    const SizedBox(height: 28),
+                                    _buildQuickAccessRow(
+                                      clubId,
+                                      clubName,
+                                      clubData,
+                                      viewerRole,
+                                      canManageEquipmentAndLoans,
+                                    ),
+                                    const SizedBox(height: 28),
+                                    _buildNotToMissSection(
+                                      clubId,
+                                      clubName,
+                                      userSnapshot.data?.data() ?? {},
+                                      canManageEquipmentAndLoans,
+                                    ),
+                                    const SizedBox(height: 28),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
               );
             },
           );
@@ -246,13 +255,18 @@ class _AdminHomePageState extends State<AdminHomePage> {
                               child: const SizedBox(
                                 width: 18,
                                 height: 18,
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
                               ),
                             ),
                             errorWidget: (_, __, ___) => CircleAvatar(
                               radius: 22,
                               backgroundColor: clubColor.withValues(alpha: 0.1),
-                              child: const Icon(Icons.person, color: ViroColors.primary),
+                              child: const Icon(
+                                Icons.person,
+                                color: ViroColors.primary,
+                              ),
                             ),
                             memCacheWidth: 88,
                             memCacheHeight: 88,
@@ -260,7 +274,10 @@ class _AdminHomePageState extends State<AdminHomePage> {
                         : CircleAvatar(
                             radius: 22,
                             backgroundColor: clubColor.withValues(alpha: 0.1),
-                            child: const Icon(Icons.person, color: ViroColors.primary),
+                            child: const Icon(
+                              Icons.person,
+                              color: ViroColors.primary,
+                            ),
                           ),
                   ),
                 ),
@@ -276,7 +293,10 @@ class _AdminHomePageState extends State<AdminHomePage> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: ViroColors.primary.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(20),
@@ -342,10 +362,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
   }
 
   /// True si le viewer peut accepter/refuser cette demande (admin fondateur: tout; admin: joueur uniquement; coach: jamais).
-  bool _canRespondToJoinRequest(
-    String? viewerRole,
-    String? roleRequested,
-  ) {
+  bool _canRespondToJoinRequest(String? viewerRole, String? roleRequested) {
     if (viewerRole == null) return false;
     if (viewerRole == 'coach') return false;
     if (viewerRole == 'admin_fondateur') return true;
@@ -391,7 +408,9 @@ class _AdminHomePageState extends State<AdminHomePage> {
               ),
             ),
             const SizedBox(height: 12),
-            ...events.map((doc) => _buildTodayEventCard(clubId, doc.id, doc.data())),
+            ...events.map(
+              (doc) => _buildTodayEventCard(clubId, doc.id, doc.data()),
+            ),
           ],
         );
       },
@@ -404,17 +423,24 @@ class _AdminHomePageState extends State<AdminHomePage> {
     Map<String, dynamic> data,
   ) {
     final bool isMatch = data['type'] == 'Match';
-    final String title = (data['title'] ?? data['type'] ?? 'Événement').toString();
-    final String time = isMatch
-        ? (data['meetingTime']?.toString() ?? data['startTime']?.toString() ?? '--:--')
-        : (data['startTime']?.toString() ?? '--:--');
+    final bool isAllDay = data['startTime'] == null && data['endTime'] == null;
+    final String title = (data['title'] ?? data['type'] ?? 'Événement')
+        .toString();
+    final String time = isAllDay
+        ? 'Toute la journée'
+        : (isMatch
+              ? (data['meetingTime']?.toString() ??
+                    data['startTime']?.toString() ??
+                    '--:--')
+              : (data['startTime']?.toString() ?? '--:--'));
     final String? endTime = data['endTime']?.toString();
     final String location = isMatch
         ? (data['meetingLocation']?.toString().trim().isNotEmpty == true
-            ? data['meetingLocation'].toString().trim()
-            : (data['location']?.toString() ?? ''))
+              ? data['meetingLocation'].toString().trim()
+              : (data['location']?.toString() ?? ''))
         : (data['location']?.toString() ?? '');
-    final teamNames = (data['teamNames'] as List?)?.whereType<String>().toList() ??
+    final teamNames =
+        (data['teamNames'] as List?)?.whereType<String>().toList() ??
         (data['teamName'] != null ? [data['teamName'].toString()] : <String>[]);
     final String teamLabel = teamNames.isEmpty ? '' : teamNames.join(', ');
 
@@ -426,7 +452,8 @@ class _AdminHomePageState extends State<AdminHomePage> {
     return GestureDetector(
       onTap: () => Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => AdminEventDetailsPage(clubId: clubId, eventId: eventId),
+          builder: (_) =>
+              AdminEventDetailsPage(clubId: clubId, eventId: eventId),
         ),
       ),
       child: Container(
@@ -634,7 +661,11 @@ class _AdminHomePageState extends State<AdminHomePage> {
             if (!canManageEquipmentAndLoans) {
               final hasContent = hasJoin || hasLeaves;
               return _buildNotToMissContent(
-                clubId, clubName, userData, canManageEquipmentAndLoans, hasContent,
+                clubId,
+                clubName,
+                userData,
+                canManageEquipmentAndLoans,
+                hasContent,
               );
             }
 
@@ -665,18 +696,33 @@ class _AdminHomePageState extends State<AdminHomePage> {
                         final now = DateTime.now();
                         final today = DateTime(now.year, now.month, now.day);
                         final tomorrow = today.add(const Duration(days: 1));
-                        final hasLoanReqs = (loanReqSnap.data?.docs ?? []).isNotEmpty;
-                        final hasLoans = (loansSnap.data?.docs ?? []).isNotEmpty;
-                        final hasUpcomingLoans = (acceptedSnap.data?.docs ?? []).any((doc) {
-                          final ts = doc.data()['requestedPickupDate'] as Timestamp?;
-                          if (ts == null) return false;
-                          final d = ts.toDate();
-                          final day = DateTime(d.year, d.month, d.day);
-                          return !day.isBefore(today) && !day.isAfter(tomorrow);
-                        });
-                        final hasContent = hasJoin || hasLeaves || hasLoanReqs || hasLoans || hasUpcomingLoans;
+                        final hasLoanReqs =
+                            (loanReqSnap.data?.docs ?? []).isNotEmpty;
+                        final hasLoans =
+                            (loansSnap.data?.docs ?? []).isNotEmpty;
+                        final hasUpcomingLoans = (acceptedSnap.data?.docs ?? [])
+                            .any((doc) {
+                              final ts =
+                                  doc.data()['requestedPickupDate']
+                                      as Timestamp?;
+                              if (ts == null) return false;
+                              final d = ts.toDate();
+                              final day = DateTime(d.year, d.month, d.day);
+                              return !day.isBefore(today) &&
+                                  !day.isAfter(tomorrow);
+                            });
+                        final hasContent =
+                            hasJoin ||
+                            hasLeaves ||
+                            hasLoanReqs ||
+                            hasLoans ||
+                            hasUpcomingLoans;
                         return _buildNotToMissContent(
-                          clubId, clubName, userData, canManageEquipmentAndLoans, hasContent,
+                          clubId,
+                          clubName,
+                          userData,
+                          canManageEquipmentAndLoans,
+                          hasContent,
                         );
                       },
                     );
@@ -705,10 +751,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
         const SizedBox(height: 30),
         const Text(
           "À ne pas manquer",
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
-          ),
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
         ),
         const SizedBox(height: 10),
         _buildJoinRequestsSection(clubId, clubName, userData),
@@ -787,8 +830,8 @@ class _AdminHomePageState extends State<AdminHomePage> {
                 final roleLabel = role == 'coach'
                     ? "Entraîneur"
                     : (role == 'admin' || role == 'admin_fondateur'
-                        ? "Administrateur"
-                        : "Membre");
+                          ? "Administrateur"
+                          : "Membre");
                 return InkWell(
                   onTap: () {
                     Navigator.of(context).push(
@@ -982,19 +1025,13 @@ class _AdminHomePageState extends State<AdminHomePage> {
                   const SizedBox(width: 8),
                   const Text(
                     "Départs du club",
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                   ),
                   const SizedBox(width: 8),
                   Chip(
                     label: Text(
                       "${docs.length}",
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Colors.white,
-                      ),
+                      style: const TextStyle(fontSize: 12, color: Colors.white),
                     ),
                     backgroundColor: ViroColors.error,
                   ),
@@ -1003,8 +1040,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
               const SizedBox(height: 12),
               ...docs.map((doc) {
                 final data = doc.data();
-                final firstName =
-                    (data['firstName'] as String?)?.trim() ?? '';
+                final firstName = (data['firstName'] as String?)?.trim() ?? '';
                 final lastName = (data['lastName'] as String?)?.trim() ?? '';
                 final role = data['role'] as String? ?? 'player';
                 final leftAt = data['leftAt'] as Timestamp?;
@@ -1020,8 +1056,10 @@ class _AdminHomePageState extends State<AdminHomePage> {
                   } else if (diff.inHours < 24) {
                     timeAgo = 'Il y a ${diff.inHours} h';
                   } else {
-                    timeAgo = DateFormat('dd/MM HH:mm', 'fr_FR')
-                        .format(leftAt.toDate());
+                    timeAgo = DateFormat(
+                      'dd/MM HH:mm',
+                      'fr_FR',
+                    ).format(leftAt.toDate());
                   }
                 }
                 return Container(
@@ -1093,9 +1131,9 @@ class _AdminHomePageState extends State<AdminHomePage> {
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(FirebaseErrorHandler.getErrorMessage(e))));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(FirebaseErrorHandler.getErrorMessage(e))),
+      );
     } finally {
       if (mounted) setState(() => _processingRequestId = null);
     }
@@ -1114,7 +1152,8 @@ class _AdminHomePageState extends State<AdminHomePage> {
           final error = snapshot.error;
           final errorStr = error.toString();
           // Vérifier si c'est une erreur d'index manquant
-          if (errorStr.contains('index') || errorStr.contains('requires an index')) {
+          if (errorStr.contains('index') ||
+              errorStr.contains('requires an index')) {
             return _InfoCard(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1571,9 +1610,9 @@ class _AdminHomePageState extends State<AdminHomePage> {
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(FirebaseErrorHandler.getErrorMessage(e))));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(FirebaseErrorHandler.getErrorMessage(e))),
+      );
     } finally {
       if (mounted) setState(() => _processingLoanRequestId = null);
     }
@@ -2183,7 +2222,9 @@ class _AdminHomePageState extends State<AdminHomePage> {
                               if (context.mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
-                                    content: Text(FirebaseErrorHandler.getErrorMessage(e)),
+                                    content: Text(
+                                      FirebaseErrorHandler.getErrorMessage(e),
+                                    ),
                                     backgroundColor: Colors.red,
                                   ),
                                 );
@@ -2487,10 +2528,7 @@ class _QuickAccessButton extends StatelessWidget {
             const SizedBox(height: 10),
             Text(
               label,
-              style: const TextStyle(
-                fontWeight: FontWeight.w600,
-                fontSize: 13,
-              ),
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
             ),
           ],
         ),
@@ -2523,9 +2561,10 @@ class _AnimatedRoleBadgeState extends State<_AnimatedRoleBadge>
       vsync: this,
       duration: const Duration(milliseconds: 1800),
     )..repeat(reverse: true);
-    _shimmer = Tween<double>(begin: -0.8, end: 0.8)
-        .chain(CurveTween(curve: Curves.easeInOut))
-        .animate(_ctrl);
+    _shimmer = Tween<double>(
+      begin: -0.8,
+      end: 0.8,
+    ).chain(CurveTween(curve: Curves.easeInOut)).animate(_ctrl);
   }
 
   @override
@@ -2538,29 +2577,29 @@ class _AnimatedRoleBadgeState extends State<_AnimatedRoleBadge>
   Widget build(BuildContext context) {
     final (label, base, shine, textColor) = switch (widget.role) {
       'admin_fondateur' => (
-          'Fondateur',
-          const Color(0xFFB8860B),
-          const Color(0xFFFFF0A0),
-          Colors.white,
-        ),
+        'Fondateur',
+        const Color(0xFFB8860B),
+        const Color(0xFFFFF0A0),
+        Colors.white,
+      ),
       'admin' => (
-          'Administrateur',
-          const Color(0xFF7A7A7A),
-          const Color(0xFFE8E8E8),
-          Colors.white,
-        ),
+        'Administrateur',
+        const Color(0xFF7A7A7A),
+        const Color(0xFFE8E8E8),
+        Colors.white,
+      ),
       'coach' => (
-          'Entraîneur',
-          const Color(0xFF7B4F2E),
-          const Color(0xFFE8B27A),
-          Colors.white,
-        ),
+        'Entraîneur',
+        const Color(0xFF7B4F2E),
+        const Color(0xFFE8B27A),
+        Colors.white,
+      ),
       _ => (
-          'Membre',
-          const Color(0xFF9E9E9E),
-          const Color(0xFFE0E0E0),
-          Colors.white,
-        ),
+        'Membre',
+        const Color(0xFF9E9E9E),
+        const Color(0xFFE0E0E0),
+        Colors.white,
+      ),
     };
 
     return AnimatedBuilder(
