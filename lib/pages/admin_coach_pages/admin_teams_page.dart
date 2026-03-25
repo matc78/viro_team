@@ -257,6 +257,118 @@ class _AdminTeamsPageState extends State<AdminTeamsPage> {
     }).toList();
   }
 
+  bool _isSeniorOrVeteranCategory(String category) {
+    final normalized = category
+        .trim()
+        .toLowerCase()
+        .replaceAll('é', 'e')
+        .replaceAll('è', 'e')
+        .replaceAll('ê', 'e')
+        .replaceAll('à', 'a')
+        .replaceAll('ù', 'u');
+    return normalized.contains('senior') || normalized.contains('veteran');
+  }
+
+  Future<void> _showMessagingLinksDialog(DocumentSnapshot teamDoc) async {
+    final data = teamDoc.data() as Map<String, dynamic>? ?? {};
+    final teamName = (data['name'] as String? ?? 'Équipe').trim();
+    final category = (data['category'] as String? ?? '').trim();
+    final canHaveParentsMessaging = !_isSeniorOrVeteranCategory(category);
+    final teamMessagingController = TextEditingController(
+      text: (data['messagingLink'] as String? ?? '').trim(),
+    );
+    final parentsMessagingController = TextEditingController(
+      text: (data['parentsMessagingLink'] as String? ?? '').trim(),
+    );
+
+    final bool? shouldSave = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Liens de messagerie'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                teamName,
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: teamMessagingController,
+                decoration: InputDecoration(
+                  labelText: 'Lien messagerie équipe',
+                  hintText: 'https://...',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              if (canHaveParentsMessaging)
+                TextField(
+                  controller: parentsMessagingController,
+                  decoration: InputDecoration(
+                    labelText: 'Lien messagerie parents',
+                    hintText: 'https://...',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              const SizedBox(height: 8),
+              const Text(
+                'Exemples : WhatsApp, Messenger, Snapchat...',
+                style: TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Annuler'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: ViroColors.primary),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Enregistrer', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldSave != true) return;
+
+    final teamMessagingLink = teamMessagingController.text.trim();
+    final parentsMessagingLink = canHaveParentsMessaging
+        ? parentsMessagingController.text.trim()
+        : '';
+
+    final updates = <String, dynamic>{
+      'messagingLink': teamMessagingLink.isEmpty
+          ? FieldValue.delete()
+          : teamMessagingLink,
+      'parentsMessagingLink': parentsMessagingLink.isEmpty
+          ? FieldValue.delete()
+          : parentsMessagingLink,
+    };
+
+    try {
+      await teamDoc.reference.set(updates, SetOptions(merge: true));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Liens de messagerie mis à jour')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(FirebaseErrorHandler.getErrorMessage(e))),
+      );
+    }
+  }
+
   static List<String> getCategoriesBySport(String sportName) {
     final sport = sportName.toLowerCase().trim().replaceAll('-', '');
     switch (sport) {
@@ -434,7 +546,24 @@ class _AdminTeamsPageState extends State<AdminTeamsPage> {
                   return const Center(child: ViroLoader(size: 50));
                 }
 
-                final teams = snapshot.data!;
+                final teams = List<DocumentSnapshot>.from(snapshot.data!)
+                  ..sort((a, b) {
+                    final aData = a.data() as Map<String, dynamic>? ?? {};
+                    final bData = b.data() as Map<String, dynamic>? ?? {};
+
+                    final aCategory =
+                        (aData['category'] as String? ?? '').trim().toLowerCase();
+                    final bCategory =
+                        (bData['category'] as String? ?? '').trim().toLowerCase();
+                    final categoryCompare = aCategory.compareTo(bCategory);
+                    if (categoryCompare != 0) return categoryCompare;
+
+                    final aName =
+                        (aData['name'] as String? ?? '').trim().toLowerCase();
+                    final bName =
+                        (bData['name'] as String? ?? '').trim().toLowerCase();
+                    return aName.compareTo(bName);
+                  });
 
                 if (teams.isEmpty) {
                   return Center(
@@ -473,6 +602,15 @@ class _AdminTeamsPageState extends State<AdminTeamsPage> {
                     );
                     final playerCount = playerIds.length;
                     final String category = (data['category'] as String?)?.trim() ?? '';
+                    final String teamMessagingLink =
+                        (data['messagingLink'] as String? ?? '').trim();
+                    final String parentsMessagingLink =
+                        (data['parentsMessagingLink'] as String? ?? '').trim();
+                    final bool hasMessagingLink = teamMessagingLink.isNotEmpty;
+                    final bool canHaveParentsMessaging =
+                        !_isSeniorOrVeteranCategory(category);
+                    final bool hasParentsMessagingLink = canHaveParentsMessaging &&
+                        parentsMessagingLink.isNotEmpty;
                     // Couleur par catégorie (orange et vert réservés aux badges licence)
                     final Color categoryColor = category.isNotEmpty
                         ? ViroColors.getCategoryColor(category)
@@ -483,6 +621,9 @@ class _AdminTeamsPageState extends State<AdminTeamsPage> {
 
                     return _TeamSlidableTile(
                       key: Key(team.id),
+                      onMessagingTap: canChangeAvatar
+                          ? () => _showMessagingLinksDialog(team)
+                          : null,
                       onCameraTap: canChangeAvatar
                           ? () => _pickTeamAvatar(team)
                           : null,
@@ -543,6 +684,46 @@ class _AdminTeamsPageState extends State<AdminTeamsPage> {
                                             CrossAxisAlignment.start,
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
+                                          if (hasMessagingLink)
+                                            Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Text(
+                                                  "Messagerie équipe",
+                                                  style: TextStyle(
+                                                    fontSize: subtitleSize,
+                                                    color: ViroColors.primary,
+                                                  ),
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                                const SizedBox(width: 4),
+                                                const Icon(
+                                                  Icons.check_circle,
+                                                  size: 16,
+                                                  color: ViroColors.primary,
+                                                ),
+                                              ],
+                                            ),
+                                          if (hasParentsMessagingLink)
+                                            Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Text(
+                                                  "Messagerie parents",
+                                                  style: TextStyle(
+                                                    fontSize: subtitleSize,
+                                                    color: ViroColors.primary,
+                                                  ),
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                                const SizedBox(width: 4),
+                                                const Icon(
+                                                  Icons.check_circle,
+                                                  size: 16,
+                                                  color: ViroColors.primary,
+                                                ),
+                                              ],
+                                            ),
                                           if (playerCount > 0)
                                             Text(
                                               "$playerCount joueur${playerCount > 1 ? 's' : ''}",
@@ -795,12 +976,14 @@ class _AdminTeamsPageState extends State<AdminTeamsPage> {
 ///   - optionnellement à droite : bouton rouge "supprimer l'équipe"
 class _TeamSlidableTile extends StatefulWidget {
   final Widget Function(Animation<double> slideAnimation) builder;
+  final Future<void> Function()? onMessagingTap;
   final Future<void> Function()? onCameraTap;
   final Future<void> Function()? onDeleteTap;
 
   const _TeamSlidableTile({
     required super.key,
     required this.builder,
+    this.onMessagingTap,
     this.onCameraTap,
     this.onDeleteTap,
   });
@@ -816,11 +999,14 @@ class _TeamSlidableTileState extends State<_TeamSlidableTile>
   static const double _buttonSize = 48.0;
   static const double _singleRevealWidth = 70.0;
   static const double _doubleRevealWidth = 126.0;
+  static const double _tripleRevealWidth = 182.0;
 
   double get _revealWidth {
     final count =
+        (widget.onMessagingTap != null ? 1 : 0) +
         (widget.onCameraTap != null ? 1 : 0) +
         (widget.onDeleteTap != null ? 1 : 0);
+    if (count >= 3) return _tripleRevealWidth;
     if (count >= 2) return _doubleRevealWidth;
     if (count == 1) return _singleRevealWidth;
     return 0;
@@ -890,9 +1076,10 @@ class _TeamSlidableTileState extends State<_TeamSlidableTile>
 
   @override
   Widget build(BuildContext context) {
+    final hasMessagingBtn = widget.onMessagingTap != null;
     final hasCameraBtn = widget.onCameraTap != null;
     final hasDeleteBtn = widget.onDeleteTap != null;
-    final hasAnyBtn = hasCameraBtn || hasDeleteBtn;
+    final hasAnyBtn = hasMessagingBtn || hasCameraBtn || hasDeleteBtn;
 
     if (!hasAnyBtn) return widget.builder(_controller);
 
@@ -914,6 +1101,17 @@ class _TeamSlidableTileState extends State<_TeamSlidableTile>
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  if (hasMessagingBtn) ...[
+                    _roundButton(
+                      icon: Icons.forum_rounded,
+                      color: ViroColors.primary,
+                      onTap: () async {
+                        await widget.onMessagingTap!();
+                        if (mounted) _close();
+                      },
+                    ),
+                    if (hasCameraBtn || hasDeleteBtn) const SizedBox(width: 8),
+                  ],
                   if (hasCameraBtn) ...[
                     _roundButton(
                       icon: Icons.photo_camera,

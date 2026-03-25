@@ -4,6 +4,7 @@ import 'package:viro_team/utils/club_emoji_utils.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:viro_team/utils/firestore_instance.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:viro_team/constants/firebase_collections.dart';
 import '../../theme/viro_theme.dart';
 import '../../utils/avatar_moderation.dart';
@@ -25,6 +26,120 @@ class PlayerTeamsPage extends StatefulWidget {
 
 class _PlayerTeamsPageState extends State<PlayerTeamsPage> {
   final String _currentUserId = FirebaseAuth.instance.currentUser?.uid ?? "";
+  final Map<String, ExpansionTileController> _teamTileControllers = {};
+  String? _openedTeamKey;
+
+  ExpansionTileController _controllerForTeam(String tileKey) {
+    return _teamTileControllers.putIfAbsent(tileKey, ExpansionTileController.new);
+  }
+
+  void _onTeamExpansionChanged(String tileKey, bool expanded) {
+    if (expanded) {
+      final previousOpened = _openedTeamKey;
+      if (previousOpened != null && previousOpened != tileKey) {
+        _teamTileControllers[previousOpened]?.collapse();
+      }
+      _openedTeamKey = tileKey;
+      return;
+    }
+    if (_openedTeamKey == tileKey) {
+      _openedTeamKey = null;
+    }
+  }
+
+  Future<void> _openMessagingLink(String link) async {
+    final uri = Uri.tryParse(link.trim());
+    if (uri == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Lien de messagerie invalide")),
+      );
+      return;
+    }
+    try {
+      final launched = await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
+      );
+      if (!launched && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Impossible d'ouvrir le lien")),
+        );
+      }
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Impossible d'ouvrir le lien")),
+      );
+    }
+  }
+
+  Widget _buildMessagingLinkTile({
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Material(
+        color: ViroColors.primary.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+            child: Row(
+              children: [
+                Container(
+                  width: 30,
+                  height: 30,
+                  decoration: BoxDecoration(
+                    color: ViroColors.primary.withValues(alpha: 0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.forum_rounded,
+                    size: 16,
+                    color: ViroColors.primary,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        label,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: ViroColors.primary,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      Text(
+                        "Ouvrir",
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.grey.shade600,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(
+                  Icons.arrow_forward_ios_rounded,
+                  size: 14,
+                  color: ViroColors.borderColor,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
   // Extraire tous les clubIds du joueur depuis profileSummaries
   List<String> _extractClubIds(Map<String, dynamic>? userData) {
@@ -277,6 +392,7 @@ class _PlayerTeamsPageState extends State<PlayerTeamsPage> {
     String clubId,
     String teamId,
   ) {
+    final tileKey = '$clubId::$teamId';
     final clubColor = _getClubColor(clubId);
     final List<String> playerIds = ((teamData['playerIds'] ?? []) as List)
         .cast<String>();
@@ -291,6 +407,10 @@ class _PlayerTeamsPageState extends State<PlayerTeamsPage> {
             : "Sans catégorie";
     final String? teamAvatarUrl =
         (teamData['avatarUrl'] as String?)?.trim();
+    final String messagingLink = (teamData['messagingLink'] as String? ?? '')
+        .trim();
+    final String parentsMessagingLink =
+        (teamData['parentsMessagingLink'] as String? ?? '').trim();
     final bool hasTeamAvatar =
         teamAvatarUrl != null && teamAvatarUrl.isNotEmpty;
     final bool useClubLogo =
@@ -303,6 +423,10 @@ class _PlayerTeamsPageState extends State<PlayerTeamsPage> {
         side: BorderSide(color: clubColor.withValues(alpha: 0.3), width: 2),
       ),
       child: ExpansionTile(
+        controller: _controllerForTeam(tileKey),
+        key: PageStorageKey<String>('player-team-tile-$tileKey'),
+        onExpansionChanged: (expanded) =>
+            _onTeamExpansionChanged(tileKey, expanded),
         shape:
             const Border(), // Retire la bordure par défaut de l'ExpansionTile
         leading: GestureDetector(
@@ -389,6 +513,18 @@ class _PlayerTeamsPageState extends State<PlayerTeamsPage> {
         ),
         children: [
           const Divider(),
+          if (messagingLink.isNotEmpty)
+            _buildMessagingLinkTile(
+              label: "Lien messagerie équipe",
+              onTap: () => _openMessagingLink(messagingLink),
+            ),
+          if (parentsMessagingLink.isNotEmpty)
+            _buildMessagingLinkTile(
+              label: "Lien messagerie parents",
+              onTap: () => _openMessagingLink(parentsMessagingLink),
+            ),
+          if (messagingLink.isNotEmpty || parentsMessagingLink.isNotEmpty)
+            const SizedBox(height: 8),
           // Section COACHS
           FutureBuilder<List<DocumentSnapshot<Map<String, dynamic>>>>(
             future: coachIds.isEmpty
