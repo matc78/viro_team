@@ -12,7 +12,7 @@ import '../../utils/firestore_instance.dart';
 import '../../widget/viro_loader.dart';
 import 'admin_fee_members_page.dart';
 import 'admin_fee_settings_page.dart';
-import 'widgets/fee_home_fab.dart';
+import 'widgets/fee_admin_bottom_nav.dart';
 
 /// Tableau de bord des cotisations (compteurs par statut + totaux financiers).
 class AdminFeeDashboardPage extends StatelessWidget {
@@ -47,7 +47,7 @@ class AdminFeeDashboardPage extends StatelessWidget {
           ),
         ],
       ),
-      floatingActionButton: const FeeHomeFab(),
+      bottomNavigationBar: const FeeAdminBottomNav(currentIndex: 2),
       body: StreamBuilder<ClubFeeSettings?>(
         stream: FeeService.instance.watchFeeSettings(clubId, seasonId),
         builder: (context, settingsSnap) {
@@ -173,6 +173,8 @@ class AdminFeeDashboardPage extends StatelessWidget {
                       Wrap(
                         spacing: 10,
                         runSpacing: 10,
+                        alignment: WrapAlignment.center,
+                        runAlignment: WrapAlignment.center,
                         children: [
                           for (final s in statuses)
                             _StatChip(
@@ -287,8 +289,12 @@ class _StatChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = feeStatusTextColor(status);
-    final bg = feeStatusColor(status);
+    final color = status == MemberFeeStatus.partiel
+        ? Colors.purple.shade800
+        : feeStatusTextColor(status);
+    final bg = status == MemberFeeStatus.partiel
+        ? Colors.purple.shade100
+        : feeStatusColor(status);
     final icon = feeStatusIcon(status);
 
     return MouseRegion(
@@ -357,8 +363,8 @@ class _PendingAccountChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = Colors.orange.shade800;
-    final bg = Colors.orange.shade100;
+    final color = Colors.indigo.shade800;
+    final bg = Colors.indigo.shade100;
 
     return MouseRegion(
       cursor: SystemMouseCursors.click,
@@ -453,7 +459,7 @@ class _FinancialSummaryCard extends StatelessWidget {
             _FinRow(
               label: 'Encaissé',
               value: formatEurosFromCents(totalPaid),
-              valueColor: ViroColors.success,
+              valueColor: ViroColors.primary,
             ),
             const SizedBox(height: 8),
             _FinRow(

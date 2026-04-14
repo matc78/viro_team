@@ -11,7 +11,7 @@ import '../../utils/fee_status_ui.dart';
 import '../../utils/firebase_error_handler.dart';
 import '../../widget/user_display_tile.dart';
 import '../../widget/viro_loader.dart';
-import 'widgets/fee_home_fab.dart';
+import 'widgets/fee_admin_bottom_nav.dart';
 
 /// Détail / édition cotisation pour un joueur.
 class AdminMemberFeeDetailPage extends StatelessWidget {
@@ -34,7 +34,7 @@ class AdminMemberFeeDetailPage extends StatelessWidget {
         title: const Text('Cotisation du joueur'),
         centerTitle: true,
       ),
-      floatingActionButton: const FeeHomeFab(),
+      bottomNavigationBar: const FeeAdminBottomNav(currentIndex: 2),
       body: StreamBuilder<ClubFeeSettings?>(
         stream: FeeService.instance.watchFeeSettings(clubId, seasonId),
         builder: (context, settingsSnap) {

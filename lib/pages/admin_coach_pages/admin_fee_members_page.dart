@@ -12,8 +12,8 @@ import '../../utils/firestore_instance.dart';
 import '../../widget/user_display_tile.dart';
 import '../../widget/viro_loader.dart';
 import 'admin_member_fee_detail_page.dart';
+import 'widgets/fee_admin_bottom_nav.dart';
 import 'widgets/fee_bulk_action_dialog.dart';
-import 'widgets/fee_home_fab.dart';
 
 /// Liste des joueurs avec filtre par statut de cotisation.
 class AdminFeeMembersPage extends StatefulWidget {
@@ -109,6 +109,24 @@ class _AdminFeeMembersPageState extends State<AdminFeeMembersPage> {
     });
   }
 
+  Color _filterBadgeBg(MemberFeeStatus status) {
+    switch (status) {
+      case MemberFeeStatus.partiel:
+        return Colors.purple.shade100;
+      default:
+        return feeStatusColor(status);
+    }
+  }
+
+  Color _filterBadgeFg(MemberFeeStatus status) {
+    switch (status) {
+      case MemberFeeStatus.partiel:
+        return Colors.purple.shade800;
+      default:
+        return feeStatusTextColor(status);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final fabVisible = _selectionMode && _selectedUids.isNotEmpty;
@@ -168,10 +186,9 @@ class _AdminFeeMembersPageState extends State<AdminFeeMembersPage> {
               icon: const Icon(Icons.layers_outlined),
               label: const Text('Actions groupées'),
             ),
-          if (fabVisible) const SizedBox(height: 10),
-          const FeeHomeFab(),
         ],
       ),
+      bottomNavigationBar: const FeeAdminBottomNav(currentIndex: 2),
       body: StreamBuilder<ClubFeeSettings?>(
         stream: FeeService.instance.watchFeeSettings(
           widget.clubId,
@@ -391,8 +408,8 @@ class _AdminFeeMembersPageState extends State<AdminFeeMembersPage> {
                                   label: s.label,
                                   icon: feeStatusIcon(s),
                                   selected: _filter == s,
-                                  unselectedBg: feeStatusColor(s),
-                                  unselectedFg: feeStatusTextColor(s),
+                                  unselectedBg: _filterBadgeBg(s),
+                                  unselectedFg: _filterBadgeFg(s),
                                   onTap: () => setState(
                                     () {
                                       _filter = _filter == s ? null : s;
@@ -405,8 +422,8 @@ class _AdminFeeMembersPageState extends State<AdminFeeMembersPage> {
                               label: 'Compte non créé',
                               icon: Icons.person_off_outlined,
                               selected: _pendingOnlyFilter,
-                              unselectedBg: Colors.orange.shade100,
-                              unselectedFg: Colors.orange.shade800,
+                              unselectedBg: Colors.indigo.shade100,
+                              unselectedFg: Colors.indigo.shade800,
                               onTap: () => setState(() {
                                 _pendingOnlyFilter = !_pendingOnlyFilter;
                                 if (_pendingOnlyFilter) {
@@ -553,12 +570,12 @@ class _AdminFeeMembersPageState extends State<AdminFeeMembersPage> {
                                                       vertical: 3,
                                                     ),
                                                 decoration: BoxDecoration(
-                                                  color: Colors.orange.shade50,
+                                                  color: Colors.indigo.shade50,
                                                   borderRadius:
                                                       BorderRadius.circular(999),
                                                   border: Border.all(
                                                     color:
-                                                        Colors.orange.shade200,
+                                                        Colors.indigo.shade200,
                                                   ),
                                                 ),
                                                 child: Text(
@@ -566,7 +583,7 @@ class _AdminFeeMembersPageState extends State<AdminFeeMembersPage> {
                                                   style: TextStyle(
                                                     fontSize: 10,
                                                     color:
-                                                        Colors.orange.shade800,
+                                                        Colors.indigo.shade800,
                                                     fontWeight: FontWeight.w600,
                                                   ),
                                                 ),
@@ -574,7 +591,9 @@ class _AdminFeeMembersPageState extends State<AdminFeeMembersPage> {
                                             ),
                                         ],
                                       ),
-                                      trailing: FeeStatusChip(status: status),
+                                      trailing: _MemberRowStatusChip(
+                                        status: status,
+                                      ),
                                       onTap: () {
                                         if (_selectionMode) {
                                           setState(() {
@@ -739,6 +758,46 @@ class _FilterBadge extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _MemberRowStatusChip extends StatelessWidget {
+  final MemberFeeStatus status;
+
+  const _MemberRowStatusChip({required this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = status == MemberFeeStatus.partiel
+        ? Colors.purple.shade100
+        : feeStatusColor(status);
+    final fg = status == MemberFeeStatus.partiel
+        ? Colors.purple.shade800
+        : feeStatusTextColor(status);
+    final icon = feeStatusIcon(status);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: fg),
+          const SizedBox(width: 4),
+          Text(
+            status.label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: fg,
+            ),
+          ),
+        ],
       ),
     );
   }

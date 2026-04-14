@@ -34,7 +34,9 @@ class _TabData {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class AdminShell extends StatefulWidget {
-  const AdminShell({super.key});
+  final int initialIndex;
+
+  const AdminShell({super.key, this.initialIndex = 2});
 
   @override
   State<AdminShell> createState() => _AdminShellState();
@@ -61,6 +63,7 @@ class _AdminShellState extends State<AdminShell> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
+    _currentIndex = widget.initialIndex.clamp(0, _tabs.length - 1);
     _pageCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 220),
