@@ -13,6 +13,7 @@ import '../../widget/user_display_tile.dart';
 import '../../widget/viro_loader.dart';
 import 'admin_member_fee_detail_page.dart';
 import 'widgets/fee_bulk_action_dialog.dart';
+import 'widgets/fee_home_fab.dart';
 
 /// Liste des joueurs avec filtre par statut de cotisation.
 class AdminFeeMembersPage extends StatefulWidget {
@@ -140,8 +141,12 @@ class _AdminFeeMembersPageState extends State<AdminFeeMembersPage> {
           ),
         ],
       ),
-      floatingActionButton: fabVisible
-          ? FloatingActionButton.extended(
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          if (fabVisible)
+            FloatingActionButton.extended(
               onPressed: () async {
                 final ok = await showFeeBulkActionDialog(
                   context: context,
@@ -162,8 +167,11 @@ class _AdminFeeMembersPageState extends State<AdminFeeMembersPage> {
               },
               icon: const Icon(Icons.layers_outlined),
               label: const Text('Actions groupées'),
-            )
-          : null,
+            ),
+          if (fabVisible) const SizedBox(height: 10),
+          const FeeHomeFab(),
+        ],
+      ),
       body: StreamBuilder<ClubFeeSettings?>(
         stream: FeeService.instance.watchFeeSettings(
           widget.clubId,

@@ -12,6 +12,7 @@ import '../../utils/firestore_instance.dart';
 import '../../widget/viro_loader.dart';
 import 'admin_fee_members_page.dart';
 import 'admin_fee_settings_page.dart';
+import 'widgets/fee_home_fab.dart';
 
 /// Tableau de bord des cotisations (compteurs par statut + totaux financiers).
 class AdminFeeDashboardPage extends StatelessWidget {
@@ -46,6 +47,7 @@ class AdminFeeDashboardPage extends StatelessWidget {
           ),
         ],
       ),
+      floatingActionButton: const FeeHomeFab(),
       body: StreamBuilder<ClubFeeSettings?>(
         stream: FeeService.instance.watchFeeSettings(clubId, seasonId),
         builder: (context, settingsSnap) {

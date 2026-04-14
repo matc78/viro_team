@@ -8,6 +8,7 @@ import '../../theme/viro_theme.dart';
 import '../../utils/firebase_error_handler.dart';
 import '../../widget/viro_loader.dart';
 import 'admin_fee_dashboard_page.dart';
+import 'widgets/fee_home_fab.dart';
 
 /// Liste des saisons de cotisation du club.
 /// Point d'entrée de la fonctionnalité cotisations pour les admins/coachs.
@@ -21,10 +22,18 @@ class AdminFeeSeasonListPage extends StatelessWidget {
     return Scaffold(
       backgroundColor: ViroColors.background,
       appBar: AppBar(title: const Text('Cotisations'), centerTitle: true),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showCreateDialog(context),
-        icon: const Icon(Icons.add),
-        label: const Text('Nouvelle saison'),
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          FloatingActionButton.extended(
+            onPressed: () => _showCreateDialog(context),
+            icon: const Icon(Icons.add),
+            label: const Text('Nouvelle saison'),
+          ),
+          const SizedBox(height: 10),
+          const FeeHomeFab(),
+        ],
       ),
       body: StreamBuilder<List<FeeSeason>>(
         stream: FeeService.instance.watchSeasons(clubId),

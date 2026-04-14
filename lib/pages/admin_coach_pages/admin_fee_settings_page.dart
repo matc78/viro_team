@@ -10,6 +10,7 @@ import '../../theme/viro_theme.dart';
 import '../../utils/fee_format.dart';
 import '../../utils/firebase_error_handler.dart';
 import '../../widget/viro_loader.dart';
+import 'widgets/fee_home_fab.dart';
 
 /// Edition de la grille tarifaire et des consignes de paiement.
 class AdminFeeSettingsPage extends StatelessWidget {
@@ -30,6 +31,7 @@ class AdminFeeSettingsPage extends StatelessWidget {
         title: const Text('Parametres cotisation'),
         centerTitle: true,
       ),
+      floatingActionButton: const FeeHomeFab(),
       body: StreamBuilder<ClubFeeSettings?>(
         stream: FeeService.instance.watchFeeSettings(clubId, seasonId),
         builder: (context, snap) {
