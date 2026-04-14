@@ -4,6 +4,7 @@ import 'package:viro_team/utils/club_emoji_utils.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:viro_team/utils/firestore_instance.dart';
 import 'package:flutter/material.dart';
+import 'package:viro_team/pages/admin_coach_pages/admin_club_stats_hub_page.dart';
 import 'package:viro_team/pages/admin_coach_pages/admin_event_details_page.dart';
 import 'package:viro_team/pages/admin_coach_pages/admin_loans_page.dart';
 import 'package:viro_team/pages/admin_coach_pages/admin_members_page.dart';
@@ -144,6 +145,8 @@ class _AdminHomePageState extends State<AdminHomePage> {
                                       viewerRole,
                                       canManageEquipmentAndLoans,
                                     ),
+                                    const SizedBox(height: 20),
+                                    _buildClubStatsHubEntry(context, clubId),
                                     const SizedBox(height: 28),
                                     _buildNotToMissSection(
                                       clubId,
@@ -645,6 +648,54 @@ class _AdminHomePageState extends State<AdminHomePage> {
           ],
         ),
       ],
+    );
+  }
+
+  Widget _buildClubStatsHubEntry(BuildContext context, String clubId) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      elevation: 1,
+      shadowColor: Colors.black.withValues(alpha: 0.06),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => AdminClubStatsHubPage(clubId: clubId),
+            ),
+          );
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              Icon(Icons.insights_outlined, color: ViroColors.primary, size: 26),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Statistiques du club',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15,
+                      ),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'Effectif, événements, moyennes et classements',
+                      style: TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right, color: Colors.grey[400]),
+            ],
+          ),
+        ),
+      ),
     );
   }
 

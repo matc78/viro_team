@@ -28,6 +28,7 @@ import '../../services/notification_preferences_service.dart';
 import '../onboarding_page.dart';
 import '../../services/user_session.dart';
 import '../../services/membership_service.dart';
+import '../../widget/player_club_stats_widgets.dart';
 import 'player_home_page.dart';
 
 class PlayerProfilPage extends StatefulWidget {
@@ -63,8 +64,9 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
           return const Scaffold(body: ViroLoader(size: 80));
         }
         final data = snapshot.data?.data();
+        final session = context.watch<UserSession>();
         final dataForModeration = data != null ? Map<String, dynamic>.from(data) : <String, dynamic>{};
-        final profile = context.watch<UserSession>().currentUser;
+        final profile = session.currentUser;
         if (profile != null && profile.uid == user.uid) {
           dataForModeration.addAll(profile.toAvatarMergeMap());
         }
@@ -164,6 +166,15 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
                   onTap: () => _showInfoDialog(data ?? {}, user),
                 ),
                 const SizedBox(height: 30),
+                if (session.currentClubId != null &&
+                    session.currentClubId!.isNotEmpty) ...[
+                  _buildSectionHeader("MES STATISTIQUES"),
+                  PlayerClubStatsPreviewCard(
+                    clubId: session.currentClubId!,
+                    userData: data ?? {},
+                  ),
+                  const SizedBox(height: 30),
+                ],
 
                 _buildSectionHeader("PROFILS & CLUBS"),
                 _buildMenuCard(

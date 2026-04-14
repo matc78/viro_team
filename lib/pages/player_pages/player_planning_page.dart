@@ -5,6 +5,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:viro_team/constants/firebase_collections.dart';
+import 'package:viro_team/services/event_service.dart';
+import '../../utils/event_attendance_stats.dart';
 import '../../theme/viro_theme.dart';
 import '../../utils/firebase_error_handler.dart';
 import '../../utils/document_cache.dart';
@@ -21,6 +23,7 @@ class PlayerPlanningPage extends StatefulWidget {
 }
 
 class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
+  final EventService _eventService = EventService();
   DateTime _selectedDate = DateTime.now();
   final String _currentUserId = FirebaseAuth.instance.currentUser?.uid ?? "";
   Map<String, dynamic>? _userData;
@@ -568,12 +571,18 @@ class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
     String status,
   ) async {
     try {
-      await appFirestore
-          .collection(FirebaseCollections.clubs)
-          .doc(clubId)
-          .collection(FirebaseCollections.events)
-          .doc(eventId)
-          .update({'attendance.$_currentUserId': status});
+      final ok = await _eventService.updatePlayerAttendanceWithStats(
+        clubId: clubId,
+        eventId: eventId,
+        userId: _currentUserId,
+        newStatus: status,
+      );
+      if (!ok && mounted) {
+        FirebaseErrorHandler.showErrorSnackBar(
+          context,
+          Exception('Mise à jour impossible'),
+        );
+      }
     } catch (e) {
       if (mounted) {
         FirebaseErrorHandler.showErrorSnackBar(context, e);
@@ -598,15 +607,13 @@ class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
     // On vérifie le statut de présence du joueur actuel pour afficher un indicateur
     final attendance = data['attendance'] as Map<String, dynamic>? ?? {};
     final myStatus = attendance[_currentUserId]?.toString() ?? 'none';
-    final presentCount = attendance.values.where((v) => v == 'present').length;
-    final absentCount = attendance.values.where((v) => v == 'absent').length;
     final teamMemberIds = (data['teamMemberIds'] as List<dynamic>?) ?? [];
     final hasNotResponded = myStatus != 'present' && myStatus != 'absent';
 
     // Récupérer la couleur du club
     final clubColor = _getClubColor(clubId);
 
-    // Récupérer le nom du club (mis en cache 15 min) et le nombre de pending
+    // Pending équipe : exclus des totaux sur la carte
     return FutureBuilder<Map<String, dynamic>>(
       future: () async {
         final clubDoc = await DocumentCache.getDocument(
@@ -614,19 +621,26 @@ class _PlayerPlanningPageState extends State<PlayerPlanningPage> {
           cacheDuration: const Duration(minutes: 15),
         );
         final pendingIds = await _getPendingPlayerIdsForTeam(clubId, teamName);
-        return {'club': clubDoc, 'pendingCount': pendingIds.length};
+        return {'club': clubDoc, 'pendingIds': pendingIds};
       }(),
       builder: (context, snap) {
         final clubDoc = snap.data?['club'] as DocumentSnapshot?;
-        final pendingCount = (snap.data?['pendingCount'] as int?) ?? 0;
+        final pendingIds = (snap.data?['pendingIds'] as List?)
+                ?.whereType<String>()
+                .toList() ??
+            <String>[];
         final clubData = clubDoc?.data() as Map<String, dynamic>?;
         final clubName = clubData?['name'] as String? ?? "Club";
         final sport = clubData?['sport'] as String?;
 
-        // Total convoqués = membres avec compte + pending ; sans réponse = total - présents - absents
-        final totalConvoqued = teamMemberIds.length + pendingCount;
-        final noResponseCount = (totalConvoqued - presentCount - absentCount)
-            .clamp(0, totalConvoqued);
+        final rsvp = computeRsvpSummaryExcludingPendingMembers(
+          attendance: attendance,
+          teamMemberIds: teamMemberIds,
+          teamPendingPlayerIds: pendingIds.toSet(),
+        );
+        final presentCount = rsvp.present;
+        final absentCount = rsvp.absent;
+        final noResponseCount = rsvp.sansReponse;
 
         return Container(
           margin: const EdgeInsets.only(bottom: 12),

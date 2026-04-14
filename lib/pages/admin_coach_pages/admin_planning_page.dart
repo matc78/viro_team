@@ -5,9 +5,67 @@ import 'package:intl/intl.dart';
 import 'package:viro_team/constants/firebase_collections.dart';
 import 'package:viro_team/pages/admin_coach_pages/admin_add_event_page.dart';
 import 'package:viro_team/pages/admin_coach_pages/admin_event_details_page.dart';
+import 'package:viro_team/pages/admin_coach_pages/admin_past_training_summary_page.dart';
+import '../../utils/event_attendance_stats.dart';
 import '../../theme/viro_theme.dart';
 import '../../utils/app_logger.dart';
 import '../../widget/viro_loader.dart';
+
+/// Ouvre le récap [AdminPastTrainingSummaryPage] au lieu de la fiche détail
+/// lorsque l’entraînement est terminé (jour passé, ou créneau horaire déjà fini).
+bool _shouldNavigateToPastTrainingRecap(Map<String, dynamic> data) {
+  if (data['type'] != 'Entraînement') return false;
+  final ts = data['date'] as Timestamp?;
+  if (ts == null) return false;
+  final base = ts.toDate();
+  final startStr = data['startTime']?.toString();
+  final endStr = data['endTime']?.toString();
+  final now = DateTime.now();
+
+  TimeOfDay? parseTd(String? s) {
+    if (s == null || s.isEmpty) return null;
+    final parts = s.split(':');
+    final h = int.tryParse(parts[0].trim()) ?? 0;
+    final m = parts.length > 1 ? int.tryParse(parts[1].trim()) ?? 0 : 0;
+    return TimeOfDay(hour: h, minute: m);
+  }
+
+  final eventDay = DateTime(base.year, base.month, base.day);
+  final today = DateTime(now.year, now.month, now.day);
+
+  if (startStr == null || startStr.isEmpty) {
+    return eventDay.isBefore(today);
+  }
+
+  final startTd = parseTd(startStr);
+  if (startTd == null) {
+    return eventDay.isBefore(today);
+  }
+
+  final startDt = DateTime(
+    base.year,
+    base.month,
+    base.day,
+    startTd.hour,
+    startTd.minute,
+  );
+
+  final endTd = parseTd(endStr);
+  if (endTd != null) {
+    final endDt = DateTime(
+      base.year,
+      base.month,
+      base.day,
+      endTd.hour,
+      endTd.minute,
+    );
+    return now.isAfter(endDt);
+  }
+
+  if (eventDay.isBefore(today)) return true;
+  if (eventDay.isAfter(today)) return false;
+  return now.isAfter(startDt.add(const Duration(hours: 2)));
+}
 
 class AdminPlanningPage extends StatefulWidget {
   final String clubId;
@@ -775,8 +833,8 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
                 .toSet()
                 .toList();
 
-            return FutureBuilder<Map<String, int>>(
-              future: _getPendingCountsForTeamNames(widget.clubId, teamNames),
+            return FutureBuilder<Map<String, Set<String>>>(
+              future: _getPendingPlayerIdsByTeamNames(widget.clubId, teamNames),
               builder: (context, pendingSnap) {
                 final pendingByTeam = pendingSnap.data ?? {};
                 return ListView.builder(
@@ -792,7 +850,8 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
                             ?.whereType<String>()
                             .firstOrNull ??
                         '';
-                    final pendingCount = pendingByTeam[teamName] ?? 0;
+                    final pendingIdsForTeam =
+                        pendingByTeam[teamName] ?? <String>{};
 
                     // Vérifier si l'événement est terminé (après la fin de saison)
                     bool isSeasonCompleted = false;
@@ -820,15 +879,23 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
                       child: _buildEventCard(
                         data,
                         isSeasonCompleted: isSeasonCompleted,
-                        pendingCount: pendingCount,
-                        onTap: () => Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => AdminEventDetailsPage(
-                              clubId: widget.clubId,
-                              eventId: docId,
+                        pendingIdsForTeam: pendingIdsForTeam,
+                        onTap: () {
+                          final recap = _shouldNavigateToPastTrainingRecap(data);
+                          Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => recap
+                                  ? AdminPastTrainingSummaryPage(
+                                      clubId: widget.clubId,
+                                      eventId: docId,
+                                    )
+                                  : AdminEventDetailsPage(
+                                      clubId: widget.clubId,
+                                      eventId: docId,
+                                    ),
                             ),
-                          ),
-                        ),
+                          );
+                        },
                       ),
                     );
                   },
@@ -841,8 +908,8 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
     );
   }
 
-  /// Retourne pour chaque nom d'équipe le nombre de joueurs en attente (sans compte).
-  Future<Map<String, int>> _getPendingCountsForTeamNames(
+  /// Pour chaque nom d'équipe, les IDs `pending_members` (exclus des totaux RSVP).
+  Future<Map<String, Set<String>>> _getPendingPlayerIdsByTeamNames(
     String clubId,
     List<String> teamNames,
   ) async {
@@ -855,12 +922,12 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
         .collection(FirebaseCollections.teams)
         .where('name', whereIn: batch)
         .get();
-    final map = <String, int>{};
+    final map = <String, Set<String>>{};
     for (final doc in snap.docs) {
       final data = doc.data();
       final name = data['name'] as String? ?? '';
       final list = data['pendingPlayerIds'] as List?;
-      map[name] = list?.length ?? 0;
+      map[name] = list?.whereType<String>().toSet() ?? {};
     }
     return map;
   }
@@ -868,7 +935,7 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
   Widget _buildEventCard(
     Map<String, dynamic> data, {
     bool isSeasonCompleted = false,
-    int pendingCount = 0,
+    Set<String> pendingIdsForTeam = const {},
     VoidCallback? onTap,
   }) {
     final bool canceled = data['canceled'] == true;
@@ -899,17 +966,22 @@ class _AdminPlanningPageState extends State<AdminPlanningPage> {
     final Map<String, dynamic> attendance = Map<String, dynamic>.from(
       data['attendance'] ?? {},
     );
-    int presentCount = attendance.values.where((v) => v == 'present').length;
-    int absentCount = attendance.values.where((v) => v == 'absent').length;
-    if (presentCount == 0 && absentCount == 0) {
+    final teamMemberIds = data['teamMemberIds'] as List? ?? [];
+    final s = computeRsvpSummaryExcludingPendingMembers(
+      attendance: attendance,
+      teamMemberIds: teamMemberIds,
+      teamPendingPlayerIds: pendingIdsForTeam,
+    );
+    var presentCount = s.present;
+    var absentCount = s.absent;
+    var noResponseCount = s.sansReponse;
+    if (presentCount == 0 &&
+        absentCount == 0 &&
+        s.convoquesAvecCompte == 0) {
       presentCount = _countList(data['presentIds']);
       absentCount = _countList(data['absentIds']);
+      noResponseCount = 0;
     }
-    final int totalResponded = presentCount + absentCount;
-    final int unknownFromMembers = _countList(data['teamMemberIds']) > 0
-        ? (_countList(data['teamMemberIds']) - totalResponded).clamp(0, 9999)
-        : 0;
-    final int noResponseCount = unknownFromMembers + pendingCount;
 
     final Color borderColor = canceled
         ? Colors.grey

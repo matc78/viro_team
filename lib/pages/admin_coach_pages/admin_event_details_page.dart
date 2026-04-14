@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../../constants/firebase_collections.dart';
 import '../../services/user_session.dart';
 import '../../theme/viro_theme.dart';
+import '../../utils/event_attendance_stats.dart';
 import '../../utils/firebase_helpers.dart';
 import '../../utils/firestore_instance.dart';
 import '../../utils/avatar_moderation.dart';
@@ -411,7 +412,8 @@ class AdminEventDetailsPage extends StatelessWidget {
                     // --- STATISTIQUES ---
                     _buildAttendanceSummary(
                       attendance,
-                      pendingCount: pendingPlayerIds.length,
+                      teamMembers,
+                      pendingPlayerIds,
                     ),
 
                     // --- LISTES DES JOUEURS ---
@@ -760,13 +762,18 @@ class AdminEventDetailsPage extends StatelessWidget {
   }
 
   Widget _buildAttendanceSummary(
-    Map<String, dynamic> attendance, {
-    int pendingCount = 0,
-  }) {
-    int present = attendance.values.where((v) => v == 'present').length;
-    int absent = attendance.values.where((v) => v == 'absent').length;
-    int total = attendance.length;
-    int noResponse = total - (present + absent) + pendingCount;
+    Map<String, dynamic> attendance,
+    List<dynamic> teamMembers,
+    List<String> pendingPlayerIds,
+  ) {
+    final s = computeRsvpSummaryExcludingPendingMembers(
+      attendance: attendance,
+      teamMemberIds: teamMembers,
+      teamPendingPlayerIds: pendingPlayerIds.toSet(),
+    );
+    final present = s.present;
+    final absent = s.absent;
+    final noResponse = s.sansReponse;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -1106,7 +1113,7 @@ class AdminEventDetailsPage extends StatelessWidget {
         ? email
         : '$firstName $lastName'.trim();
 
-    // Pending_member : badge toujours "Compte en attente" (ils restent comptés dans SANS RÉPONSE)
+    // Pending_member : badge "Compte en attente" — non comptés dans les totaux RSVP
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(

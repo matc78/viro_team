@@ -5,7 +5,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:viro_team/utils/firestore_instance.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 import '../../constants/firebase_collections.dart';
+import '../../services/user_session.dart';
+import '../../widget/player_club_stats_widgets.dart';
 import '../../theme/viro_theme.dart';
 import '../../widget/viro_loader.dart';
 import '../../utils/firebase_helpers.dart';
@@ -292,6 +295,23 @@ class ProfilDisplayPage extends StatelessWidget {
                               );
                             }),
                           ],
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 24),
+
+                    Consumer<UserSession>(
+                      builder: (context, session, _) {
+                        final cid = session.currentClubId;
+                        if (cid == null || cid.isEmpty) {
+                          return const SizedBox.shrink();
+                        }
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: PlayerClubStatsSection(
+                            clubId: cid,
+                            userData: data,
+                          ),
                         );
                       },
                     ),

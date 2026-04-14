@@ -8,6 +8,7 @@ import 'package:viro_team/constants/firebase_collections.dart';
 import 'package:viro_team/services/event_service.dart';
 import 'package:intl/intl.dart';
 import '../../theme/viro_theme.dart';
+import '../../utils/event_attendance_stats.dart';
 import '../../utils/app_logger.dart';
 import '../../utils/avatar_moderation.dart';
 import '../../utils/firebase_error_handler.dart';
@@ -133,7 +134,7 @@ class PlayerEventDetailsPage extends StatelessWidget {
                       clubId,
                       eventId,
                       currentUserId,
-                      pendingCount: pendingPlayerIds.length,
+                      pendingPlayerIds,
                     ),
 
                     // --- LISTES DES JOUEURS ---
@@ -333,21 +334,20 @@ class PlayerEventDetailsPage extends StatelessWidget {
     }
 
     try {
-      if (newStatus == null) {
-        // Sans réponse : retirer l'entrée
-        await appFirestore
-            .collection(FirebaseCollections.clubs)
-            .doc(clubId)
-            .collection(FirebaseCollections.events)
-            .doc(eventId)
-            .update({'attendance.$uid': FieldValue.delete()});
-      } else {
-        await appFirestore
-            .collection(FirebaseCollections.clubs)
-            .doc(clubId)
-            .collection(FirebaseCollections.events)
-            .doc(eventId)
-            .update({'attendance.$uid': newStatus});
+      final ok = await _eventService.updatePlayerAttendanceWithStats(
+        clubId: clubId,
+        eventId: eventId,
+        userId: uid,
+        newStatus: newStatus,
+      );
+      if (!ok) {
+        if (context.mounted) {
+          FirebaseErrorHandler.showErrorSnackBar(
+            context,
+            Exception('Mise à jour impossible'),
+          );
+        }
+        return;
       }
       AppLogger.instance.info('Mise à jour de présence', {
         'userId': uid,
@@ -366,7 +366,9 @@ class PlayerEventDetailsPage extends StatelessWidget {
           'status': newStatus ?? 'none',
         },
       );
-      FirebaseErrorHandler.showErrorSnackBar(context, e);
+      if (context.mounted) {
+        FirebaseErrorHandler.showErrorSnackBar(context, e);
+      }
     }
   }
 
@@ -376,16 +378,17 @@ class PlayerEventDetailsPage extends StatelessWidget {
     List<dynamic> teamMembers,
     String clubId,
     String eventId,
-    String currentUserId, {
-    int pendingCount = 0,
-  }) {
-    int present = attendance.values.where((v) => v == 'present').length;
-    int absent = attendance.values.where((v) => v == 'absent').length;
-    int total = teamMembers.isEmpty
-        ? attendance.length
-        : teamMembers.length;
-    total += pendingCount;
-    int noResponse = (total - (present + absent)).clamp(0, total);
+    String currentUserId,
+    List<String> pendingPlayerIds,
+  ) {
+    final s = computeRsvpSummaryExcludingPendingMembers(
+      attendance: attendance,
+      teamMemberIds: teamMembers,
+      teamPendingPlayerIds: pendingPlayerIds.toSet(),
+    );
+    final present = s.present;
+    final absent = s.absent;
+    final noResponse = s.sansReponse;
 
     final String currentStatus =
         (attendance[currentUserId] as String?) ?? 'none';

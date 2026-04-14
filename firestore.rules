@@ -240,6 +240,12 @@ service cloud.firestore {
                    && request.resource.data.get('attendance', {}).diff(resource.data.get('attendance', {})).affectedKeys().hasOnly([request.auth.uid])
                    && (!(request.auth.uid in request.resource.data.get('attendance', {}))
                        || request.resource.data.get('attendance', {}).get(request.auth.uid, '') in ['present', 'absent']))
+                  // Idem + métadonnées de réponse (délai) : uniquement la clé du joueur dans attendanceMeta
+                  || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['attendance', 'attendanceMeta'])
+                   && request.resource.data.get('attendance', {}).diff(resource.data.get('attendance', {})).affectedKeys().hasOnly([request.auth.uid])
+                   && (!(request.auth.uid in request.resource.data.get('attendance', {}))
+                       || request.resource.data.get('attendance', {}).get(request.auth.uid, '') in ['present', 'absent'])
+                   && request.resource.data.get('attendanceMeta', {}).diff(resource.data.get('attendanceMeta', {})).affectedKeys().hasOnly([request.auth.uid]))
                   // Joueur se retire de l'événement (quitter le club) : seul retrait de son uid de teamMemberIds et de attendance
                   || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['teamMemberIds', 'attendance'])
                       && !(request.auth.uid in request.resource.data.get('teamMemberIds', []))

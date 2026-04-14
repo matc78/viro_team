@@ -9,6 +9,7 @@ import '../../services/membership_service.dart';
 import '../../utils/firebase_helpers.dart';
 import '../../utils/firebase_error_handler.dart';
 import '../../utils/avatar_moderation.dart';
+import '../../utils/player_club_stats_helpers.dart';
 import '../../widget/user_display_tile.dart';
 import '../../widget/viro_loader.dart';
 import '../profil_display_page.dart';
@@ -803,6 +804,14 @@ class _TeamDetailsPageState extends State<TeamDetailsPage> {
             fontWeight: FontWeight.w600,
           ),
         ),
+        subtitle: role == 'player'
+            ? Text(
+                playerStatsOneLiner(
+                  playerSeasonStatsForClub(userData, widget.clubId),
+                ),
+                style: const TextStyle(fontSize: 11, color: Colors.grey),
+              )
+            : null,
         trailing: canEdit && canRemoveInSection
             ? IconButton(
                 icon: const Icon(
