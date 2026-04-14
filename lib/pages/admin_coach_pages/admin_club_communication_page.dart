@@ -22,8 +22,11 @@ class AdminClubCommunicationPage extends StatefulWidget {
 class _AdminClubCommunicationPageState
     extends State<AdminClubCommunicationPage> {
   final TextEditingController _messageController = TextEditingController();
-  String _selectedTargetType = 'Équipes'; // 'Équipes', 'Catégories', 'Joueurs'
+  /// Par défaut : diffusion à tout le club (réservé aux admins — les coachs sont
+  /// repassés sur « Équipes » une fois le rôle connu).
+  String _selectedTargetType = 'Tous les membres';
   final List<String> _selectedIds = [];
+  bool _scheduledCoachRecipientFallback = false;
   bool _isSending = false;
   int _durationDays = 7;
   final String _currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
@@ -276,8 +279,10 @@ class _AdminClubCommunicationPageState
                       .doc(_currentUserId)
                       .snapshots(),
                   builder: (context, userSnap) {
+                    final hasUser =
+                        userSnap.hasData && userSnap.data?.data() != null;
                     bool isAdmin = false;
-                    if (userSnap.hasData && userSnap.data?.data() != null) {
+                    if (hasUser) {
                       final roles = getAllUserRolesInClub(
                         userSnap.data!.data()!,
                         widget.clubId,
@@ -285,6 +290,19 @@ class _AdminClubCommunicationPageState
                       isAdmin = roles.any(
                         (r) => r == 'admin' || r == 'admin_fondateur',
                       );
+                    }
+                    if (hasUser &&
+                        !isAdmin &&
+                        _selectedTargetType == 'Tous les membres' &&
+                        !_scheduledCoachRecipientFallback) {
+                      _scheduledCoachRecipientFallback = true;
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (!mounted) return;
+                        setState(() {
+                          _selectedTargetType = 'Équipes';
+                          _selectedIds.clear();
+                        });
+                      });
                     }
                     return SingleChildScrollView(
                       padding: const EdgeInsets.only(
@@ -308,17 +326,18 @@ class _AdminClubCommunicationPageState
                           const SizedBox(height: 12),
                           _buildTargetToggle(isAdmin: isAdmin),
                           const SizedBox(height: 20),
-
-                          const Text(
-                            "SÉLECTIONNER",
-                            style: TextStyle(
-                              fontWeight: FontWeight.w900,
-                              fontSize: 11,
-                              color: Colors.grey,
-                              letterSpacing: 1.1,
+                          if (_selectedTargetType != 'Tous les membres') ...[
+                            const Text(
+                              "SÉLECTIONNER",
+                              style: TextStyle(
+                                fontWeight: FontWeight.w900,
+                                fontSize: 11,
+                                color: Colors.grey,
+                                letterSpacing: 1.1,
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 12),
+                            const SizedBox(height: 12),
+                          ],
                           _buildPickerList(),
                           const SizedBox(height: 30),
 
