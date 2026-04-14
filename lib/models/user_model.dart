@@ -491,6 +491,7 @@ class UserProfile {
   final Map<String, bool> notificationPreferences;
   final DateTime? createdAt;
   final DateTime? updatedAt;
+  final DateTime? lastConnectionAt;
 
   UserProfile({
     required this.uid,
@@ -514,6 +515,7 @@ class UserProfile {
     this.notificationPreferences = const {},
     this.createdAt,
     this.updatedAt,
+    this.lastConnectionAt,
   });
 
   /// Construit à partir d'un Map déjà fusionné (user doc + avatar_moderation/state).
@@ -564,6 +566,7 @@ class UserProfile {
           prefs.map((k, v) => MapEntry(k, v == true)),
       createdAt: (d['createdAt'] as Timestamp?)?.toDate(),
       updatedAt: (d['updatedAt'] as Timestamp?)?.toDate(),
+      lastConnectionAt: (d['lastConnectionAt'] as Timestamp?)?.toDate(),
     );
   }
 

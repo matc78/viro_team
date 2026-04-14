@@ -516,7 +516,9 @@ class _AuthGateState extends State<_AuthGate> {
         if (user.uid != widget.currentUserId) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             widget.onUserIdChanged(user.uid);
-            context.read<UserSession>().startListening(user.uid);
+            final userSession = context.read<UserSession>();
+            userSession.startListening(user.uid);
+            unawaited(userSession.touchLastConnection(user.uid));
             widget.onSessionStarted(user.uid);
           });
         }

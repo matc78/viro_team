@@ -12,8 +12,7 @@ import 'package:viro_team/services/user_session.dart';
 import 'package:viro_team/theme/viro_theme.dart';
 import 'package:viro_team/utils/avatar_moderation.dart';
 import 'package:viro_team/pages/add_profile_page.dart';
-import 'package:viro_team/pages/admin_coach_pages/admin_shell.dart';
-import 'package:viro_team/pages/player_pages/player_shell.dart';
+import 'package:viro_team/utils/profile_context_utils.dart' as profile_context;
 
 /// Affiche le menu déroulant profil sous le bouton (avatar).
 /// [context] doit être le contexte du widget cliqué (pour la position).
@@ -264,55 +263,25 @@ class _ProfileMenuDropdownContentState extends State<ProfileMenuDropdownContent>
   }
 
   String _getRoleDisplayName(String role) {
-    switch (role) {
-      case 'player':
-        return 'Joueur';
-      case 'coach':
-        return 'Coach';
-      case 'admin':
-        return 'Administrateur';
-      case 'admin_fondateur':
-        return 'Fondateur';
-      default:
-        return role;
-    }
+    return role == 'admin_fondateur'
+        ? 'Fondateur'
+        : profile_context.roleDisplayName(role);
   }
 
   Future<void> _switchProfile(String role, String clubId) async {
     if (_isSwitching) return;
     setState(() => _isSwitching = true);
     final session = context.read<UserSession>();
-    final navigator = Navigator.of(context);
-    final success = await session.switchContext(role, clubId);
-    if (!mounted) return;
-    setState(() => _isSwitching = false);
-    if (!success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Erreur lors du changement de profil'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-    widget.onClose();
-    if (role == 'player') {
-      navigator.pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const PlayerShell()),
-        (route) => false,
-      );
-    } else {
-      navigator.pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const AdminShell()),
-        (route) => false,
-      );
-    }
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Profil changé avec succès'),
-        backgroundColor: Colors.green,
-      ),
+    final success = await profile_context.switchProfileAndNavigate(
+      context: context,
+      session: session,
+      role: role,
+      clubId: clubId,
+      closeCurrentSurface: widget.onClose,
     );
+    if (mounted && !success) {
+      setState(() => _isSwitching = false);
+    }
   }
 
   @override

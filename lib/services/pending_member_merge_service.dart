@@ -12,6 +12,8 @@ class PendingMemberMergeService {
   PendingMemberMergeService._();
   static final PendingMemberMergeService instance = PendingMemberMergeService._();
 
+  static const String _feeMigrationMarkerField = '_migratedFromPendingId';
+
   final FirebaseFirestore _db = appFirestore;
 
   /// À appeler après qu'un utilisateur a rejoint un club (acceptation demande ou signup invite).
@@ -134,6 +136,12 @@ class PendingMemberMergeService {
         );
       }
 
+      await _migrateFeeRecords(
+        clubId: clubId,
+        fromId: pendingMemberId,
+        toId: userId,
+      );
+
       // Supprimer le pending_member
       await _db
           .collection(FirebaseCollections.clubs)
@@ -162,6 +170,77 @@ class PendingMemberMergeService {
         },
       );
       rethrow;
+    }
+  }
+
+  Future<void> _migrateFeeRecords({
+    required String clubId,
+    required String fromId,
+    required String toId,
+  }) async {
+    final seasonsSnap = await _db
+        .collection(FirebaseCollections.clubs)
+        .doc(clubId)
+        .collection(FirebaseCollections.feeSeasons)
+        .get();
+
+    for (final seasonDoc in seasonsSnap.docs) {
+      final sourceRef = seasonDoc.reference
+          .collection(FirebaseCollections.memberFees)
+          .doc(fromId);
+      final targetRef = seasonDoc.reference
+          .collection(FirebaseCollections.memberFees)
+          .doc(toId);
+
+      final outcome = await _db.runTransaction<_FeeMigrationOutcome>((
+        transaction,
+      ) async {
+        final sourceSnap = await transaction.get(sourceRef);
+        if (!sourceSnap.exists) {
+          return _FeeMigrationOutcome.notFound;
+        }
+
+        final targetSnap = await transaction.get(targetRef);
+        if (targetSnap.exists) {
+          transaction.delete(sourceRef);
+          return _FeeMigrationOutcome.conflictKeptTarget;
+        }
+
+        final sourceData = sourceSnap.data();
+        if (sourceData == null) {
+          return _FeeMigrationOutcome.notFound;
+        }
+
+        transaction.set(targetRef, {
+          ...sourceData,
+          _feeMigrationMarkerField: fromId,
+        });
+        transaction.delete(sourceRef);
+        return _FeeMigrationOutcome.migrated;
+      });
+
+      if (outcome == _FeeMigrationOutcome.migrated) {
+        await targetRef.update({_feeMigrationMarkerField: FieldValue.delete()});
+        AppLogger.instance.info(
+          'Cotisation migrée depuis pending_member',
+          {
+            'clubId': clubId,
+            'seasonId': seasonDoc.id,
+            'fromId': fromId,
+            'toId': toId,
+          },
+        );
+      } else if (outcome == _FeeMigrationOutcome.conflictKeptTarget) {
+        AppLogger.instance.warning(
+          'Conflit cotisation pendant fusion pending_member: cible conservée',
+          {
+            'clubId': clubId,
+            'seasonId': seasonDoc.id,
+            'fromId': fromId,
+            'toId': toId,
+          },
+        );
+      }
     }
   }
 
@@ -204,4 +283,10 @@ class PendingMemberMergeService {
       }
     }
   }
+}
+
+enum _FeeMigrationOutcome {
+  notFound,
+  migrated,
+  conflictKeptTarget,
 }

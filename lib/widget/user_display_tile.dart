@@ -62,12 +62,68 @@ class UserDisplayTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final name = NameFormatter.formatFromData(
-      firstName,
-      lastName,
-      fallback: fallback,
-    );
     final radius = compact ? 12.0 : 18.0;
+    final urlFromParam = _urlFromDynamic(avatarUrl);
+    final hasUrlFromParam = urlFromParam != null && urlFromParam.isNotEmpty;
+
+    // Si le nom ET l'avatar sont fournis en param, rendu statique (pas de Firestore)
+    final hasNameParam = (firstName?.trim().isNotEmpty ?? false) ||
+        (lastName?.trim().isNotEmpty ?? false);
+
+    if (hasNameParam && (hasUrlFromParam || userId == null || userId!.isEmpty)) {
+      return _buildRow(
+        context,
+        firstName: firstName,
+        lastName: lastName,
+        resolvedAvatarUrl: hasUrlFromParam ? urlFromParam : null,
+        radius: radius,
+      );
+    }
+
+    // Chargement depuis Firestore : nom et/ou avatar manquants
+    if (userId != null && userId!.isNotEmpty) {
+      return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+        stream: appFirestore
+            .collection(FirebaseCollections.users)
+            .doc(userId)
+            .snapshots(),
+        builder: (context, snapshot) {
+          final data = snapshot.data?.data() ?? {};
+          final loadedFirst =
+              hasNameParam ? firstName : data['firstName'] as String?;
+          final loadedLast =
+              hasNameParam ? lastName : data['lastName'] as String?;
+          final url = hasUrlFromParam
+              ? urlFromParam
+              : effectiveAvatarUrl(data);
+          return _buildRow(
+            context,
+            firstName: loadedFirst,
+            lastName: loadedLast,
+            resolvedAvatarUrl: url,
+            radius: radius,
+          );
+        },
+      );
+    }
+
+    // Pas de userId : rendu statique avec fallback
+    return _buildRow(
+      context,
+      firstName: firstName,
+      lastName: lastName,
+      resolvedAvatarUrl: hasUrlFromParam ? urlFromParam : null,
+      radius: radius,
+    );
+  }
+
+  Widget _buildRow(
+    BuildContext context, {
+    required String? firstName,
+    required String? lastName,
+    required String? resolvedAvatarUrl,
+    required double radius,
+  }) {
     final fontSize = compact ? 12.0 : 14.0;
     final effectiveStyle =
         textStyle ??
@@ -76,58 +132,21 @@ class UserDisplayTile extends StatelessWidget {
           fontWeight: FontWeight.w600,
           color: textStyle?.color ?? Colors.grey[800],
         );
+    final name = NameFormatter.formatFromData(
+      firstName,
+      lastName,
+      fallback: fallback,
+    );
 
-    // Utiliser l'URL passée, ou charger depuis Firestore si on a userId (comme profil_display_page)
-    final urlFromParam = _urlFromDynamic(avatarUrl);
-    final hasUrlFromParam = urlFromParam != null && urlFromParam.isNotEmpty;
-
-    Widget avatar;
-    if (hasUrlFromParam) {
+    final Widget avatar;
+    if (resolvedAvatarUrl != null && resolvedAvatarUrl.isNotEmpty) {
       avatar = _buildAvatarFromUrl(
         context,
-        url: urlFromParam,
+        url: resolvedAvatarUrl,
         radius: radius,
         compact: compact,
         firstName: firstName,
         lastName: lastName,
-      );
-    } else if (userId != null && userId!.isNotEmpty) {
-      // Même source que ProfilDisplayPage : document users
-      avatar = StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-        stream: appFirestore
-            .collection(FirebaseCollections.users)
-            .doc(userId)
-            .snapshots(),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData || !(snapshot.data?.exists ?? false)) {
-            return _buildInitialsAvatar(
-              radius: radius,
-              compact: compact,
-              firstName: firstName,
-              lastName: lastName,
-            );
-          }
-          final data = snapshot.data!.data() ?? {};
-          // Même condition que profil_display_page pour l'avatar (modération OK)
-          final url = effectiveAvatarUrl(data);
-          final hasUrl = url != null && url.isNotEmpty;
-          if (hasUrl) {
-            return _buildAvatarFromUrl(
-              context,
-              url: url,
-              radius: radius,
-              compact: compact,
-              firstName: firstName,
-              lastName: lastName,
-            );
-          }
-          return _buildInitialsAvatar(
-            radius: radius,
-            compact: compact,
-            firstName: data['firstName'] as String? ?? firstName,
-            lastName: data['lastName'] as String? ?? lastName,
-          );
-        },
       );
     } else {
       avatar = _buildInitialsAvatar(

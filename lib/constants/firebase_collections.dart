@@ -39,4 +39,17 @@ class FirebaseCollections {
 
   /// ID du document unique dans avatar_moderation (état courant)
   static const String avatarModerationStateDocId = 'state';
+
+  /// Cotisations : saisons sous clubs/{clubId}/fee_seasons/{seasonId}
+  static const String feeSeasons = 'fee_seasons';
+
+  /// Cotisations : suivi par joueur sous clubs/{clubId}/fee_seasons/{seasonId}/member_fees/{uid}
+  static const String memberFees = 'member_fees';
+
+  // Legacy (données avant le multi-saisons — conservées pour compatibilité)
+  /// @deprecated Utiliser [feeSeasons] à la place
+  static const String feeSettings = 'fee_settings';
+
+  /// @deprecated Utiliser [feeSeasons] à la place
+  static const String feeSettingsDefaultDocId = 'default';
 }

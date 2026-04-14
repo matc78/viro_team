@@ -850,20 +850,32 @@ class _EquipmentCard extends StatelessWidget {
                           width: 8,
                           height: 8,
                           decoration: BoxDecoration(
-                            color: isAvailable
-                                ? const Color(0xFF20C05C)
-                                : ViroColors.error,
+                            color: !isAvailable
+                                ? ViroColors.error
+                                : maxQuantity == 1
+                                    ? ViroColors.error
+                                    : maxQuantity == 2
+                                        ? const Color(0xFFFF9800)
+                                        : const Color(0xFF20C05C),
                             shape: BoxShape.circle,
                           ),
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          isAvailable
-                              ? '$maxQuantity lot(s) disponible(s)'
-                              : 'Indisponible',
+                          !isAvailable
+                              ? 'Indisponible'
+                              : maxQuantity == 1
+                                  ? 'Dernière unité disponible'
+                                  : '$maxQuantity lot(s) disponible(s)',
                           style: TextStyle(
                             fontSize: 13,
-                            color: Colors.grey[700],
+                            color: !isAvailable
+                                ? ViroColors.error
+                                : maxQuantity == 1
+                                    ? ViroColors.error
+                                    : maxQuantity == 2
+                                        ? const Color(0xFFFF9800)
+                                        : const Color(0xFF20C05C),
                             fontWeight: FontWeight.w600,
                           ),
                         ),

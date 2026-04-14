@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -8,6 +10,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:viro_team/constants/firebase_collections.dart';
 import 'package:viro_team/pages/complete_profile_page.dart';
 import 'package:viro_team/pages/onboarding_page.dart';
+import 'package:viro_team/services/pending_member_merge_service.dart';
 import 'package:viro_team/utils/firestore_instance.dart';
 import 'package:viro_team/pages/admin_coach_pages/admin_shell.dart';
 import 'player_pages/player_home_page.dart';
@@ -65,6 +68,24 @@ class _AuthPageState extends State<AuthPage> {
     return null;
   }
 
+  void _triggerPendingMemberMerge(User user) {
+    final emailNorm = (user.email ?? '').trim().toLowerCase();
+    if (emailNorm.isEmpty) return;
+
+    unawaited(
+      PendingMemberMergeService.instance
+          .mergePendingMembersForUser(user.uid, emailNorm)
+          .catchError((Object error, StackTrace stackTrace) {
+        AppLogger.instance.error(
+          'Erreur fusion pending_members après authentification',
+          error: error,
+          stackTrace: stackTrace,
+          context: {'userId': user.uid, 'email': emailNorm},
+        );
+      }),
+    );
+  }
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) {
       return;
@@ -87,6 +108,9 @@ class _AuthPageState extends State<AuthPage> {
           password: _passwordController.text.trim(),
         );
         final user = FirebaseAuth.instance.currentUser;
+        if (user != null) {
+          _triggerPendingMemberMerge(user);
+        }
         AppLogger.instance.info(
           'Connexion réussie',
           {'userId': user?.uid, 'email': _emailController.text.trim()},
@@ -115,6 +139,7 @@ class _AuthPageState extends State<AuthPage> {
                 'lastName': _lastNameController.text.trim(),
               },
             );
+            _triggerPendingMemberMerge(user);
           } catch (e) {
             AppLogger.instance.error(
               'Erreur lors de la création du document utilisateur',
@@ -243,6 +268,8 @@ class _AuthPageState extends State<AuthPage> {
           {'userId': user.uid, 'email': user.email},
         );
       }
+
+      _triggerPendingMemberMerge(user);
 
       // Navigation explicite pour éviter le blocage sur la page de connexion
       if (!mounted) return;

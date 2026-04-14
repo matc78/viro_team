@@ -4,10 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:viro_team/utils/firestore_instance.dart';
 import 'package:viro_team/utils/club_emoji_utils.dart';
 import 'package:viro_team/constants/firebase_collections.dart';
+import 'package:viro_team/utils/profile_context_utils.dart' as profile_context;
 import '../services/user_session.dart';
 import '../theme/viro_theme.dart';
-import '../pages/player_pages/player_home_page.dart';
-import '../pages/admin_coach_pages/admin_shell.dart';
 
 /// Dialog pour changer de profil/contexte
 class ProfileSwitcherDialog extends StatefulWidget {
@@ -192,75 +191,26 @@ class _ProfileSwitcherDialogState extends State<ProfileSwitcherDialog> {
   }
 
   String _getRoleDisplayName(String role) {
-    switch (role) {
-      case 'player':
-        return 'Joueur';
-      case 'coach':
-        return 'Coach';
-      case 'admin':
-        return 'Administrateur';
-      case 'admin_fondateur':
-        return 'Fondateur';
-      default:
-        return role;
-    }
+    return role == 'admin_fondateur'
+        ? 'Fondateur'
+        : profile_context.roleDisplayName(role);
   }
 
   IconData _getRoleIcon(String role) {
-    switch (role) {
-      case 'player':
-        return Icons.sports_soccer;
-      case 'coach':
-        return Icons.psychology;
-      case 'admin':
-      case 'admin_fondateur':
-        return Icons.admin_panel_settings;
-      default:
-        return Icons.person;
-    }
+    return profile_context.roleIcon(role);
   }
 
   Future<void> _switchProfile(String role, String clubId) async {
     setState(() => _isSwitching = true);
-
-    final success = await _session.switchContext(role, clubId);
-
-    if (!mounted) return;
-
-    if (success) {
-      Navigator.of(context).pop();
-
-      // Rediriger vers la bonne page selon le nouveau rôle
-      if (role == 'player') {
-        // Rediriger vers PlayerHomePage
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const PlayerHomePage()),
-          (route) => false,
-        );
-      } else if (role == 'admin' ||
-          role == 'coach' ||
-          role == 'admin_fondateur') {
-        // Rediriger vers AdminHomePage
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const AdminShell()),
-          (route) => false,
-        );
-      }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Profil changé avec succès'),
-          backgroundColor: Colors.green,
-        ),
-      );
-    } else {
+    final success = await profile_context.switchProfileAndNavigate(
+      context: context,
+      session: _session,
+      role: role,
+      clubId: clubId,
+      closeCurrentSurface: () => Navigator.of(context).pop(),
+    );
+    if (mounted && !success) {
       setState(() => _isSwitching = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Erreur lors du changement de profil'),
-          backgroundColor: Colors.red,
-        ),
-      );
     }
   }
 

@@ -18,7 +18,11 @@ import 'player_planning_page.dart';
 import 'player_event_details_page.dart';
 import 'player_infos_page.dart';
 import 'player_loan_catalog_page.dart';
+import 'player_my_fee_page.dart';
 
+import '../../models/fee_season.dart';
+import '../../models/member_fee.dart';
+import '../../services/fee_service.dart';
 import '../../services/notification_service.dart';
 import '../../theme/viro_theme.dart';
 import '../../utils/avatar_moderation.dart';
@@ -227,6 +231,7 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
                           children: [
                             _buildNextEventCard(allClubIds, userData),
                             const SizedBox(height: 28),
+                            _buildMyFeeShortcutConditional(allClubIds),
                             _buildTodaySection(clubId, allClubIds, userData),
                             const SizedBox(height: 28),
                             _buildActionRequiredBloc(clubId, allClubIds, userData),
@@ -536,6 +541,129 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
           fontSize: 18,
           fontWeight: FontWeight.bold,
           color: ViroColors.primary,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMyFeeShortcutConditional(List<String> allClubIds) {
+    final uid = _currentUserId;
+    if (uid.isEmpty || allClubIds.isEmpty) return const SizedBox.shrink();
+    final showClubName = allClubIds.length > 1;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: allClubIds
+          .map((cid) => _buildFeeShortcutForClub(cid, showClubName: showClubName))
+          .toList(),
+    );
+  }
+
+  Widget _buildFeeShortcutForClub(String clubId, {required bool showClubName}) {
+    final uid = _currentUserId;
+    return StreamBuilder<({MemberFee? fee, FeeSeason? season})>(
+      stream: FeeService.instance.watchActiveMemberFee(clubId, uid),
+      builder: (context, feeSnap) {
+        final season = feeSnap.data?.season;
+        if (season == null) return const SizedBox.shrink();
+
+        final fee = feeSnap.data?.fee;
+        final settings = season.toClubFeeSettings();
+        final now = DateTime.now();
+        final effective =
+            fee ?? MemberFee(userId: uid, status: MemberFeeStatus.nonConfigure);
+        final status = effective.effectiveDisplayStatus(settings, now);
+        if (status == MemberFeeStatus.paye) return const SizedBox.shrink();
+
+        if (!showClubName) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 28),
+            child: _buildMyFeeShortcut(clubId),
+          );
+        }
+
+        // Multi-club : affiche le nom du club dans le sous-titre
+        return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+          stream: appFirestore
+              .collection(FirebaseCollections.clubs)
+              .doc(clubId)
+              .snapshots(),
+          builder: (context, clubSnap) {
+            final clubName =
+                clubSnap.data?.data()?['name'] as String? ?? 'Mon club';
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 28),
+              child: _buildMyFeeShortcut(clubId, clubName: clubName),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildMyFeeShortcut(String clubId, {String? clubName}) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute<void>(
+              builder: (_) => PlayerMyFeePage(clubId: clubId),
+            ),
+          );
+        },
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: ViroColors.primary.withValues(alpha: 0.35),
+              width: 1.5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              CircleAvatar(
+                backgroundColor: ViroColors.primary.withValues(alpha: 0.12),
+                child: const Icon(
+                  Icons.account_balance_wallet_outlined,
+                  color: ViroColors.primary,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Ma cotisation',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                        color: Colors.grey[900],
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      clubName ?? 'Montant, statut et consignes de paiement',
+                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right, color: Colors.grey[400]),
+            ],
+          ),
         ),
       ),
     );

@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:viro_team/utils/firestore_instance.dart';
 import 'package:viro_team/constants/firebase_collections.dart';
+import 'package:viro_team/utils/profile_context_utils.dart';
 import '../models/user_model.dart';
 import '../utils/app_logger.dart';
 
@@ -228,27 +229,9 @@ class UserSession extends ChangeNotifier {
     if (u == null) return false;
     if (u.isActiveContextCoherent) return false;
 
-    String? role;
-    String? clubId;
-    final summaries = u.profileSummaries;
-    final fondateur = summaries.where((s) => s.role == 'admin_fondateur').toList();
-    final admin = summaries.where((s) => s.role == 'admin').toList();
-    final coach = summaries.where((s) => s.role == 'coach').toList();
-    final player = summaries.where((s) => s.role == 'player').toList();
-
-    if (fondateur.isNotEmpty) {
-      role = 'admin_fondateur';
-      clubId = fondateur.first.clubId;
-    } else if (admin.isNotEmpty) {
-      role = 'admin';
-      clubId = admin.first.clubId;
-    } else if (coach.isNotEmpty) {
-      role = 'coach';
-      clubId = coach.first.clubId;
-    } else if (player.isNotEmpty) {
-      role = 'player';
-      clubId = player.first.clubId;
-    }
+    final preferred = preferredActiveContextFromSummaries(u.profileSummaries);
+    final role = preferred?['role'];
+    final clubId = preferred?['clubId'];
     if (role == null || clubId == null || clubId.isEmpty) return false;
 
     try {
@@ -307,25 +290,32 @@ class UserSession extends ChangeNotifier {
     return u.hasRoleInClub(role, clubId);
   }
 
+  /// Met à jour la dernière connexion de l'utilisateur.
+  /// Appelée au démarrage de session (auth réussie / réouverture app avec session active).
+  Future<void> touchLastConnection(String uid) async {
+    try {
+      await appFirestore
+          .collection(FirebaseCollections.users)
+          .doc(uid)
+          .set({
+        'lastConnectionAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+      AppLogger.instance.info('Dernière connexion mise à jour', {'userId': uid});
+    } catch (e, st) {
+      AppLogger.instance.error(
+        'Erreur mise à jour dernière connexion',
+        error: e,
+        stackTrace: st,
+        context: {'userId': uid},
+      );
+    }
+  }
+
   /// Profils disponibles pour le switcher (depuis profileSummaries)
   List<ProfileOption> getAvailableProfiles() {
     final u = _currentUser;
     if (u == null) return [];
-
-    String displayNameFor(String role) {
-      switch (role) {
-        case 'player':
-          return 'Joueur';
-        case 'coach':
-          return 'Coach';
-        case 'admin_fondateur':
-          return 'Administrateur fondateur';
-        case 'admin':
-          return 'Administrateur';
-        default:
-          return role;
-      }
-    }
 
     final fondateurClubIds = u.profileSummaries
         .where((s) => s.role == 'admin_fondateur')
@@ -342,7 +332,7 @@ class UserSession extends ChangeNotifier {
               role: s.role,
               clubId: s.clubId,
               clubName: null,
-              displayName: displayNameFor(s.role),
+              displayName: roleDisplayName(s.role),
             ))
         .toList();
   }

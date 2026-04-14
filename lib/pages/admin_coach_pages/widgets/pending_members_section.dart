@@ -56,16 +56,30 @@ class PendingMembersSection extends StatelessWidget {
           .collection(FirebaseCollections.pendingMembers)
           .snapshots(),
       builder: (context, snapshot) {
-        if (snapshot.hasError || !snapshot.hasData) {
-          return const SizedBox.shrink();
+        if (snapshot.hasError) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8.0),
+            child: Text(
+              "Erreur de chargement des membres en attente.",
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: Colors.red),
+            ),
+          );
+        }
+        if (!snapshot.hasData) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 8.0),
+            child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+          );
         }
         final docs = snapshot.data!.docs;
         final list = docs
             .map((doc) => {'doc': doc, 'data': doc.data()})
             .where((e) {
-              final status =
-                  (e['data'] as Map<String, dynamic>)['invitationStatus']
-                      as String? ??
+              final data = e['data'] as Map<String, dynamic>;
+              final status = (data['invitationStatus'] as String?) ??
+                  (data['status'] as String?) ??
                   'pending';
               if (onlyDeclined) return status == 'declined';
               return status != 'declined';

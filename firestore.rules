@@ -3,7 +3,7 @@ rules_version = '2';
 // =============================================================================
 // Règles Firestore ViroTeam – Production
 // =============================================================================
-// Rule set version: 1
+// Rule set version: 3 (cotisations : canManageClubFees + membership roles)
 // Incrémenter à chaque changement majeur des règles, puis lancer :
 //   firebase deploy --only firestore:rules
 // pour vérifier que le déploiement fonctionne.
@@ -36,6 +36,77 @@ service cloud.firestore {
         && (request.auth.uid == club.get('adminId', '')
              || request.auth.uid in club.get('admins', [])
              || request.auth.uid in club.get('coaches', []));
+    }
+
+    // Staff (admin / coach) d’après le doc membership — utile si les tableaux du doc club sont désynchronisés
+    function hasStaffRoleInMembership(clubId) {
+      let path = /databases/$(database)/documents/clubs/$(clubId)/members/$(request.auth.uid);
+      return request.auth != null
+        && exists(path)
+        && get(path).data.get('roles', []).hasAny(['admin', 'admin_fondateur', 'coach']);
+    }
+
+    function canManageClubFees(clubId) {
+      return canWriteClub(clubId) || hasStaffRoleInMembership(clubId);
+    }
+
+    function authUserEmail() {
+      return request.auth == null
+        ? ''
+        : get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('email', '');
+    }
+
+    function isOwnedPendingMember(clubId, pendingMemberId) {
+      let pendingPath = /databases/$(database)/documents/clubs/$(clubId)/pending_members/$(pendingMemberId);
+      return request.auth != null
+        && pendingMemberId != ''
+        && exists(pendingPath)
+        && get(pendingPath).data.get('email', '') == authUserEmail();
+    }
+
+    function canCreateMigratedOwnMemberFee(clubId, seasonId, userId) {
+      let pendingId = request.resource.data.get('_migratedFromPendingId', '');
+      let sourcePath = /databases/$(database)/documents/clubs/$(clubId)/fee_seasons/$(seasonId)/member_fees/$(pendingId);
+      return request.auth != null
+        && userId == request.auth.uid
+        && pendingId != ''
+        && pendingId != request.auth.uid
+        && isOwnedPendingMember(clubId, pendingId)
+        && exists(sourcePath)
+        && request.resource.data.diff(get(sourcePath).data).affectedKeys().hasOnly(['_migratedFromPendingId']);
+    }
+
+    function canFinalizeMigratedOwnMemberFee(userId) {
+      return request.auth != null
+        && userId == request.auth.uid
+        && resource.data.get('_migratedFromPendingId', '') != ''
+        && request.resource.data.get('_migratedFromPendingId', '') == ''
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['_migratedFromPendingId']);
+    }
+
+    function canDeleteMigratedPendingMemberFee(clubId, seasonId, userId) {
+      let targetPath = /databases/$(database)/documents/clubs/$(clubId)/fee_seasons/$(seasonId)/member_fees/$(request.auth.uid);
+      let targetAfter = getAfter(targetPath).data;
+      return request.auth != null
+        && userId != request.auth.uid
+        && isOwnedPendingMember(clubId, userId)
+        && (
+          exists(targetPath)
+          || (targetAfter != null
+              && targetAfter.get('_migratedFromPendingId', '') == userId
+              && targetAfter.diff(resource.data).affectedKeys().hasOnly(['_migratedFromPendingId']))
+        );
+    }
+
+    // Membre du club (joueur listé, coach, ou admin) — pour lecture paramètres cotisation
+    function isInClub(clubId) {
+      let club = get(/databases/$(database)/documents/clubs/$(clubId)).data;
+      let uid = request.auth.uid;
+      return request.auth != null
+        && (uid == club.get('adminId', '')
+             || uid in club.get('admins', [])
+             || uid in club.get('coaches', [])
+             || uid in club.get('members', []));
     }
 
     // -------------------------------------------------------------------------
@@ -265,6 +336,38 @@ service cloud.firestore {
       match /training_attendances/{docId} {
         allow read: if request.auth != null;
         allow write: if canWriteClub(clubId);
+      }
+
+      // Cotisations : consignes et grille (lecture membres du club ; écriture staff)
+      match /fee_settings/{docId} {
+        allow read: if canManageClubFees(clubId) || isInClub(clubId);
+        allow write: if canManageClubFees(clubId);
+      }
+
+      // Cotisations legacy (member_fees) — conservé pour compatibilité données existantes
+      match /member_fees/{userId} {
+        allow read: if canManageClubFees(clubId) || request.auth.uid == userId;
+        allow write: if canManageClubFees(clubId);
+      }
+
+      // Cotisations multi-saisons : paramètres et grille tarifaire par saison
+      // Lecture : membres du club ; écriture : staff (admin/coach)
+      match /fee_seasons/{seasonId} {
+        allow read: if canManageClubFees(clubId) || isInClub(clubId);
+        allow write: if canManageClubFees(clubId);
+
+        // Suivi des cotisations par joueur dans une saison
+        // Lecture : soi-même ou staff ; écriture : staff uniquement,
+        // sauf migration contrôlée pendingMemberId -> uid avec marqueur transitoire.
+        match /member_fees/{userId} {
+          allow read: if canManageClubFees(clubId) || request.auth.uid == userId;
+          allow create: if canManageClubFees(clubId)
+            || canCreateMigratedOwnMemberFee(clubId, seasonId, userId);
+          allow update: if canManageClubFees(clubId)
+            || canFinalizeMigratedOwnMemberFee(userId);
+          allow delete: if canManageClubFees(clubId)
+            || canDeleteMigratedPendingMemberFee(clubId, seasonId, userId);
+        }
       }
     }
 

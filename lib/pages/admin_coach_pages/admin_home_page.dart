@@ -8,6 +8,7 @@ import 'package:viro_team/pages/admin_coach_pages/admin_event_details_page.dart'
 import 'package:viro_team/pages/admin_coach_pages/admin_loans_page.dart';
 import 'package:viro_team/pages/admin_coach_pages/admin_members_page.dart';
 import 'package:viro_team/pages/admin_coach_pages/admin_teams_page.dart';
+import 'package:viro_team/pages/admin_coach_pages/admin_fee_season_list_page.dart';
 import 'package:viro_team/pages/admin_coach_pages/profil_request_page.dart';
 import 'admin_profil_page.dart';
 import 'package:intl/intl.dart';
@@ -624,6 +625,23 @@ class _AdminHomePageState extends State<AdminHomePage> {
                 ),
               ),
             ],
+          ],
+        ),
+        const SizedBox(height: 14),
+        Row(
+          children: [
+            Expanded(
+              child: _QuickAccessButton(
+                icon: Icons.payments_outlined,
+                label: "Cotisations",
+                color: ViroColors.primary,
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => AdminFeeSeasonListPage(clubId: clubId),
+                  ),
+                ),
+              ),
+            ),
           ],
         ),
       ],

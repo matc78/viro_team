@@ -422,7 +422,7 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
                 ),
               ),
               _buildMembersSliver(),
-              if (canEdit)
+              if (canEdit || canSendInviteLink)
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(12, 16, 12, 24),
@@ -655,7 +655,9 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
                 const SizedBox(height: 8),
                 PendingMembersSection(
                   clubId: widget.clubId,
-                  search: _search,
+                  // Ne pas lier les pending à la recherche "membres du club":
+                  // sinon une recherche active masque toute la section pending.
+                  search: '',
                   onlyDeclined: false,
                   canEdit: canEdit,
                   canSendInviteLink: canSendInviteLink,
@@ -714,7 +716,8 @@ class _AdminMembersPageState extends State<AdminMembersPage> {
                 const SizedBox(height: 8),
                 PendingMembersSection(
                   clubId: widget.clubId,
-                  search: _search,
+                  // Même logique pour la section des refus.
+                  search: '',
                   onlyDeclined: true,
                   canEdit: canEdit,
                   canSendInviteLink: canSendInviteLink,
