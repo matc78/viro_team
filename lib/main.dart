@@ -35,6 +35,7 @@ import 'theme/viro_theme.dart';
 import 'utils/app_logger.dart';
 import 'utils/auth_helper.dart';
 import 'utils/connectivity_checker.dart';
+import 'utils/profile_context_utils.dart';
 import 'utils/migration_user_to_memberships.dart';
 import 'widget/fatal_error_app.dart';
 import 'widget/viro_loader.dart';
@@ -203,14 +204,40 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     _setupNotificationHandlers();
   }
 
-  void _setupNotificationHandlers() {
-    // Atterrir sur la home admin : un autre admin a pu déjà accepter/refuser la demande
-    JoinRequestNotification.onOpen = (_) {
-      _navigatorKey.currentState?.push(
-        MaterialPageRoute<void>(
-          builder: (_) => const AdminShell(),
+  /// Club du payload + scroll vers « À ne pas manquer » (demandes, départs récents, etc.).
+  /// Un autre admin peut avoir déjà traité l’info : la section peut être vide.
+  Future<void> _openAdminHomeNotToMissFromPayload(
+    Map<String, String> payload,
+  ) async {
+    final clubId = payload['clubId']?.trim() ?? '';
+    final session = UserSession();
+    final user = session.currentUser;
+    if (user != null && clubId.isNotEmpty) {
+      final role = adminSideRoleForClub(user, clubId);
+      if (role != null) {
+        final needsSwitch = session.currentClubId != clubId ||
+            session.currentRole != role;
+        if (needsSwitch) {
+          await session.switchContext(role, clubId);
+        }
+      }
+    }
+    _navigatorKey.currentState?.push(
+      MaterialPageRoute<void>(
+        builder: (_) => const AdminShell(
+          scrollToJoinRequestsOnOpen: true,
         ),
-      );
+      ),
+    );
+  }
+
+  void _setupNotificationHandlers() {
+    // Demande d’adhésion ou départ membre : même bloc « À ne pas manquer » sur l’accueil admin.
+    JoinRequestNotification.onOpen = (payload) async {
+      await _openAdminHomeNotToMissFromPayload(payload);
+    };
+    MemberLeaveNotification.onOpen = (payload) async {
+      await _openAdminHomeNotToMissFromPayload(payload);
     };
     LoanRequestNotification.onOpen = (payload) {
       final clubId = payload['clubId'];

@@ -61,6 +61,15 @@ Map<String, String>? preferredActiveContextFromSummaries(
   };
 }
 
+/// Rôle admin/coach pour un club (priorité fondateur > admin > coach), ex. ouverture depuis une notif.
+String? adminSideRoleForClub(UserProfile user, String clubId) {
+  if (clubId.isEmpty) return null;
+  if (user.hasRoleInClub('admin_fondateur', clubId)) return 'admin_fondateur';
+  if (user.hasRoleInClub('admin', clubId)) return 'admin';
+  if (user.hasRoleInClub('coach', clubId)) return 'coach';
+  return null;
+}
+
 Future<bool> switchProfileAndNavigate({
   required BuildContext context,
   required UserSession session,

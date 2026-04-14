@@ -36,7 +36,14 @@ class _TabData {
 class AdminShell extends StatefulWidget {
   final int initialIndex;
 
-  const AdminShell({super.key, this.initialIndex = 2});
+  /// Ouvre l’accueil admin et fait défiler vers les demandes d’adhésion (ex. tap sur une notif).
+  final bool scrollToJoinRequestsOnOpen;
+
+  const AdminShell({
+    super.key,
+    this.initialIndex = 2,
+    this.scrollToJoinRequestsOnOpen = false,
+  });
 
   @override
   State<AdminShell> createState() => _AdminShellState();
@@ -54,6 +61,7 @@ class _AdminShellState extends State<AdminShell> with TickerProviderStateMixin {
 
   // Pastilles de notification
   bool _badgeEquipement = false;
+  bool _badgeJoinRequests = false;
   bool _badgePlanning = false;
 
   Set<String> _coachedTeamNames = {};
@@ -170,6 +178,20 @@ class _AdminShellState extends State<AdminShell> with TickerProviderStateMixin {
         _recomputeEquipementBadge(null, snap.docs);
       }),
     );
+
+    // Demandes d'adhésion en attente (pastille sur l'onglet Accueil)
+    _badgeSubs.add(
+      appFirestore
+          .collection(FirebaseCollections.joinRequests)
+          .where('clubId', isEqualTo: clubId)
+          .where('status', isEqualTo: 'pending')
+          .snapshots()
+          .listen((snap) {
+        if (mounted) {
+          setState(() => _badgeJoinRequests = snap.docs.isNotEmpty);
+        }
+      }),
+    );
   }
 
   // Garde le résultat des deux streams d'équipement pour combiner
@@ -237,7 +259,9 @@ class _AdminShellState extends State<AdminShell> with TickerProviderStateMixin {
   List<Widget> _buildPages(String clubId) => [
     AdminEquipmentPage(clubId: clubId),
     AdminClubCommunicationPage(clubId: clubId),
-    const AdminHomePage(),
+    AdminHomePage(
+      scrollToJoinRequestsOnOpen: widget.scrollToJoinRequestsOnOpen,
+    ),
     AdminCoachModePage(clubId: clubId),
     AdminPlanningPage(clubId: clubId),
   ];
@@ -274,7 +298,13 @@ class _AdminShellState extends State<AdminShell> with TickerProviderStateMixin {
       bottomNavigationBar: _AdminNavBar(
         currentIndex: _currentIndex,
         onTap: _switchTab,
-        badges: [_badgeEquipement, false, false, false, _badgePlanning],
+        badges: [
+          _badgeEquipement,
+          false,
+          _badgeJoinRequests,
+          false,
+          _badgePlanning,
+        ],
       ),
     );
   }
@@ -410,38 +440,58 @@ class _NavItemState extends State<_NavItem> with SingleTickerProviderStateMixin 
             return Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Transform.scale(
-                  scale: isSelected ? _scaleAnim.value : 1.0,
-                  child: Container(
-                    width: 52,
-                    height: 52,
-                    decoration: BoxDecoration(
-                      color: Color.lerp(
-                        Colors.grey.shade200,
-                        ViroColors.primary,
-                        _pillAnim.value,
-                      ),
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: ViroColors.primary.withValues(
-                            alpha: _pillAnim.value * 0.35,
+                Stack(
+                  clipBehavior: Clip.none,
+                  alignment: Alignment.center,
+                  children: [
+                    Transform.scale(
+                      scale: isSelected ? _scaleAnim.value : 1.0,
+                      child: Container(
+                        width: 52,
+                        height: 52,
+                        decoration: BoxDecoration(
+                          color: Color.lerp(
+                            Colors.grey.shade200,
+                            ViroColors.primary,
+                            _pillAnim.value,
                           ),
-                          blurRadius: 12,
-                          offset: const Offset(0, 4),
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: ViroColors.primary.withValues(
+                                alpha: _pillAnim.value * 0.35,
+                              ),
+                              blurRadius: 12,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                    child: Icon(
-                      isSelected ? widget.tab.selectedIcon : widget.tab.icon,
-                      size: 24,
-                      color: Color.lerp(
-                        Colors.grey[500],
-                        Colors.white,
-                        _pillAnim.value,
+                        child: Icon(
+                          isSelected ? widget.tab.selectedIcon : widget.tab.icon,
+                          size: 24,
+                          color: Color.lerp(
+                            Colors.grey[500],
+                            Colors.white,
+                            _pillAnim.value,
+                          ),
+                        ),
                       ),
                     ),
-                  ),
+                    if (widget.hasBadge)
+                      Positioned(
+                        top: -2,
+                        right: -2,
+                        child: Container(
+                          width: 9,
+                          height: 9,
+                          decoration: BoxDecoration(
+                            color: Colors.red,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 1.5),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ],
             );

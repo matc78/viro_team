@@ -25,7 +25,13 @@ import '../../widget/slide_to_confirm.dart';
 import '../../widget/user_display_tile.dart';
 
 class AdminHomePage extends StatefulWidget {
-  const AdminHomePage({super.key});
+  /// Ex. ouverture depuis une notif « demande d’adhésion » : défiler vers la section concernée.
+  final bool scrollToJoinRequestsOnOpen;
+
+  const AdminHomePage({
+    super.key,
+    this.scrollToJoinRequestsOnOpen = false,
+  });
 
   @override
   State<AdminHomePage> createState() => _AdminHomePageState();
@@ -33,6 +39,8 @@ class AdminHomePage extends StatefulWidget {
 
 class _AdminHomePageState extends State<AdminHomePage> {
   final user = FirebaseAuth.instance.currentUser;
+  final ScrollController _scrollController = ScrollController();
+  final GlobalKey _notToMissAnchorKey = GlobalKey();
   bool _showAllRequests = false;
   String? _processingRequestId;
   String? _processingLoanRequestId;
@@ -43,6 +51,42 @@ class _AdminHomePageState extends State<AdminHomePage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       NotificationService.instance.requestPermissionIfNeeded(user?.uid);
     });
+    if (widget.scrollToJoinRequestsOnOpen) {
+      _scrollToJoinRequestsWhenReady();
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  /// Attend que la section « À ne pas manquer » soit rendue (streams Firestore).
+  Future<void> _scrollToJoinRequestsWhenReady() async {
+    for (var i = 0; i < 25; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 120));
+      if (!mounted) return;
+      final ctx = _notToMissAnchorKey.currentContext;
+      if (ctx != null && ctx.mounted) {
+        await Scrollable.ensureVisible(
+          ctx,
+          alignment: 0.12,
+          duration: const Duration(milliseconds: 450),
+          curve: Curves.easeInOutCubic,
+        );
+        if (!context.mounted) return;
+        return;
+      }
+    }
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Aucune demande à afficher ici pour le moment (déjà traitée ou accès limité).',
+        ),
+      ),
+    );
   }
 
   /// Rafraîchit le contenu (scroll vers le bas = pull-to-refresh).
@@ -119,6 +163,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
                       RefreshIndicator(
                         onRefresh: _refreshAdminHome,
                         child: SingleChildScrollView(
+                          controller: _scrollController,
                           physics: const AlwaysScrollableScrollPhysics(),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -815,6 +860,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
     if (!hasContent) return const SizedBox.shrink();
 
     return Column(
+      key: _notToMissAnchorKey,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 30),

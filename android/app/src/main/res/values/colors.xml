@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="ic_launcher_background">#FFFFFF</color>
+    <!-- Accent barre de notification FCM (aligné sur ViroColors.primary) -->
+    <color name="notification_accent">#2F27CE</color>
 </resources>
