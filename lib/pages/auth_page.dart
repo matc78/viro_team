@@ -19,6 +19,7 @@ import '../widget/viro_loader.dart';
 import '../utils/app_logger.dart';
 import '../utils/auth_helper.dart';
 import '../utils/firebase_error_handler.dart';
+import '../utils/safe_navigation.dart';
 
 class AuthPage extends StatefulWidget {
   const AuthPage({super.key});
@@ -317,38 +318,53 @@ class _AuthPageState extends State<AuthPage> {
 
     // Profil non complété (ex. nouveau compte Google) → Compléter le profil en premier
     if (profileCompleted == false) {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const CompleteProfilePage()),
-      );
+      scheduleDeferredNavigation(() {
+        if (!mounted) return;
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const CompleteProfilePage()),
+        );
+      });
       return;
     }
     if (hasPendingRequest) {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const PlayerHomePage()),
-      );
+      scheduleDeferredNavigation(() {
+        if (!mounted) return;
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const PlayerHomePage()),
+        );
+      });
       return;
     }
     if (activeRole == 'admin_fondateur' ||
         activeRole == 'admin' ||
         activeRole == 'coach') {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const AdminShell()),
-      );
+      scheduleDeferredNavigation(() {
+        if (!mounted) return;
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const AdminShell()),
+        );
+      });
       return;
     }
     if (activeRole == 'player' || (hasPlayer && !hasAdminOrCoach)) {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const PlayerHomePage()),
-      );
+      scheduleDeferredNavigation(() {
+        if (!mounted) return;
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const PlayerHomePage()),
+        );
+      });
       return;
     }
     if (hasAdminOrCoach) {
       // Rôle admin/coach mais pas d'activeContext : AuthGate gérera la restauration
       return;
     }
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const OnboardingPage()),
-    );
+    scheduleDeferredNavigation(() {
+      if (!mounted) return;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const OnboardingPage()),
+      );
+    });
   }
 
   @override

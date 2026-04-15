@@ -36,6 +36,7 @@ import 'utils/app_logger.dart';
 import 'utils/auth_helper.dart';
 import 'utils/connectivity_checker.dart';
 import 'utils/profile_context_utils.dart';
+import 'utils/safe_navigation.dart';
 import 'utils/migration_user_to_memberships.dart';
 import 'widget/fatal_error_app.dart';
 import 'widget/viro_loader.dart';
@@ -204,6 +205,16 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     _setupNotificationHandlers();
   }
 
+  /// Voir [scheduleDeferredNavigation] ; variante avec [GlobalKey] du [Navigator] racine.
+  void _scheduleFcmNavigation(void Function(NavigatorState nav) action) {
+    scheduleDeferredNavigation(() {
+      final nav = _navigatorKey.currentState;
+      if (nav != null && nav.mounted) {
+        action(nav);
+      }
+    });
+  }
+
   /// Club du payload + scroll vers « À ne pas manquer » (demandes, départs récents, etc.).
   /// Un autre admin peut avoir déjà traité l’info : la section peut être vide.
   Future<void> _openAdminHomeNotToMissFromPayload(
@@ -222,10 +233,12 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         }
       }
     }
-    _navigatorKey.currentState?.push(
-      MaterialPageRoute<void>(
-        builder: (_) => const AdminShell(
-          scrollToJoinRequestsOnOpen: true,
+    _scheduleFcmNavigation(
+      (nav) => nav.push<void>(
+        MaterialPageRoute<void>(
+          builder: (_) => const AdminShell(
+            scrollToJoinRequestsOnOpen: true,
+          ),
         ),
       ),
     );
@@ -242,32 +255,38 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     LoanRequestNotification.onOpen = (payload) {
       final clubId = payload['clubId'];
       if (clubId != null && clubId.isNotEmpty) {
-        _navigatorKey.currentState?.push(
-          MaterialPageRoute<void>(
-            builder: (_) => AdminLoansPage(
-              clubId: clubId,
-              initialTabIndex: 1,
+        _scheduleFcmNavigation(
+          (nav) => nav.push<void>(
+            MaterialPageRoute<void>(
+              builder: (_) => AdminLoansPage(
+                clubId: clubId,
+                initialTabIndex: 1,
+              ),
             ),
           ),
         );
       }
     };
     JoinRequestResponseNotification.onOpen = (payload) {
-      _navigatorKey.currentState?.pushAndRemoveUntil(
-        MaterialPageRoute<void>(
-          builder: (_) => const OnboardingPage(),
+      _scheduleFcmNavigation(
+        (nav) => nav.pushAndRemoveUntil<void>(
+          MaterialPageRoute<void>(
+            builder: (_) => const OnboardingPage(),
+          ),
+          (route) => false,
         ),
-        (route) => false,
       );
     };
     LoanRequestResponseNotification.onOpen = (payload) {
       final clubId = payload['clubId'];
       if (clubId != null && clubId.isNotEmpty) {
-        _navigatorKey.currentState?.push(
-          MaterialPageRoute<void>(
-            builder: (_) => PlayerLoanCatalogPage(
-              clubId: clubId,
-              initialTabIndex: 1,
+        _scheduleFcmNavigation(
+          (nav) => nav.push<void>(
+            MaterialPageRoute<void>(
+              builder: (_) => PlayerLoanCatalogPage(
+                clubId: clubId,
+                initialTabIndex: 1,
+              ),
             ),
           ),
         );
@@ -276,11 +295,13 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     LoanReturnNotification.onOpen = (payload) {
       final clubId = payload['clubId'];
       if (clubId != null && clubId.isNotEmpty) {
-        _navigatorKey.currentState?.push(
-          MaterialPageRoute<void>(
-            builder: (_) => AdminLoansPage(
-              clubId: clubId,
-              initialTabIndex: 1,
+        _scheduleFcmNavigation(
+          (nav) => nav.push<void>(
+            MaterialPageRoute<void>(
+              builder: (_) => AdminLoansPage(
+                clubId: clubId,
+                initialTabIndex: 1,
+              ),
             ),
           ),
         );
@@ -293,11 +314,13 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           clubId.isNotEmpty &&
           eventId != null &&
           eventId.isNotEmpty) {
-        _navigatorKey.currentState?.push(
-          MaterialPageRoute<void>(
-            builder: (_) => PlayerEventDetailsPage(
-              clubId: clubId,
-              eventId: eventId,
+        _scheduleFcmNavigation(
+          (nav) => nav.push<void>(
+            MaterialPageRoute<void>(
+              builder: (_) => PlayerEventDetailsPage(
+                clubId: clubId,
+                eventId: eventId,
+              ),
             ),
           ),
         );
@@ -310,11 +333,13 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           clubId.isNotEmpty &&
           eventId != null &&
           eventId.isNotEmpty) {
-        _navigatorKey.currentState?.push(
-          MaterialPageRoute<void>(
-            builder: (_) => PlayerEventDetailsPage(
-              clubId: clubId,
-              eventId: eventId,
+        _scheduleFcmNavigation(
+          (nav) => nav.push<void>(
+            MaterialPageRoute<void>(
+              builder: (_) => PlayerEventDetailsPage(
+                clubId: clubId,
+                eventId: eventId,
+              ),
             ),
           ),
         );
@@ -327,11 +352,13 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           clubId.isNotEmpty &&
           eventId != null &&
           eventId.isNotEmpty) {
-        _navigatorKey.currentState?.push(
-          MaterialPageRoute<void>(
-            builder: (_) => AdminEventDetailsPage(
-              clubId: clubId,
-              eventId: eventId,
+        _scheduleFcmNavigation(
+          (nav) => nav.push<void>(
+            MaterialPageRoute<void>(
+              builder: (_) => AdminEventDetailsPage(
+                clubId: clubId,
+                eventId: eventId,
+              ),
             ),
           ),
         );
@@ -339,19 +366,23 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     };
     EventDeletedNotification.onOpen = (payload) {
       // Événement supprimé, on pourrait juste aller sur le planning.
-      _navigatorKey.currentState?.pushAndRemoveUntil(
-        MaterialPageRoute<void>(
-          builder: (_) => const PlayerShell(),
+      _scheduleFcmNavigation(
+        (nav) => nav.pushAndRemoveUntil<void>(
+          MaterialPageRoute<void>(
+            builder: (_) => const PlayerShell(),
+          ),
+          (route) => false,
         ),
-        (route) => false,
       );
     };
     AnnouncementNotification.onOpen = (payload) {
       final clubId = payload['clubId'];
       if (clubId != null && clubId.isNotEmpty) {
-        _navigatorKey.currentState?.push(
-          MaterialPageRoute<void>(
-            builder: (_) => AdminClubCommunicationPage(clubId: clubId),
+        _scheduleFcmNavigation(
+          (nav) => nav.push<void>(
+            MaterialPageRoute<void>(
+              builder: (_) => AdminClubCommunicationPage(clubId: clubId),
+            ),
           ),
         );
       }

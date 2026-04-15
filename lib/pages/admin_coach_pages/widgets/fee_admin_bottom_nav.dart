@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../theme/viro_theme.dart';
+import '../../../utils/safe_navigation.dart';
 import '../admin_shell.dart';
 
 class FeeAdminBottomNav extends StatelessWidget {
@@ -44,12 +45,15 @@ class FeeAdminBottomNav extends StatelessWidget {
                 Expanded(
                   child: InkWell(
                     onTap: () {
-                      Navigator.of(context).pushAndRemoveUntil(
-                        MaterialPageRoute<void>(
-                          builder: (_) => AdminShell(initialIndex: i),
-                        ),
-                        (route) => false,
-                      );
+                      scheduleDeferredNavigation(() {
+                        if (!context.mounted) return;
+                        Navigator.of(context).pushAndRemoveUntil<void>(
+                          MaterialPageRoute<void>(
+                            builder: (_) => AdminShell(initialIndex: i),
+                          ),
+                          (route) => false,
+                        );
+                      });
                     },
                     child: _FeeAdminBottomNavItem(
                       label: _tabs[i].$1,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/user_model.dart';
+import 'safe_navigation.dart';
 import '../pages/admin_coach_pages/admin_shell.dart';
 import '../pages/player_pages/player_shell.dart';
 import '../services/user_session.dart';
@@ -77,7 +78,6 @@ Future<bool> switchProfileAndNavigate({
   required String clubId,
   required VoidCallback closeCurrentSurface,
 }) async {
-  final navigator = Navigator.of(context);
   final messenger = ScaffoldMessenger.of(context);
   final success = await session.switchContext(role, clubId);
   if (!context.mounted) return false;
@@ -93,19 +93,22 @@ Future<bool> switchProfileAndNavigate({
   }
 
   closeCurrentSurface();
-  navigator.pushAndRemoveUntil(
-    MaterialPageRoute<void>(
-      builder: (_) => usesPlayerShell(role)
-          ? const PlayerShell()
-          : const AdminShell(),
-    ),
-    (route) => false,
-  );
-  messenger.showSnackBar(
-    const SnackBar(
-      content: Text('Profil changé avec succès'),
-      backgroundColor: Colors.green,
-    ),
-  );
+  scheduleDeferredNavigation(() {
+    if (!context.mounted) return;
+    Navigator.of(context).pushAndRemoveUntil<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => usesPlayerShell(role)
+            ? const PlayerShell()
+            : const AdminShell(),
+      ),
+      (route) => false,
+    );
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text('Profil changé avec succès'),
+        backgroundColor: Colors.green,
+      ),
+    );
+  });
   return true;
 }

@@ -7,6 +7,7 @@ import 'package:viro_team/constants/firebase_collections.dart';
 import '../../theme/viro_theme.dart';
 import '../../widget/viro_loader.dart';
 import '../../utils/app_logger.dart';
+import '../../utils/safe_navigation.dart';
 import '../../utils/firebase_error_handler.dart';
 import '../../services/membership_service.dart';
 import '../../services/user_session.dart';
@@ -128,10 +129,13 @@ class _CreateClubPageState extends State<CreateClubPage> {
         await context.read<UserSession>().loadUser(user.uid);
       }
       if (mounted) {
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const AdminShell()),
-          (route) => false,
-        );
+        scheduleDeferredNavigation(() {
+          if (!mounted) return;
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (_) => const AdminShell()),
+            (route) => false,
+          );
+        });
       }
     } catch (e) {
       AppLogger.instance.error(
@@ -142,6 +146,7 @@ class _CreateClubPageState extends State<CreateClubPage> {
           'clubName': _nameController.text.trim(),
         },
       );
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(FirebaseErrorHandler.getErrorMessage(e))),
       );

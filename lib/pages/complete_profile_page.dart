@@ -5,6 +5,7 @@ import 'package:viro_team/constants/firebase_collections.dart';
 import 'package:viro_team/pages/onboarding_page.dart';
 import 'package:viro_team/utils/firebase_error_handler.dart';
 import 'package:viro_team/utils/firestore_instance.dart';
+import 'package:viro_team/utils/safe_navigation.dart';
 import '../widget/viro_loader.dart';
 
 /// Page de complétion du profil pour les utilisateurs ayant créé un compte via Google.
@@ -87,9 +88,12 @@ class _CompleteProfilePageState extends State<CompleteProfilePage> {
       );
 
       if (!mounted) return;
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const OnboardingPage()),
-      );
+      scheduleDeferredNavigation(() {
+        if (!mounted) return;
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const OnboardingPage()),
+        );
+      });
     } catch (e) {
       if (mounted) {
         FirebaseErrorHandler.showErrorSnackBar(context, e);

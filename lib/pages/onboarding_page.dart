@@ -8,6 +8,7 @@ import 'package:viro_team/constants/firebase_collections.dart';
 import '../services/join_request_service.dart';
 import '../services/user_session.dart';
 import '../theme/viro_theme.dart';
+import '../utils/safe_navigation.dart';
 import '../widget/viro_loader.dart';
 import '../widget/club_search_widget.dart';
 import 'player_pages/player_home_page.dart';
@@ -73,13 +74,19 @@ class _OnboardingPageState extends State<OnboardingPage> {
       if (activeRole == 'admin' ||
           activeRole == 'coach' ||
           activeRole == 'admin_fondateur') {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const AdminShell()),
-        );
+        scheduleDeferredNavigation(() {
+          if (!mounted) return;
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (_) => const AdminShell()),
+          );
+        });
       } else if (activeRole == 'player') {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const PlayerHomePage()),
-        );
+        scheduleDeferredNavigation(() {
+          if (!mounted) return;
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (_) => const PlayerHomePage()),
+          );
+        });
       } else {
         setState(() => _initialCheckDone = true);
       }
@@ -117,13 +124,19 @@ class _OnboardingPageState extends State<OnboardingPage> {
       if (firstRole == 'admin' ||
           firstRole == 'coach' ||
           firstRole == 'admin_fondateur') {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const AdminShell()),
-        );
+        scheduleDeferredNavigation(() {
+          if (!mounted) return;
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (_) => const AdminShell()),
+          );
+        });
       } else {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const PlayerHomePage()),
-        );
+        scheduleDeferredNavigation(() {
+          if (!mounted) return;
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (_) => const PlayerHomePage()),
+          );
+        });
       }
       return;
     }
@@ -195,9 +208,12 @@ class _OnboardingPageState extends State<OnboardingPage> {
         await context.read<UserSession>().loadUser(user.uid);
       }
       if (mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const PlayerHomePage()),
-        );
+        scheduleDeferredNavigation(() {
+          if (!mounted) return;
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (_) => const PlayerHomePage()),
+          );
+        });
       }
     } catch (e) {
       if (mounted) {
@@ -242,10 +258,12 @@ class _OnboardingPageState extends State<OnboardingPage> {
                 subtitle: "Je souhaite fonder mon club",
                 icon: Icons.add_business_outlined,
                 roleValue: 'admin',
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const CreateClubPage()),
-                ),
+                onTap: () => scheduleDeferredNavigation(() {
+                  if (!context.mounted) return;
+                  Navigator.of(context).push<void>(
+                    MaterialPageRoute(builder: (_) => const CreateClubPage()),
+                  );
+                }),
               ),
 
               // OPTION : REJOINDRE COACH
