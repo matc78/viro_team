@@ -11,6 +11,13 @@ class PendingRequestsWidget extends StatelessWidget {
 
   const PendingRequestsWidget({super.key, required this.userId});
 
+  Future<void> _dismissProcessedRequest(String docId) async {
+    await appFirestore
+        .collection(FirebaseCollections.joinRequests)
+        .doc(docId)
+        .delete();
+  }
+
   Future<bool> _deleteRequest(BuildContext context, String docId) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -129,6 +136,7 @@ class PendingRequestsWidget extends StatelessWidget {
                 return _RequestCardWithSport(
                   data: data,
                   status: data['status'] == 'accepted' ? 'accepted' : 'refused',
+                  onDismiss: () => _dismissProcessedRequest(doc.id),
                 );
               }),
             ],
@@ -288,10 +296,14 @@ class _RequestCardWithSport extends StatelessWidget {
   /// Animation de slide du parent (0 = fermé/taille normale, 1 = ouvert/compressé).
   final Animation<double>? slideAnimation;
 
+  /// Callback de suppression pour les demandes traitées (affiche une croix).
+  final VoidCallback? onDismiss;
+
   const _RequestCardWithSport({
     required this.data,
     required this.status,
     this.slideAnimation,
+    this.onDismiss,
   });
 
   @override
@@ -330,6 +342,7 @@ class _RequestCardWithSport extends StatelessWidget {
   }
 
   Widget _buildCard(String clubName, String role, String status) {
+
     final isAccepted = status == 'accepted';
     final isPending = status == 'pending';
     final isRefused = status == 'refused';
@@ -400,6 +413,18 @@ class _RequestCardWithSport extends StatelessWidget {
                 child: const Badge(
                   label: Text("En attente"),
                   backgroundColor: Colors.orange,
+                ),
+              ),
+            if (!isPending && onDismiss != null)
+              GestureDetector(
+                onTap: onDismiss,
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 6),
+                  child: Icon(
+                    Icons.close,
+                    size: 16,
+                    color: iconColor.withValues(alpha: 0.6),
+                  ),
                 ),
               ),
           ],

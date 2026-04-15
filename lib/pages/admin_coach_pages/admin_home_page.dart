@@ -41,8 +41,6 @@ class _AdminHomePageState extends State<AdminHomePage> {
   final user = FirebaseAuth.instance.currentUser;
   final ScrollController _scrollController = ScrollController();
   final GlobalKey _notToMissAnchorKey = GlobalKey();
-  bool _showAllRequests = false;
-  String? _processingRequestId;
   String? _processingLoanRequestId;
 
   @override
@@ -408,18 +406,6 @@ class _AdminHomePageState extends State<AdminHomePage> {
     if (rolesInClub.contains('admin')) return 'admin';
     if (rolesInClub.contains('coach')) return 'coach';
     return null;
-  }
-
-  /// True si le viewer peut accepter/refuser cette demande (admin fondateur: tout; admin: joueur uniquement; coach: jamais).
-  bool _canRespondToJoinRequest(String? viewerRole, String? roleRequested) {
-    if (viewerRole == null) return false;
-    if (viewerRole == 'coach') return false;
-    if (viewerRole == 'admin_fondateur') return true;
-    if (viewerRole == 'admin') {
-      final r = roleRequested ?? 'player';
-      return r == 'player';
-    }
-    return false;
   }
 
   Widget _buildTodaySection(String clubId) {
@@ -869,7 +855,11 @@ class _AdminHomePageState extends State<AdminHomePage> {
           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
         ),
         const SizedBox(height: 10),
-        _buildJoinRequestsSection(clubId, clubName, userData),
+        _JoinRequestsSection(
+          clubId: clubId,
+          clubName: clubName,
+          viewerRole: _viewerRoleInClub(userData, clubId),
+        ),
         const SizedBox(height: 12),
         _buildMemberLeavesSection(clubId),
         const SizedBox(height: 12),
@@ -882,223 +872,6 @@ class _AdminHomePageState extends State<AdminHomePage> {
           const SizedBox(height: 12),
         ],
       ],
-    );
-  }
-
-  Widget _buildJoinRequestsSection(
-    String clubId,
-    String clubName,
-    Map<String, dynamic> userData,
-  ) {
-    final viewerRole = _viewerRoleInClub(userData, clubId);
-
-    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: appFirestore
-          .collection(FirebaseCollections.joinRequests)
-          .where('clubId', isEqualTo: clubId)
-          .where('status', isEqualTo: 'pending')
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return _InfoCard(
-            child: const Text(
-              "Erreur de chargement des demandes.",
-              style: TextStyle(color: Colors.redAccent),
-            ),
-          );
-        }
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const _InfoCard(
-            child: Center(child: CircularProgressIndicator()),
-          );
-        }
-
-        final docs = snapshot.data?.docs ?? [];
-        // tri côté client pour éviter d'imposer un index Firestore
-        docs.sort((a, b) {
-          final ta = a.data()['createdAt'] as Timestamp? ?? Timestamp.now();
-          final tb = b.data()['createdAt'] as Timestamp? ?? Timestamp.now();
-          return tb.compareTo(ta); // plus récent en premier
-        });
-
-        if (docs.isEmpty) {
-          return const SizedBox.shrink();
-        }
-
-        final toShow = _showAllRequests ? docs : docs.take(2).toList();
-        return _InfoCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              ...toShow.map((doc) {
-                final data = doc.data();
-                final role = data['roleRequested'] ?? "player";
-                final message = data['message'] ?? "";
-                final createdAt = data['createdAt'] as Timestamp?;
-                final dateText = createdAt != null
-                    ? "${createdAt.toDate().day}/${createdAt.toDate().month}"
-                    : "";
-                final canRespond = _canRespondToJoinRequest(
-                  viewerRole,
-                  data['roleRequested'],
-                );
-                final roleLabel = role == 'coach'
-                    ? "Entraîneur"
-                    : (role == 'admin' || role == 'admin_fondateur'
-                          ? "Administrateur"
-                          : "Membre");
-                return InkWell(
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => ProfilRequestPage(
-                          requestId: doc.id,
-                          userId: data['userId'],
-                          clubId: clubId,
-                          clubName: clubName,
-                          roleRequested: data['roleRequested'],
-                          message: message,
-                          firstName: data['firstName'],
-                          lastName: data['lastName'],
-                          canRespond: canRespond,
-                        ),
-                      ),
-                    );
-                  },
-                  child: Container(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: ViroColors.borderColor),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Expanded(
-                              child: UserDisplayTile(
-                                userId: data['userId'] as String?,
-                                firstName: data['firstName'] as String?,
-                                lastName: data['lastName'] as String?,
-                                fallback: data['userId'] ?? "Membre",
-                                textStyle: const TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 16,
-                                ),
-                              ),
-                            ),
-                            Text(
-                              roleLabel,
-                              style: const TextStyle(color: Colors.grey),
-                            ),
-                          ],
-                        ),
-                        if (message.isNotEmpty) ...[
-                          const SizedBox(height: 8),
-                          Text(
-                            message,
-                            style: const TextStyle(color: Colors.black87),
-                          ),
-                        ],
-                        if (dateText.isNotEmpty) ...[
-                          const SizedBox(height: 6),
-                          Text(
-                            "Reçue le $dateText",
-                            style: const TextStyle(
-                              color: Colors.grey,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                        const SizedBox(height: 10),
-                        if (canRespond)
-                          Row(
-                            children: [
-                              Expanded(
-                                child: OutlinedButton(
-                                  onPressed: _processingRequestId == doc.id
-                                      ? null
-                                      : () => _handleRequest(
-                                          doc.id,
-                                          data['userId'],
-                                          accept: false,
-                                        ),
-                                  child: const Text("Refuser"),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: ElevatedButton(
-                                  onPressed: _processingRequestId == doc.id
-                                      ? null
-                                      : () => _handleRequest(
-                                          doc.id,
-                                          data['userId'],
-                                          accept: true,
-                                          clubId: clubId,
-                                          clubName: clubName,
-                                          role: data['roleRequested'],
-                                        ),
-                                  child: _processingRequestId == doc.id
-                                      ? const SizedBox(
-                                          height: 16,
-                                          width: 16,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            color: Colors.white,
-                                          ),
-                                        )
-                                      : const Text("Accepter"),
-                                ),
-                              ),
-                            ],
-                          )
-                        else
-                          Padding(
-                            padding: const EdgeInsets.only(top: 4),
-                            child: Text(
-                              viewerRole == 'coach'
-                                  ? "Seul un administrateur peut accepter ou refuser."
-                                  : "Réservé à l'administrateur fondateur.",
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey[600],
-                                fontStyle: FontStyle.italic,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                );
-              }),
-              if (docs.length > 2)
-                Align(
-                  alignment: Alignment.center,
-                  child: TextButton.icon(
-                    onPressed: () => setState(() {
-                      _showAllRequests = !_showAllRequests;
-                    }),
-                    icon: Icon(
-                      _showAllRequests
-                          ? Icons.keyboard_arrow_up
-                          : Icons.keyboard_arrow_down,
-                    ),
-                    label: Text(
-                      _showAllRequests
-                          ? "Voir moins"
-                          : "Voir toutes les demandes (${docs.length})",
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        );
-      },
     );
   }
 
@@ -1217,41 +990,6 @@ class _AdminHomePageState extends State<AdminHomePage> {
         );
       },
     );
-  }
-
-  Future<void> _handleRequest(
-    String requestId,
-    String? userId, {
-    required bool accept,
-    String? clubId,
-    String? clubName,
-    String? role,
-  }) async {
-    if (userId == null) return;
-    setState(() => _processingRequestId = requestId);
-    try {
-      if (accept) {
-        await JoinRequestService.instance.acceptRequest(
-          requestId: requestId,
-          userId: userId,
-          clubId: clubId ?? '',
-          role: role ?? 'player',
-        );
-      } else {
-        await JoinRequestService.instance.refuseRequest(
-          requestId: requestId,
-          userId: userId,
-          clubId: clubId,
-        );
-      }
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(FirebaseErrorHandler.getErrorMessage(e))),
-      );
-    } finally {
-      if (mounted) setState(() => _processingRequestId = null);
-    }
   }
 
   Widget _buildLoanRequestsSection(String clubId) {
@@ -2576,6 +2314,286 @@ class _AdminHomePageState extends State<AdminHomePage> {
               }),
             ],
           ),
+        );
+      },
+    );
+  }
+}
+
+// =============================================================================
+// Section demandes d'adhésion — widget isolé pour éviter les rebuilds de page
+// =============================================================================
+
+class _JoinRequestsSection extends StatefulWidget {
+  final String clubId;
+  final String clubName;
+  final String? viewerRole;
+
+  const _JoinRequestsSection({
+    required this.clubId,
+    required this.clubName,
+    required this.viewerRole,
+  });
+
+  @override
+  State<_JoinRequestsSection> createState() => _JoinRequestsSectionState();
+}
+
+class _JoinRequestsSectionState extends State<_JoinRequestsSection> {
+  late final Stream<QuerySnapshot<Map<String, dynamic>>> _stream;
+  String? _processingRequestId;
+  final Set<String> _removingRequestIds = {};
+  bool _showAll = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Stream créé une seule fois : les setState internes ne le recrééront jamais.
+    _stream = appFirestore
+        .collection(FirebaseCollections.joinRequests)
+        .where('clubId', isEqualTo: widget.clubId)
+        .where('status', isEqualTo: 'pending')
+        .snapshots();
+  }
+
+  bool _canRespond(String? roleRequested) {
+    final v = widget.viewerRole;
+    if (v == null || v == 'coach') return false;
+    if (v == 'admin_fondateur') return true;
+    if (v == 'admin') return (roleRequested ?? 'player') == 'player';
+    return false;
+  }
+
+  Future<void> _handleRequest(
+    String requestId,
+    String? userId, {
+    required bool accept,
+    String? role,
+  }) async {
+    if (userId == null) return;
+    setState(() {
+      _processingRequestId = requestId;
+      _removingRequestIds.add(requestId);
+    });
+    try {
+      if (accept) {
+        await JoinRequestService.instance.acceptRequest(
+          requestId: requestId,
+          userId: userId,
+          clubId: widget.clubId,
+          role: role ?? 'player',
+        );
+      } else {
+        await JoinRequestService.instance.refuseRequest(
+          requestId: requestId,
+          userId: userId,
+          clubId: widget.clubId,
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _removingRequestIds.remove(requestId));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(FirebaseErrorHandler.getErrorMessage(e))),
+      );
+    } finally {
+      if (mounted) setState(() => _processingRequestId = null);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: _stream,
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return const Text(
+            "Erreur de chargement des demandes.",
+            style: TextStyle(color: Colors.redAccent),
+          );
+        }
+        if (!snapshot.hasData) return const SizedBox.shrink();
+
+        final docs = List.of(snapshot.data!.docs);
+        docs.sort((a, b) {
+          final ta = a.data()['createdAt'] as Timestamp? ?? Timestamp.now();
+          final tb = b.data()['createdAt'] as Timestamp? ?? Timestamp.now();
+          return tb.compareTo(ta);
+        });
+
+        if (docs.isEmpty) return const SizedBox.shrink();
+
+        final toShow = _showAll ? docs : docs.take(2).toList();
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ...toShow.map((doc) {
+              final data = doc.data();
+              final role = data['roleRequested'] as String? ?? 'player';
+              final message = data['message'] as String? ?? '';
+              final createdAt = data['createdAt'] as Timestamp?;
+              final dateText = createdAt != null
+                  ? "${createdAt.toDate().day}/${createdAt.toDate().month}"
+                  : '';
+              final canRespond = _canRespond(role);
+              final roleLabel = role == 'coach'
+                  ? 'Entraîneur'
+                  : (role == 'admin' || role == 'admin_fondateur'
+                        ? 'Administrateur'
+                        : 'Membre');
+              final isRemoving = _removingRequestIds.contains(doc.id);
+
+              return IgnorePointer(
+                ignoring: isRemoving,
+                child: AnimatedOpacity(
+                  duration: const Duration(milliseconds: 220),
+                  opacity: isRemoving ? 0.0 : 1.0,
+                  child: InkWell(
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => ProfilRequestPage(
+                          requestId: doc.id,
+                          userId: data['userId'],
+                          clubId: widget.clubId,
+                          clubName: widget.clubName,
+                          roleRequested: role,
+                          message: message,
+                          firstName: data['firstName'],
+                          lastName: data['lastName'],
+                          canRespond: canRespond,
+                        ),
+                      ),
+                    ),
+                    child: Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: ViroColors.borderColor),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Expanded(
+                                child: UserDisplayTile(
+                                  userId: data['userId'] as String?,
+                                  firstName: data['firstName'] as String?,
+                                  lastName: data['lastName'] as String?,
+                                  fallback: data['userId'] ?? 'Membre',
+                                  textStyle: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                              ),
+                              Text(
+                                roleLabel,
+                                style: const TextStyle(color: Colors.grey),
+                              ),
+                            ],
+                          ),
+                          if (message.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              message,
+                              style: const TextStyle(color: Colors.black87),
+                            ),
+                          ],
+                          if (dateText.isNotEmpty) ...[
+                            const SizedBox(height: 6),
+                            Text(
+                              "Reçue le $dateText",
+                              style: const TextStyle(
+                                color: Colors.grey,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 10),
+                          if (canRespond)
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: OutlinedButton(
+                                    onPressed: _processingRequestId == doc.id
+                                        ? null
+                                        : () => _handleRequest(
+                                            doc.id,
+                                            data['userId'],
+                                            accept: false,
+                                          ),
+                                    child: const Text('Refuser'),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: ElevatedButton(
+                                    onPressed: _processingRequestId == doc.id
+                                        ? null
+                                        : () => _handleRequest(
+                                            doc.id,
+                                            data['userId'],
+                                            accept: true,
+                                            role: role,
+                                          ),
+                                    child: _processingRequestId == doc.id
+                                        ? const SizedBox(
+                                            height: 16,
+                                            width: 16,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              color: Colors.white,
+                                            ),
+                                          )
+                                        : const Text('Accepter'),
+                                  ),
+                                ),
+                              ],
+                            )
+                          else
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: Text(
+                                widget.viewerRole == 'coach'
+                                    ? 'Seul un administrateur peut accepter ou refuser.'
+                                    : "Réservé à l'administrateur fondateur.",
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[600],
+                                  fontStyle: FontStyle.italic,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }),
+            if (docs.length > 2)
+              Align(
+                alignment: Alignment.center,
+                child: TextButton.icon(
+                  onPressed: () => setState(() => _showAll = !_showAll),
+                  icon: Icon(
+                    _showAll
+                        ? Icons.keyboard_arrow_up
+                        : Icons.keyboard_arrow_down,
+                  ),
+                  label: Text(
+                    _showAll
+                        ? 'Voir moins'
+                        : 'Voir toutes les demandes (${docs.length})',
+                  ),
+                ),
+              ),
+          ],
         );
       },
     );

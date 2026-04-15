@@ -26,6 +26,7 @@ import '../add_profile_page.dart';
 import '../notification_settings_page.dart';
 import '../../services/notification_preferences_service.dart';
 import '../onboarding_page.dart';
+import '../admin_coach_pages/admin_shell.dart';
 import '../../services/user_session.dart';
 import '../../services/membership_service.dart';
 import '../../widget/player_club_stats_widgets.dart';
@@ -1354,6 +1355,21 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
             if (firstClubName != null) 'clubName': firstClubName,
           };
         }
+      } else {
+        // Pas d'autre club joueur : chercher un rôle admin/coach pour éviter que
+        // restoreActiveContextIfNeeded() se déclenche et entre en conflit avec la navigation.
+        for (final fallbackRole in ['admin_fondateur', 'admin', 'coach']) {
+          for (final s in summaries) {
+            if (s['role'] == fallbackRole && s['clubId'] != clubId) {
+              newActiveContext = {
+                'role': s['role'] as String,
+                'clubId': s['clubId'] as String,
+              };
+              break;
+            }
+          }
+          if (newActiveContext != null) break;
+        }
       }
       final updates = <String, dynamic>{};
       final activeContext = data['activeContext'] as Map<String, dynamic>?;
@@ -1372,11 +1388,19 @@ class _PlayerProfilPageState extends State<PlayerProfilPage> {
       await MembershipService.instance.removeRoleFromClub(uid, clubId, 'player');
 
       if (!context.mounted) return;
+      final destRole = newActiveContext?['role'] as String?;
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute<void>(
-          builder: (_) => hasOtherPlayerClubs
-              ? const PlayerHomePage()
-              : const OnboardingPage(),
+          builder: (_) {
+            if (hasOtherPlayerClubs || destRole == 'player') {
+              return const PlayerHomePage();
+            }
+            if (destRole != null) {
+              // rôle admin ou coach : aller directement sur AdminShell
+              return const AdminShell();
+            }
+            return const OnboardingPage();
+          },
         ),
         (route) => false,
       );
