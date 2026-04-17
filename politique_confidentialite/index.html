@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Politique de confidentialité – ViroTeam</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f5f7fa;
+      color: #1a1a2e;
+      line-height: 1.7;
+    }
+
+    header {
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 60%, #0f3460 100%);
+      color: #fff;
+      padding: 48px 24px 40px;
+      text-align: center;
+    }
+
+    header .logo {
+      font-size: 2rem;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      margin-bottom: 8px;
+    }
+
+    header .logo span { color: #e94560; }
+
+    header p {
+      font-size: 0.9rem;
+      opacity: 0.7;
+      margin-top: 6px;
+    }
+
+    main {
+      max-width: 820px;
+      margin: 40px auto;
+      padding: 0 20px 60px;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 14px;
+      padding: 36px 40px;
+      margin-bottom: 24px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+    }
+
+    .card h2 {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #0f3460;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .card h2 .icon {
+      width: 32px;
+      height: 32px;
+      background: #e8f0fe;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1rem;
+      flex-shrink: 0;
+    }
+
+    .card p { margin-bottom: 12px; font-size: 0.95rem; color: #333; }
+    .card p:last-child { margin-bottom: 0; }
+
+    .card ul {
+      padding-left: 0;
+      list-style: none;
+      margin-top: 8px;
+    }
+
+    .card ul li {
+      padding: 6px 0 6px 22px;
+      position: relative;
+      font-size: 0.95rem;
+      color: #333;
+      border-bottom: 1px solid #f0f0f0;
+    }
+
+    .card ul li:last-child { border-bottom: none; }
+
+    .card ul li::before {
+      content: "•";
+      position: absolute;
+      left: 6px;
+      color: #e94560;
+      font-weight: bold;
+    }
+
+    .contact-block {
+      background: #f0f4ff;
+      border-left: 4px solid #0f3460;
+      border-radius: 0 8px 8px 0;
+      padding: 16px 20px;
+      margin-top: 16px;
+      font-size: 0.9rem;
+      color: #1a1a2e;
+      line-height: 1.8;
+    }
+
+    .contact-block strong { display: block; font-size: 1rem; margin-bottom: 4px; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+      font-size: 0.88rem;
+    }
+
+    thead tr { background: #0f3460; color: #fff; }
+
+    th {
+      padding: 10px 14px;
+      text-align: left;
+      font-weight: 600;
+    }
+
+    tbody tr:nth-child(even) { background: #f7f9ff; }
+    tbody tr:hover { background: #eef2ff; }
+
+    td {
+      padding: 10px 14px;
+      border-bottom: 1px solid #e8ecf0;
+      vertical-align: top;
+      color: #333;
+    }
+
+    td strong { color: #1a1a2e; }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+
+    .badge-contract { background: #e8f5e9; color: #2e7d32; }
+    .badge-consent  { background: #fff3e0; color: #e65100; }
+    .badge-legit    { background: #e3f2fd; color: #1565c0; }
+
+    .rights-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    .right-item {
+      background: #f7f9ff;
+      border: 1px solid #d9e3ff;
+      border-radius: 10px;
+      padding: 14px 16px;
+      font-size: 0.88rem;
+    }
+
+    .right-item strong {
+      display: block;
+      color: #0f3460;
+      margin-bottom: 4px;
+      font-size: 0.92rem;
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .summary-item {
+      background: #f7f9ff;
+      border-radius: 8px;
+      padding: 12px 16px;
+      font-size: 0.88rem;
+    }
+
+    .summary-item strong {
+      display: block;
+      color: #0f3460;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+    }
+
+    .cnil-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 12px;
+      padding: 10px 18px;
+      background: #0f3460;
+      color: #fff;
+      border-radius: 8px;
+      text-decoration: none;
+      font-size: 0.88rem;
+      font-weight: 600;
+      transition: background 0.2s;
+    }
+
+    .cnil-link:hover { background: #e94560; }
+
+    footer {
+      text-align: center;
+      padding: 24px;
+      font-size: 0.82rem;
+      color: #999;
+    }
+
+    @media (max-width: 600px) {
+      .card { padding: 24px 20px; }
+      .summary-grid { grid-template-columns: 1fr; }
+      table { display: block; overflow-x: auto; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Viro<span>Team</span></div>
+  <h1 style="font-size:1.4rem;font-weight:600;margin-top:4px;">Politique de confidentialité</h1>
+  <p>Dernière mise à jour : 05/02/2026</p>
+</header>
+
+<main>
+
+  <!-- 1. Responsable du traitement -->
+  <div class="card">
+    <h2><span class="icon">👤</span> 1. Responsable du traitement</h2>
+    <p>Les données à caractère personnel collectées via l'application <strong>ViroTeam</strong> sont traitées par :</p>
+    <div class="contact-block">
+      <strong>Matia Cilly – Développeur indépendant</strong>
+      Avenue du Général Leclerc, 78220 Viroflay, France<br>
+      Email : <a href="mailto:matia.cilly@gmail.com">matia.cilly@gmail.com</a><br>
+      Téléphone : 06 65 78 87 93
+    </div>
+    <p style="margin-top:14px;">Pour toute question relative à vos données personnelles, contactez-nous à l'adresse ci-dessus.</p>
+  </div>
+
+  <!-- 2. Données collectées -->
+  <div class="card">
+    <h2><span class="icon">📋</span> 2. Données collectées et finalités</h2>
+    <p>ViroTeam permet la gestion de clubs et équipes sportives (joueurs, coachs, administrateurs). Voici les données traitées :</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Données</th>
+          <th>Finalité</th>
+          <th>Base légale</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Email, mot de passe</strong></td>
+          <td>Création de compte et authentification</td>
+          <td><span class="badge badge-contract">Contrat</span></td>
+        </tr>
+        <tr>
+          <td><strong>Nom, prénom, téléphone</strong></td>
+          <td>Identification et contact dans le cadre du club</td>
+          <td><span class="badge badge-contract">Contrat</span></td>
+        </tr>
+        <tr>
+          <td><strong>Photo de profil (avatar)</strong></td>
+          <td>Affichage dans l'application (équipes, événements, annonces)</td>
+          <td><span class="badge badge-consent">Consentement</span></td>
+        </tr>
+        <tr>
+          <td><strong>Rôles et appartenance</strong> (licence, catégories, équipes)</td>
+          <td>Gestion des membres, planning, événements</td>
+          <td><span class="badge badge-contract">Contrat</span></td>
+        </tr>
+        <tr>
+          <td><strong>Token de notification push (FCM)</strong></td>
+          <td>Envoi de notifications (événements, demandes, prêts)</td>
+          <td><span class="badge badge-consent">Consentement</span></td>
+        </tr>
+        <tr>
+          <td><strong>Données techniques et logs d'erreurs</strong> (Crashlytics)</td>
+          <td>Amélioration de la stabilité et du support</td>
+          <td><span class="badge badge-legit">Intérêt légitime</span></td>
+        </tr>
+      </tbody>
+    </table>
+    <p style="margin-top:16px;font-size:0.88rem;color:#666;">
+      Les <strong>mots de passe</strong> ne sont jamais stockés en clair — ils sont gérés par Firebase Authentication.
+      Les données sont conservées <strong>tant que votre compte est actif</strong>.
+    </p>
+  </div>
+
+  <!-- 3. Destinataires et hébergement -->
+  <div class="card">
+    <h2><span class="icon">🌐</span> 3. Destinataires et hébergement</h2>
+    <p>Vos données sont traitées par les services suivants :</p>
+    <ul>
+      <li><strong>Google Firebase</strong> (authentification, base de données Firestore, stockage, notifications push, rapports de plantages Crashlytics) — hébergement par Google, avec possibilité de transfert hors de l'Espace économique européen (notamment vers les États-Unis). Google applique des garanties appropriées (clauses contractuelles types).</li>
+      <li><strong>Google Cloud Vision API</strong> — analyse automatique des photos de profil (modération de contenu) avant publication dans l'application.</li>
+    </ul>
+    <p style="margin-top:12px;">Les données ne sont <strong>pas vendues</strong> à des tiers. Elles ne sont communiquées qu'aux personnes habilitées (équipe responsable du traitement, administrateurs de club dans les limites strictes de leur rôle) et aux sous-traitants listés ci-dessus.</p>
+  </div>
+
+  <!-- 4. Sécurité -->
+  <div class="card">
+    <h2><span class="icon">🔒</span> 4. Sécurité</h2>
+    <p>Nous mettons en œuvre les mesures suivantes pour protéger vos données :</p>
+    <ul>
+      <li>Authentification sécurisée via Firebase Authentication</li>
+      <li>Règles d'accès Firestore limitant la lecture/écriture selon les rôles (admin, coach, joueur)</li>
+      <li>Stockage des avatars sur Firebase Storage avec contrôle d'accès</li>
+      <li>Modération automatique des photos de profil (Google Cloud Vision API)</li>
+      <li>Rapports d'erreurs Crashlytics sans accès au contenu de votre profil</li>
+    </ul>
+  </div>
+
+  <!-- 5. Durée de conservation -->
+  <div class="card">
+    <h2><span class="icon">🗓️</span> 5. Durée de conservation</h2>
+    <ul>
+      <li><strong>Compte actif :</strong> données conservées tant que le compte existe et que vous participez à des clubs.</li>
+      <li><strong>Après suppression du compte :</strong> suppression ou anonymisation dans un délai de 30 jours à 3 mois selon les services, sauf obligation légale de conservation plus longue.</li>
+      <li><strong>Token FCM :</strong> supprimé ou invalidé dès la désactivation des notifications ou la suppression du compte.</li>
+      <li><strong>Crashlytics :</strong> rapports conservés selon la politique de Google Firebase/Crashlytics.</li>
+    </ul>
+  </div>
+
+  <!-- 6. Vos droits -->
+  <div class="card">
+    <h2><span class="icon">⚖️</span> 6. Vos droits (RGPD)</h2>
+    <p>Vous disposez des droits suivants sur vos données personnelles :</p>
+    <div class="rights-grid">
+      <div class="right-item">
+        <strong>Accès</strong>
+        Obtenir une copie des données que nous détenons sur vous.
+      </div>
+      <div class="right-item">
+        <strong>Rectification</strong>
+        Faire corriger des données inexactes (certaines sont modifiables directement dans l'app).
+      </div>
+      <div class="right-item">
+        <strong>Effacement</strong>
+        Demander la suppression de vos données, sous réserve des obligations légales.
+      </div>
+      <div class="right-item">
+        <strong>Portabilité</strong>
+        Recevoir vos données dans un format structuré et lisible par machine.
+      </div>
+      <div class="right-item">
+        <strong>Opposition</strong>
+        Vous opposer à un traitement fondé sur l'intérêt légitime (ex. Crashlytics). Les notifications push se désactivent dans les paramètres de l'appareil.
+      </div>
+      <div class="right-item">
+        <strong>Limitation</strong>
+        Demander la limitation du traitement dans certains cas prévus par la loi.
+      </div>
+    </div>
+    <p style="margin-top:16px;">Pour exercer ces droits, adressez une demande à <a href="mailto:matia.cilly@gmail.com">matia.cilly@gmail.com</a> en précisant votre identité. Nous répondrons dans un délai d'un mois.</p>
+    <p style="margin-top:8px;">Vous avez également le droit d'introduire une réclamation auprès de la CNIL :</p>
+    <a class="cnil-link" href="https://www.cnil.fr" target="_blank" rel="noopener">
+      Contacter la CNIL →
+    </a>
+  </div>
+
+  <!-- 7. Données sur l'appareil -->
+  <div class="card">
+    <h2><span class="icon">📱</span> 7. Données stockées sur l'appareil</h2>
+    <p>L'application peut enregistrer localement sur votre appareil :</p>
+    <ul>
+      <li>Préférences d'affichage et paramètres de l'application</li>
+      <li>Données nécessaires au bon fonctionnement (ex. scores, minuteur sportif)</li>
+    </ul>
+    <p style="margin-top:10px;">Ces données restent sur votre appareil et ne sont pas utilisées à des fins publicitaires ou de profilage.</p>
+  </div>
+
+  <!-- 8. Modifications -->
+  <div class="card">
+    <h2><span class="icon">📝</span> 8. Modifications</h2>
+    <p>Toute modification substantielle de cette politique vous sera communiquée via l'application ou par email. La date de mise à jour figurant en haut de page sera actualisée. Nous vous encourageons à consulter régulièrement cette politique.</p>
+  </div>
+
+  <!-- 9. Résumé -->
+  <div class="card">
+    <h2><span class="icon">✅</span> 9. Résumé (conformité RGPD)</h2>
+    <div class="summary-grid">
+      <div class="summary-item">
+        <strong>Responsable</strong>
+        Matia Cilly – Viroflay (78), France
+      </div>
+      <div class="summary-item">
+        <strong>Finalités</strong>
+        Gestion de compte, clubs, équipes, notifications, amélioration technique
+      </div>
+      <div class="summary-item">
+        <strong>Bases légales</strong>
+        Exécution du contrat · Consentement (notifications) · Intérêt légitime (Crashlytics)
+      </div>
+      <div class="summary-item">
+        <strong>Destinataires</strong>
+        Responsable du traitement, admins de club, Google Firebase &amp; Cloud Vision (sous-traitants)
+      </div>
+      <div class="summary-item">
+        <strong>Transferts hors UE</strong>
+        Oui (Firebase / Google), avec garanties appropriées (CCT)
+      </div>
+      <div class="summary-item">
+        <strong>Conservation</strong>
+        Durée du compte + délai technique et légal après suppression
+      </div>
+      <div class="summary-item">
+        <strong>Droits</strong>
+        Accès · Rectification · Effacement · Portabilité · Opposition · Limitation · Réclamation CNIL
+      </div>
+      <div class="summary-item">
+        <strong>Sécurité</strong>
+        Firebase Auth · Règles d'accès Firestore · Modération avatars · Hébergement sécurisé
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<footer>
+  &copy; 2026 ViroTeam — Matia Cilly. Tous droits réservés.
+</footer>
+
+</body>
+</html>
