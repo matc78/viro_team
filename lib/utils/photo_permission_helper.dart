@@ -10,7 +10,7 @@ import 'package:permission_handler/permission_handler.dart';
 /// puis retourne le [XFile] sélectionné (ou null si annulé/refusé).
 ///
 /// - Caméra : [Permission.camera]
-/// - Galerie Android 13+ : [Permission.photos] (READ_MEDIA_IMAGES)
+/// - Galerie Android 13+ : Photo Picker système (aucune permission requise)
 /// - Galerie Android ≤ 12 : [Permission.storage] (READ_EXTERNAL_STORAGE)
 /// - iOS : [Permission.photos] pour la galerie, [Permission.camera] pour la caméra
 Future<XFile?> pickPhotoWithPermission(
@@ -85,9 +85,11 @@ Future<bool> _requestPermissionForSource(
   } else {
     if (Platform.isAndroid) {
       final androidInfo = await DeviceInfoPlugin().androidInfo;
-      status = androidInfo.version.sdkInt >= 33
-          ? await Permission.photos.request()
-          : await Permission.storage.request();
+      if (androidInfo.version.sdkInt >= 33) {
+        // Android 13+ : le Photo Picker système ne nécessite aucune permission
+        return true;
+      }
+      status = await Permission.storage.request();
     } else {
       status = await Permission.photos.request();
     }
