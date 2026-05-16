@@ -28,6 +28,14 @@ abstract final class EventTypes {
   static const String other = 'other';
 }
 
+/// Lieu du match : domicile ou extérieur.
+abstract final class MatchVenues {
+  static const String home = 'home';
+  static const String away = 'away';
+
+  static const String homeLocationLabel = 'Domicile';
+}
+
 class ClubEvent {
   const ClubEvent({
     required this.id,
@@ -38,9 +46,14 @@ class ClubEvent {
     this.location,
     this.startTime,
     this.endTime,
+    this.meetingTime,
+    this.matchVenue,
+    this.teamIds = const [],
+    this.allTeams = false,
     this.teamMemberIds = const [],
     this.rsvp = const {},
     this.canceled = false,
+    this.seriesId,
   });
 
   final String id;
@@ -51,12 +64,44 @@ class ClubEvent {
   final String? location;
   final String? startTime;
   final String? endTime;
+  final String? meetingTime;
+  final String? matchVenue;
+  final List<String> teamIds;
+  final bool allTeams;
   final List<String> teamMemberIds;
   final Map<String, String> rsvp;
   final bool canceled;
+  final String? seriesId;
+
+  bool get isRecurringSeries =>
+      seriesId != null && seriesId!.isNotEmpty;
 
   RsvpStatus rsvpFor(String uid) =>
       RsvpStatus.fromString(rsvp[uid]);
+
+  ({int yes, int no, int none}) get rsvpCounts => rsvpCountsExcluding({});
+
+  /// Compteurs RSVP en excluant les coachs (et autres UIDs à ignorer).
+  ({int yes, int no, int none}) rsvpCountsExcluding(Set<String> excludeUids) {
+    var yes = 0;
+    var no = 0;
+    var none = 0;
+    for (final uid in playerMemberIds(excludeUids)) {
+      switch (rsvpFor(uid)) {
+        case RsvpStatus.yes:
+          yes++;
+        case RsvpStatus.no:
+          no++;
+        case RsvpStatus.none:
+          none++;
+      }
+    }
+    return (yes: yes, no: no, none: none);
+  }
+
+  /// Joueurs convoqués sans les coachs d'équipe.
+  List<String> playerMemberIds(Set<String> excludeCoachUids) =>
+      teamMemberIds.where((id) => !excludeCoachUids.contains(id)).toList();
 
   bool get isUpcoming => !canceled && !date.isBefore(_startOfDay(DateTime.now()));
 
@@ -77,12 +122,20 @@ class ClubEvent {
       location: data[FirestoreFields.location] as String?,
       startTime: data[FirestoreFields.startTime] as String?,
       endTime: data[FirestoreFields.endTime] as String?,
+      meetingTime: data[FirestoreFields.meetingTime] as String?,
+      matchVenue: data[FirestoreFields.matchVenue] as String?,
+      teamIds: (data[FirestoreFields.teamIds] as List<dynamic>?)
+              ?.whereType<String>()
+              .toList() ??
+          [],
+      allTeams: data[FirestoreFields.allTeams] as bool? ?? false,
       teamMemberIds: (data[FirestoreFields.teamMemberIds] as List<dynamic>?)
               ?.whereType<String>()
               .toList() ??
           [],
       rsvp: rsvpRaw.map((k, v) => MapEntry(k, v.toString())),
       canceled: data[FirestoreFields.canceled] as bool? ?? false,
+      seriesId: data[FirestoreFields.seriesId] as String?,
     );
   }
 

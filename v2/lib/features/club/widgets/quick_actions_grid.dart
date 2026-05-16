@@ -139,7 +139,7 @@ class ClubManagementActionsGrid extends StatelessWidget {
   const ClubManagementActionsGrid({
     super.key,
     required this.role,
-    this.onAttendance,
+    this.onPlanning,
     this.onManageTeams,
     this.onManageMembers,
     this.onManageTournaments,
@@ -147,7 +147,7 @@ class ClubManagementActionsGrid extends StatelessWidget {
   });
 
   final String role;
-  final VoidCallback? onAttendance;
+  final VoidCallback? onPlanning;
   final VoidCallback? onManageTeams;
   final VoidCallback? onManageMembers;
   final VoidCallback? onManageTournaments;
@@ -156,9 +156,9 @@ class ClubManagementActionsGrid extends StatelessWidget {
   List<QuickAction> get _actions {
     return [
       QuickAction(
-        label: 'Pointer les présences',
-        icon: ViroIcons.check,
-        onTap: onAttendance,
+        label: 'Planning',
+        icon: ViroIcons.calendar,
+        onTap: onPlanning,
       ),
       QuickAction(
         label: 'Gérer les équipes',

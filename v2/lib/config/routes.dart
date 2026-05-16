@@ -13,6 +13,8 @@ import 'package:viro_team_v2/features/auth/screens/onboarding_entry_screen.dart'
 import 'package:viro_team_v2/features/auth/screens/sign_up_screen.dart';
 
 import 'package:viro_team_v2/features/club/screens/club_detail_screen.dart';
+import 'package:viro_team_v2/features/planning/screens/add_event_screen.dart';
+import 'package:viro_team_v2/features/planning/screens/club_planning_screen.dart';
 import 'package:viro_team_v2/features/members/screens/club_members_screen.dart';
 import 'package:viro_team_v2/features/teams/screens/manage_teams_screen.dart';
 import 'package:viro_team_v2/features/teams/screens/my_teams_screen.dart';
@@ -65,6 +67,10 @@ abstract final class AppRoutes {
 
   static const clubManageTeams = '/club/:clubId/teams/manage';
 
+  static const clubPlanning = '/club/:clubId/planning';
+
+  static const clubAddEvent = '/club/:clubId/planning/add';
+
   static const designPreview = '/dev/design';
 
 
@@ -77,6 +83,14 @@ abstract final class AppRoutes {
 
   static String clubManageTeamsPath(String clubId) =>
       '/club/$clubId/teams/manage';
+
+  static String clubPlanningPath(String clubId) => '/club/$clubId/planning';
+
+  static String clubAddEventPath(String clubId, {String? date}) {
+    final base = '/club/$clubId/planning/add';
+    if (date == null || date.isEmpty) return base;
+    return '$base?date=$date';
+  }
 
 }
 
@@ -363,6 +377,50 @@ final goRouterProvider = Provider<GoRouter>((ref) {
           final clubId = state.pathParameters['clubId']!;
 
           return MyTeamsScreen(clubId: clubId);
+
+        },
+
+      ),
+
+      GoRoute(
+
+        path: AppRoutes.clubAddEvent,
+
+        builder: (_, state) {
+
+          final clubId = state.pathParameters['clubId']!;
+
+          final dateParam = state.uri.queryParameters['date'];
+
+          DateTime? initialDate;
+
+          if (dateParam != null && dateParam.isNotEmpty) {
+
+            initialDate = DateTime.tryParse(dateParam);
+
+          }
+
+          return AddEventScreen(
+
+            clubId: clubId,
+
+            initialDate: initialDate,
+
+          );
+
+        },
+
+      ),
+
+      GoRoute(
+
+        path: AppRoutes.clubPlanning,
+
+        builder: (_, state) {
+
+          final clubId = state.pathParameters['clubId']!;
+
+          return ClubPlanningScreen(clubId: clubId);
 
         },
 

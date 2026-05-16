@@ -43,6 +43,7 @@ abstract final class FirestoreFields {
   static const String practiceLocations = 'practiceLocations';
   static const String adminIds = 'adminIds';
   static const String memberCount = 'memberCount';
+  static const String seasonEndDate = 'seasonEndDate';
 
   // members/{memberId}
   static const String userId = 'userId';
@@ -75,6 +76,10 @@ abstract final class FirestoreFields {
   static const String date = 'date';
   static const String startTime = 'startTime';
   static const String endTime = 'endTime';
+  static const String meetingTime = 'meetingTime';
+  static const String meetingLocation = 'meetingLocation';
+  static const String matchVenue = 'matchVenue';
+  static const String seriesId = 'seriesId';
   static const String teamMemberIds = 'teamMemberIds';
   static const String rsvp = 'rsvp';
   static const String attendance = 'attendance';

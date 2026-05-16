@@ -40,6 +40,12 @@ class EventService {
     return DateTime(now.year, now.month, now.day);
   }
 
+  static DateTime _startOfDay(DateTime d) =>
+      DateTime(d.year, d.month, d.day);
+
+  static DateTime _endOfDay(DateTime d) =>
+      _startOfDay(d).add(const Duration(days: 1));
+
   Stream<List<ClubEvent>> watchUpcomingEventsForClub({
     required String clubId,
     required String uid,
@@ -96,6 +102,141 @@ class EventService {
             .map((d) => ClubEvent.fromFirestore(clubId: clubId, doc: d))
             .where((e) => !e.canceled)
             .toList());
+  }
+
+  /// Tous les événements d'un jour (vue coach/admin planning).
+  Stream<List<ClubEvent>> watchClubEventsOnDay({
+    required String clubId,
+    required DateTime day,
+  }) {
+    final start = _startOfDay(day);
+    final end = _endOfDay(day);
+
+    return _events(clubId)
+        .where(
+          FirestoreFields.date,
+          isGreaterThanOrEqualTo: Timestamp.fromDate(start),
+        )
+        .where(
+          FirestoreFields.date,
+          isLessThan: Timestamp.fromDate(end),
+        )
+        .orderBy(FirestoreFields.date)
+        .snapshots()
+        .map(
+          (snap) => snap.docs
+              .map((d) => ClubEvent.fromFirestore(clubId: clubId, doc: d))
+              .where((e) => !e.canceled)
+              .toList(),
+        );
+  }
+
+  Future<DateTime?> getFirstEventDate(String clubId) async {
+    final snap = await _events(clubId)
+        .orderBy(FirestoreFields.date)
+        .limit(1)
+        .get();
+    if (snap.docs.isEmpty) return null;
+    final ts = snap.docs.first.data()[FirestoreFields.date] as Timestamp?;
+    if (ts == null) return null;
+    return _startOfDay(ts.toDate());
+  }
+
+  /// Crée un ou plusieurs événements (récurrence hebdomadaire pour entraînements).
+  Future<int> createEvents({
+    required String clubId,
+    required String creatorId,
+    required String type,
+    required String title,
+    required DateTime startDate,
+    required List<String> teamIds,
+    required List<String> teamMemberIds,
+    required bool allTeams,
+    String? location,
+    String? startTime,
+    String? endTime,
+    String? meetingTime,
+    String? matchVenue,
+    DateTime? recurrenceEndDate,
+  }) async {
+    final dates = _recurrenceDates(
+      startDate: startDate,
+      recurrenceEndDate: recurrenceEndDate,
+    );
+    final seriesId =
+        dates.length > 1 ? _events(clubId).doc().id : null;
+
+    final batch = _db.batch();
+    for (final date in dates) {
+      final ref = _events(clubId).doc();
+      batch.set(ref, {
+        FirestoreFields.type: type,
+        FirestoreFields.title: title,
+        FirestoreFields.location: location ?? '',
+        FirestoreFields.teamIds: teamIds,
+        FirestoreFields.allTeams: allTeams,
+        FirestoreFields.date: Timestamp.fromDate(_startOfDay(date)),
+        if (startTime != null) FirestoreFields.startTime: startTime,
+        if (endTime != null) FirestoreFields.endTime: endTime,
+        if (meetingTime != null) FirestoreFields.meetingTime: meetingTime,
+        if (matchVenue != null) FirestoreFields.matchVenue: matchVenue,
+        if (seriesId != null) FirestoreFields.seriesId: seriesId,
+        FirestoreFields.teamMemberIds: teamMemberIds,
+        FirestoreFields.rsvp: <String, String>{},
+        FirestoreFields.attendance: <String, dynamic>{},
+        FirestoreFields.creatorId: creatorId,
+        FirestoreFields.canceled: false,
+        FirestoreFields.createdAt: FieldValue.serverTimestamp(),
+      });
+    }
+    await batch.commit();
+    return dates.length;
+  }
+
+  List<DateTime> _recurrenceDates({
+    required DateTime startDate,
+    DateTime? recurrenceEndDate,
+  }) {
+    final start = _startOfDay(startDate);
+    if (recurrenceEndDate == null) return [start];
+
+    final end = _startOfDay(recurrenceEndDate);
+    if (end.isBefore(start)) return [start];
+
+    final dates = <DateTime>[];
+    var d = start;
+    while (!d.isAfter(end) && dates.length < 52) {
+      dates.add(d);
+      d = d.add(const Duration(days: 7));
+    }
+    return dates.isEmpty ? [start] : dates;
+  }
+
+  Future<void> cancelEvent({
+    required String clubId,
+    required String eventId,
+  }) async {
+    await _events(clubId).doc(eventId).update({
+      FirestoreFields.canceled: true,
+    });
+  }
+
+  /// Annule tous les événements d'une série récurrente.
+  Future<int> cancelEventSeries({
+    required String clubId,
+    required String seriesId,
+  }) async {
+    final snap = await _events(clubId)
+        .where(FirestoreFields.seriesId, isEqualTo: seriesId)
+        .get();
+    if (snap.docs.isEmpty) return 0;
+
+    final batch = _db.batch();
+    for (final doc in snap.docs) {
+      batch.update(doc.reference, {FirestoreFields.canceled: true});
+    }
+    await batch.commit();
+    return snap.docs.length;
   }
 
   Future<void> updateRsvp({

@@ -142,7 +142,9 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen> {
                           const _SectionTitle(title: 'Gestion du club'),
                           ClubManagementActionsGrid(
                             role: m.role,
-                            onAttendance: showComingSoon,
+                            onPlanning: () => context.push(
+                              AppRoutes.clubPlanningPath(clubId),
+                            ),
                             onManageTeams: () => context.push(
                               AppRoutes.clubManageTeamsPath(clubId),
                             ),
