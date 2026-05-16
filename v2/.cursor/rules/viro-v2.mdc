@@ -1,0 +1,18 @@
+---
+description: Conventions ViroTeam v2 (Flutter)
+globs: v2/**
+alwaysApply: false
+---
+
+# ViroTeam v2
+
+Lire `v2/PROJECT_CONVENTIONS.md` avant toute modification.
+
+Résumé obligatoire :
+- Réutiliser `v2/lib/widgets/` et `../lib/` (v1) avant de créer du code neuf.
+- Listes : chaque tuile dans `v2/lib/widgets/lists/*_list_tile.dart`, jamais inline dans un screen.
+- Firestore : `appFirestore` → base `V2-dev` (debug) / `V2-prod` (release). Règles simples + Cloud Functions pour le sensible.
+- Thème : `ViroScaffold` + `ViroAppBar` sur chaque écran ; fond dégradé (`scaffoldGradient`). Interdit : AppBar/fond bleu opaque (`primary800` plein écran).
+- Cartes : `ViroCard` ; badges rôles : `ViroRoleBadge`. UI : `viro_theme.dart` / `viro_motion.dart` ; boutons → `ViroPressable` / `ViroFloatingIconButton`.
+- Pas de magic numbers couleur/espacement hors `lib/config/`.
+- Icônes : `ViroIcons` / `ViroIcon` (Phosphor), pas `Icons.*`.

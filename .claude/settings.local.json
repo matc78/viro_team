@@ -10,7 +10,8 @@
       "Bash(sed -n '630,636p' /c/Users/matin/Documents/viroteam/viro_team/lib/main.dart)",
       "Bash(sed -n '208,214p' /c/Users/matin/Documents/viroteam/viro_team/lib/main.dart)",
       "Bash(grep -v \"^$\")",
-      "Bash(dart analyze:*)"
+      "Bash(dart analyze:*)",
+      "Bash(grep -E \"\\\\\\\\.dart$\")"
     ]
   }
 }

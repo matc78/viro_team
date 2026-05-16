@@ -1,0 +1,98 @@
+{
+  "project_info": {
+    "project_number": "396501317680",
+    "project_id": "viroteam-75303",
+    "storage_bucket": "viroteam-75303.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:396501317680:android:022270ffcb6477b66fd5f5",
+        "android_client_info": {
+          "package_name": "com.viroteam.viro_team"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "396501317680-e88qed1nqntkqgdg611s9pp79qojn3p5.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.viroteam.viro_team",
+            "certificate_hash": "a3e739954643b39dc96eed71783deef3d184b163"
+          }
+        },
+        {
+          "client_id": "396501317680-h6gkoht6vhue645hci152rvm436ml45o.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.viroteam.viro_team",
+            "certificate_hash": "948e927b8da636c188f38bd5a7092b7b7eaf682e"
+          }
+        },
+        {
+          "client_id": "396501317680-afnku6clj84s00aa5f8ejcjm4oigphom.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAn6hnBTL6x-gmNGzyeTU4e7HOD8W1PX5c"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "396501317680-afnku6clj84s00aa5f8ejcjm4oigphom.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "396501317680-d94lrua9ulfad571djclnb5aajmsfi4e.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.viroteam.viroTeam"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:396501317680:android:34abd5cd41ec5c626fd5f5",
+        "android_client_info": {
+          "package_name": "com.viroteam.viro_team_v2"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "396501317680-afnku6clj84s00aa5f8ejcjm4oigphom.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAn6hnBTL6x-gmNGzyeTU4e7HOD8W1PX5c"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "396501317680-afnku6clj84s00aa5f8ejcjm4oigphom.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "396501317680-d94lrua9ulfad571djclnb5aajmsfi4e.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.viroteam.viroTeam"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

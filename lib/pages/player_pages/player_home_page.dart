@@ -25,6 +25,7 @@ import '../../models/member_fee.dart';
 import '../../services/fee_service.dart';
 import '../../services/notification_service.dart';
 import '../../theme/viro_theme.dart';
+import 'tournaments/player_tournaments_page.dart';
 import '../../utils/avatar_moderation.dart';
 import '../../widget/profile_menu_dropdown.dart';
 import '../../widget/user_display_tile.dart';
@@ -239,6 +240,8 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
                             _buildAnnouncements(allClubIds, userData),
                             const SizedBox(height: 28),
                             _buildActiveLoansSection(clubId, allClubIds),
+                            const SizedBox(height: 28),
+                            _buildTournamentsEntry(context, clubId),
                             const SizedBox(height: 28),
                           ],
                         ),
@@ -2353,6 +2356,56 @@ class _PlayerHomePageState extends State<PlayerHomePage> {
           context,
           MaterialPageRoute(
             builder: (_) => PlayerEventDetailsPage(clubId: clubId, eventId: id),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTournamentsEntry(BuildContext context, String clubId) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      elevation: 1,
+      shadowColor: Colors.black.withValues(alpha: 0.06),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => PlayerTournamentsPage(clubId: clubId),
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              Icon(
+                Icons.emoji_events_outlined,
+                color: ViroColors.primary,
+                size: 26,
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Tournois & Championnats',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15,
+                      ),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'Voir les compétitions du club',
+                      style: TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right, color: Colors.grey[400]),
+            ],
           ),
         ),
       ),

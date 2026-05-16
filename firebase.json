@@ -9,6 +9,16 @@
       "database": "prod",
       "rules": "firestore.rules",
       "indexes": "firestore.indexes.json"
+    },
+    {
+      "database": "v2-dev",
+      "rules": "firestore.v2.rules",
+      "indexes": "firestore.v2.indexes.json"
+    },
+    {
+      "database": "v2-prod",
+      "rules": "firestore.v2.rules",
+      "indexes": "firestore.v2.indexes.json"
     }
   ],
   "functions": {

@@ -350,6 +350,25 @@ service cloud.firestore {
         allow write: if canManageClubFees(clubId);
       }
 
+      // Tournois & Championnats : lecture par tout connecté, écriture par admin/coach
+      match /tournaments/{tournamentId} {
+        allow read: if request.auth != null;
+        allow write: if canWriteClub(clubId);
+
+        match /tournament_teams/{teamId} {
+          allow read: if request.auth != null;
+          allow write: if canWriteClub(clubId);
+        }
+        match /tournament_matches/{matchId} {
+          allow read: if request.auth != null;
+          allow write: if canWriteClub(clubId);
+        }
+        match /tournament_phases/{phaseId} {
+          allow read: if request.auth != null;
+          allow write: if canWriteClub(clubId);
+        }
+      }
+
       // Cotisations legacy (member_fees) — conservé pour compatibilité données existantes
       match /member_fees/{userId} {
         allow read: if canManageClubFees(clubId) || request.auth.uid == userId;

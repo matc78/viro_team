@@ -52,4 +52,17 @@ class FirebaseCollections {
 
   /// @deprecated Utiliser [feeSeasons] à la place
   static const String feeSettingsDefaultDocId = 'default';
+
+  // Tournois & Championnats
+  /// Collection principale : clubs/{clubId}/tournaments/{tournamentId}
+  static const String tournaments = 'tournaments';
+
+  /// Sous-collection équipes d'un tournoi
+  static const String tournamentTeams = 'tournament_teams';
+
+  /// Sous-collection matchs d'un tournoi
+  static const String tournamentMatches = 'tournament_matches';
+
+  /// Sous-collection phases d'un tournoi
+  static const String tournamentPhases = 'tournament_phases';
 }
