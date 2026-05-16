@@ -3,7 +3,8 @@ import 'package:viro_team_v2/config/viro_colors.dart';
 import 'package:viro_team_v2/config/viro_icons.dart';
 import 'package:viro_team_v2/config/viro_spacing.dart';
 import 'package:viro_team_v2/constants/firestore_fields.dart';
-import 'package:viro_team_v2/widgets/common/viro_card.dart';
+import 'package:viro_team_v2/config/viro_motion.dart';
+import 'package:viro_team_v2/widgets/common/viro_pressable.dart';
 
 class QuickAction {
   const QuickAction({
@@ -37,38 +38,67 @@ class _QuickActionsGridBase extends StatelessWidget {
           crossAxisCount: 2,
           mainAxisSpacing: ViroSpacing.sm,
           crossAxisSpacing: ViroSpacing.sm,
-          childAspectRatio: 2.4,
+          childAspectRatio: 1.75,
         ),
         itemCount: actions.length,
         itemBuilder: (context, index) {
-          final action = actions[index];
-          return ViroCard(
-            onTap: action.onTap,
-            padding: const EdgeInsets.symmetric(
-              horizontal: ViroSpacing.md,
-              vertical: ViroSpacing.sm,
-            ),
-            margin: EdgeInsets.zero,
-            child: Row(
-              children: [
-                ViroIcon(
-                  action.icon,
-                  size: 22,
-                  color: ViroColors.primary600,
-                ),
-                const SizedBox(width: ViroSpacing.sm),
-                Expanded(
-                  child: Text(
-                    action.label,
-                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                  ),
-                ),
-              ],
-            ),
-          );
+          return _QuickActionCell(action: actions[index]);
         },
+      ),
+    );
+  }
+}
+
+/// Cellule grille — remplit la hauteur de la cellule et centre le contenu.
+class _QuickActionCell extends StatelessWidget {
+  const _QuickActionCell({required this.action});
+
+  final QuickAction action;
+
+  @override
+  Widget build(BuildContext context) {
+    final radius = BorderRadius.circular(ViroSpacing.cardRadius);
+    final labelStyle = Theme.of(context).textTheme.labelLarge?.copyWith(
+          fontWeight: FontWeight.w600,
+        );
+
+    return ViroPressable(
+      onTap: action.onTap,
+      borderRadius: radius,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: ViroColors.surfaceCard,
+          borderRadius: radius,
+          border: Border.all(
+            color: ViroColors.primary100.withValues(alpha: 0.45),
+          ),
+          boxShadow: ViroMotion.cardShadow(),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: ViroSpacing.md,
+            vertical: ViroSpacing.sm,
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              ViroIcon(
+                action.icon,
+                size: 24,
+                color: ViroColors.primary600,
+              ),
+              const SizedBox(height: ViroSpacing.xs),
+              Text(
+                action.label,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: labelStyle,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
