@@ -5,6 +5,8 @@ import 'package:viro_team_v2/config/routes.dart';
 import 'package:viro_team_v2/config/viro_spacing.dart';
 import 'package:viro_team_v2/constants/firestore_fields.dart';
 import 'package:viro_team_v2/features/auth/providers/auth_providers.dart';
+import 'package:viro_team_v2/features/clubs/providers/user_clubs_provider.dart';
+import 'package:viro_team_v2/features/invitations/providers/pending_invitations_provider.dart';
 import 'package:viro_team_v2/features/join/providers/pending_invitation_provider.dart';
 import 'package:viro_team_v2/providers/service_providers.dart';
 import 'package:viro_team_v2/providers/session_provider.dart';
@@ -53,6 +55,10 @@ class _InvitationPreviewScreenState
             invitation: pending.invitation!,
             user: user,
           );
+      ref.invalidate(userClubsProvider);
+      ref.invalidate(userClubsWithEventsProvider);
+      ref.invalidate(pendingInvitationsProvider);
+      ref.invalidate(viroUserFutureProvider);
       ref.read(pendingInvitationProvider.notifier).clear();
       ref.read(sessionProvider.notifier).setActiveClub(
             pending.club!.id,

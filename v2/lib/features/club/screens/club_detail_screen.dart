@@ -316,8 +316,8 @@ class _ClubHeader extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.all(ViroSpacing.lg),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Container(
             width: 72,
@@ -345,32 +345,27 @@ class _ClubHeader extends StatelessWidget {
                   )
                 : null,
           ),
-          const SizedBox(width: ViroSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  club.name,
-                  style: theme.titleMedium?.copyWith(
-                    color: ViroColors.primary800,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  subtitle,
-                  style: theme.bodySmall?.copyWith(color: ViroColors.gray600),
-                ),
-                if (member != null) ...[
-                  const SizedBox(height: ViroSpacing.sm),
-                  ViroRoleBadge(
-                    role: viroRoleFromMemberRole(member!.role),
-                  ),
-                ],
-              ],
+          const SizedBox(height: ViroSpacing.md),
+          Text(
+            club.name,
+            textAlign: TextAlign.center,
+            style: theme.titleMedium?.copyWith(
+              color: ViroColors.primary800,
+              fontWeight: FontWeight.w700,
             ),
           ),
+          const SizedBox(height: 4),
+          Text(
+            subtitle,
+            textAlign: TextAlign.center,
+            style: theme.bodySmall?.copyWith(color: ViroColors.gray600),
+          ),
+          if (member != null) ...[
+            const SizedBox(height: ViroSpacing.sm),
+            ViroRoleBadge(
+              role: viroRoleFromMemberRole(member!.role),
+            ),
+          ],
         ],
       ),
     );

@@ -20,7 +20,7 @@ class UserClubWithEvent {
 }
 
 final userClubsProvider = FutureProvider<List<UserClubEntry>>((ref) async {
-  final user = await ref.watch(viroUserFutureProvider.future);
+  final user = ref.watch(viroUserProvider).value;
   if (user == null || !user.hasClubs) return [];
 
   final clubs = await ref.read(clubServiceProvider).getClubsForUser(user);

@@ -30,16 +30,13 @@ class ClubStatsRow extends StatelessWidget {
 
     if (attendanceRate != null) {
       cards.add(
-        Align(
-          alignment: Alignment.center,
-          child: SizedBox(
-            width: 150,
-            child: ViroStatsCard(
-              label: 'Présence (30 j)',
-              value: '${attendanceRate!.round()} %',
-              subtitle: 'Séances pointées',
-              onTap: onAttendanceTap,
-            ),
+        SizedBox(
+          width: 150,
+          child: ViroStatsCard(
+            label: 'Présence (30 j)',
+            value: '${attendanceRate!.round()} %',
+            subtitle: 'Séances pointées',
+            onTap: onAttendanceTap,
           ),
         ),
       );
@@ -48,16 +45,13 @@ class ClubStatsRow extends StatelessWidget {
     if (nextEvent != null) {
       if (cards.isNotEmpty) cards.add(const SizedBox(width: ViroSpacing.sm));
       cards.add(
-        Align(
-          alignment: Alignment.center,
-          child: SizedBox(
-            width: 180,
-            child: ViroStatsCard(
-              label: 'Prochain event',
-              value:
-                  '${eventTypeLabel(nextEvent!.type)} · ${formatEventDate(nextEvent!.date)}',
-              onTap: onNextEventTap,
-            ),
+        SizedBox(
+          width: 180,
+          child: ViroStatsCard(
+            label: 'Prochain event',
+            value:
+                '${eventTypeLabel(nextEvent!.type)} · ${formatEventDate(nextEvent!.date)}',
+            onTap: onNextEventTap,
           ),
         ),
       );
@@ -66,12 +60,9 @@ class ClubStatsRow extends StatelessWidget {
     if (club.memberCount > 0) {
       if (cards.isNotEmpty) cards.add(const SizedBox(width: ViroSpacing.sm));
       cards.add(
-        Align(
-          alignment: Alignment.center,
-          child: _MemberCountStatCard(
-            count: club.memberCount,
-            onTap: onMembersTap,
-          ),
+        _MemberCountStatCard(
+          count: club.memberCount,
+          onTap: onMembersTap,
         ),
       );
     }
@@ -80,12 +71,25 @@ class ClubStatsRow extends StatelessWidget {
 
     return SizedBox(
       height: 118,
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(
-          horizontal: ViroSpacing.screenHorizontal,
-        ),
-        children: cards,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(
+              horizontal: ViroSpacing.screenHorizontal,
+            ),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minWidth:
+                    constraints.maxWidth - ViroSpacing.screenHorizontal * 2,
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: cards,
+              ),
+            ),
+          );
+        },
       ),
     );
   }

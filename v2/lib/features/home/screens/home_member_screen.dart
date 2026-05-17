@@ -14,6 +14,7 @@ import 'package:viro_team_v2/features/teams/utils/team_roster_members.dart';
 import 'package:viro_team_v2/features/clubs/providers/user_clubs_provider.dart';
 import 'package:viro_team_v2/features/home/providers/home_teams_provider.dart';
 import 'package:viro_team_v2/features/home/providers/member_events_provider.dart';
+import 'package:viro_team_v2/features/clubs/widgets/add_club_sheet.dart';
 import 'package:viro_team_v2/features/home/widgets/club_selector_bar.dart';
 import 'package:viro_team_v2/features/planning/utils/planning_event_display.dart';
 import 'package:viro_team_v2/features/planning/widgets/planning_event_detail_sheet.dart';
@@ -115,7 +116,7 @@ class _HomeMemberScreenState extends ConsumerState<HomeMemberScreen> {
     final teamsByClub = ref.watch(homeClubTeamsProvider).value ??
         const <String, Map<String, ClubTeam>>{};
     final pendingCounts = ref.watch(pendingCountByClubProvider);
-    final userAsync = ref.watch(viroUserFutureProvider);
+    final userAsync = ref.watch(viroUserProvider);
 
     return ViroScaffold(
       appBar: ViroAppBar(
@@ -134,7 +135,7 @@ class _HomeMemberScreenState extends ConsumerState<HomeMemberScreen> {
         data: (clubs) {
           if (clubs.isEmpty) {
             return _EmptyClubsBody(
-              onJoin: () => context.go(AppRoutes.entry),
+              onJoin: () => showAddClubSheet(context, ref),
             );
           }
 
@@ -147,6 +148,7 @@ class _HomeMemberScreenState extends ConsumerState<HomeMemberScreen> {
               ClubSelectorBar(
                 clubs: clubs,
                 pendingByClub: pendingCounts,
+                onAddClub: () => showAddClubSheet(context, ref),
               ),
               Expanded(
                 child: eventsAsync.when(
@@ -160,6 +162,8 @@ class _HomeMemberScreenState extends ConsumerState<HomeMemberScreen> {
                       onRefresh: () async {
                         ref.invalidate(memberEventsProvider);
                         ref.invalidate(userClubsProvider);
+                        ref.invalidate(userClubsWithEventsProvider);
+                        ref.invalidate(viroUserFutureProvider);
                       },
                       child: CustomScrollView(
                         controller: _scrollController,
@@ -407,7 +411,7 @@ class _EmptyClubsBody extends StatelessWidget {
           ),
           const SizedBox(height: ViroSpacing.lg),
           ViroPrimaryButton(
-            label: 'Rejoindre un club',
+            label: 'Créer ou rejoindre un club',
             onPressed: onJoin,
           ),
         ],

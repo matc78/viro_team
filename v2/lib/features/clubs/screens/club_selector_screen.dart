@@ -13,6 +13,7 @@ import 'package:viro_team_v2/models/club_invitation.dart';
 import 'package:viro_team_v2/providers/service_providers.dart';
 import 'package:viro_team_v2/providers/session_provider.dart';
 import 'package:viro_team_v2/utils/club_color.dart';
+import 'package:viro_team_v2/features/clubs/widgets/add_club_sheet.dart';
 import 'package:viro_team_v2/widgets/common/viro_primary_button.dart';
 import 'package:viro_team_v2/widgets/common/viro_role_badge.dart';
 import 'package:viro_team_v2/widgets/common/viro_scaffold.dart';
@@ -67,7 +68,7 @@ class _ClubSelectorBody extends ConsumerWidget {
 
     if (!hasClubs && !hasInvitations) {
       return _EmptyStateWidget(
-        onAdd: () => context.go(AppRoutes.entry),
+        onAdd: () => showAddClubSheet(context, ref),
       );
     }
 
@@ -151,7 +152,7 @@ class _ClubSelectorBody extends ConsumerWidget {
                   ? '+ Ajouter un club'
                   : 'Créer ou rejoindre un club',
               outlined: hasClubs,
-              onPressed: () => context.go(AppRoutes.entry),
+              onPressed: () => showAddClubSheet(context, ref),
             ),
           ),
         ],
@@ -414,6 +415,7 @@ class _InvitationCardState extends ConsumerState<_InvitationCard> {
       ref.invalidate(pendingInvitationsProvider);
       ref.invalidate(userClubsProvider);
       ref.invalidate(userClubsWithEventsProvider);
+      ref.invalidate(viroUserFutureProvider);
       ref.read(sessionProvider.notifier).setActiveClub(
             widget.invitation.clubId,
             role: widget.invitation.role,

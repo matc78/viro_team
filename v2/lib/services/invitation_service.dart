@@ -135,6 +135,29 @@ class InvitationService {
     );
   }
 
+  String _resolvedDisplayName(ViroUser user) {
+    final fromProfile = user.displayName.trim();
+    if (fromProfile.isNotEmpty) return fromProfile;
+    return '${user.firstName} ${user.lastName}'.trim();
+  }
+
+  /// Prénom / nom / snapshot alignés sur le compte utilisateur (corrections à l'inscription).
+  Map<String, dynamic> _memberProfilePatchFromUser(
+    ViroUser user, {
+    required String displayName,
+  }) {
+    return {
+      FirestoreFields.firstName: user.firstName.trim(),
+      FirestoreFields.lastName: user.lastName.trim(),
+      FirestoreFields.snapshot: {
+        FirestoreFields.displayName: displayName,
+        FirestoreFields.email: user.email,
+        if (user.avatarUrl != null) FirestoreFields.avatarUrl: user.avatarUrl,
+      },
+      FirestoreFields.updatedAt: FieldValue.serverTimestamp(),
+    };
+  }
+
   Future<void> acceptInvitation({
     required ClubInvitation invitation,
     required ViroUser user,
@@ -153,9 +176,11 @@ class InvitationService {
     final userRef =
         _db.collection(ProjectConfig.usersCollection).doc(user.uid);
 
-    final displayName = user.displayName.isNotEmpty
-        ? user.displayName
-        : '${user.firstName} ${user.lastName}'.trim();
+    final displayName = _resolvedDisplayName(user);
+    final profilePatch = _memberProfilePatchFromUser(
+      user,
+      displayName: displayName,
+    );
 
     final linkedMemberId = invitation.memberId;
     final memberRef = linkedMemberId != null && linkedMemberId.isNotEmpty
@@ -200,14 +225,8 @@ class InvitationService {
         tx.update(memberRef, {
           FirestoreFields.accountUid: user.uid,
           FirestoreFields.userId: user.uid,
-          FirestoreFields.snapshot: {
-            FirestoreFields.displayName: displayName,
-            FirestoreFields.email: user.email,
-            if (user.avatarUrl != null)
-              FirestoreFields.avatarUrl: user.avatarUrl,
-          },
+          ...profilePatch,
           FirestoreFields.activeInvitationId: FieldValue.delete(),
-          FirestoreFields.updatedAt: FieldValue.serverTimestamp(),
         });
 
         tx.set(accountIndexRef, {
@@ -246,6 +265,12 @@ class InvitationService {
           tx.update(clubRef, {
             FirestoreFields.memberCount: memberCount + 1,
             FirestoreFields.updatedAt: FieldValue.serverTimestamp(),
+          });
+        } else {
+          tx.update(memberRef, {
+            FirestoreFields.accountUid: user.uid,
+            FirestoreFields.userId: user.uid,
+            ...profilePatch,
           });
         }
       }
@@ -299,6 +324,8 @@ class InvitationService {
         FirestoreFields.status: InvitationStatus.accepted,
         FirestoreFields.acceptedAt: FieldValue.serverTimestamp(),
         'acceptedBy': user.uid,
+        FirestoreFields.firstName: user.firstName.trim(),
+        FirestoreFields.lastName: user.lastName.trim(),
       });
     });
 

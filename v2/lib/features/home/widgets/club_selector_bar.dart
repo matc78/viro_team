@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:viro_team_v2/config/routes.dart';
 import 'package:viro_team_v2/config/viro_colors.dart';
+import 'package:viro_team_v2/config/viro_icons.dart';
 import 'package:viro_team_v2/config/viro_spacing.dart';
 import 'package:viro_team_v2/features/clubs/providers/user_clubs_provider.dart';
 import 'package:viro_team_v2/utils/club_color.dart';
@@ -12,13 +13,16 @@ class ClubSelectorBar extends StatelessWidget {
     super.key,
     required this.clubs,
     required this.pendingByClub,
+    this.onAddClub,
   });
 
   final List<UserClubEntry> clubs;
   final Map<String, int> pendingByClub;
+  final VoidCallback? onAddClub;
 
   static const double _barHeight = 88;
   static const double _logoSize = 56;
+  static const double _addButtonSize = 36;
 
   @override
   Widget build(BuildContext context) {
@@ -41,25 +45,36 @@ class ClubSelectorBar extends StatelessWidget {
 
     return SizedBox(
       height: _barHeight,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          return SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(
-              horizontal: ViroSpacing.screenHorizontal,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          LayoutBuilder(
+            builder: (context, constraints) {
+              return SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: ViroSpacing.screenHorizontal,
+                ),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    minWidth:
+                        constraints.maxWidth - ViroSpacing.screenHorizontal * 2,
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: items,
+                  ),
+                ),
+              );
+            },
+          ),
+          if (onAddClub != null)
+            Positioned(
+              right: ViroSpacing.screenHorizontal,
+              top: 0,
+              child: _AddClubBarItem(onTap: onAddClub!),
             ),
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                minWidth:
-                    constraints.maxWidth - ViroSpacing.screenHorizontal * 2,
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: items,
-              ),
-            ),
-          );
-        },
+        ],
       ),
     );
   }
@@ -67,6 +82,44 @@ class ClubSelectorBar extends StatelessWidget {
   String _shortName(String name) {
     if (name.length <= 12) return name;
     return '${name.substring(0, 10)}…';
+  }
+}
+
+class _AddClubBarItem extends StatelessWidget {
+  const _AddClubBarItem({required this.onTap});
+
+  final VoidCallback onTap;
+
+  static const double _size = ClubSelectorBar._addButtonSize;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: 'Ajouter un club',
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: _size,
+          height: _size,
+          margin: const EdgeInsets.only(top: 10),
+          decoration: BoxDecoration(
+            color: ViroColors.primary50,
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: ViroColors.primary200,
+              width: 1,
+            ),
+          ),
+          alignment: Alignment.center,
+          child: ViroIcon(
+            ViroIcons.add,
+            size: 16,
+            color: ViroColors.primary600,
+          ),
+        ),
+      ),
+    );
   }
 }
 
