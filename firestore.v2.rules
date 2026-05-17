@@ -78,6 +78,23 @@ service cloud.firestore {
 
 
 
+    // Liaison compte Firebase → membre pré-créé lors de l'acceptation d'une invitation.
+    function isLinkingAccountToPrecreatedMember() {
+
+      return isSignedIn()
+
+        && resource.data.get('activeInvitationId', null) != null
+
+        && resource.data.get('accountUid', null) == null
+
+        && request.resource.data.get('accountUid', null) == request.auth.uid
+
+        && request.resource.data.get('userId', null) == request.auth.uid;
+
+    }
+
+
+
     match /users/{uid} {
 
       // Lecture par tout utilisateur connecté (profils coéquipiers, annonces, etc.)
@@ -93,7 +110,10 @@ service cloud.firestore {
 
       allow create: if isSignedIn();
 
-      allow read: if isClubMember(clubId)
+      // get : aperçu club avant adhésion (code d'invitation), y compris sans compte
+      allow get: if true;
+
+      allow list: if isClubMember(clubId)
 
         || (isSignedIn()
 
@@ -107,7 +127,14 @@ service cloud.firestore {
 
       match /members/{memberId} {
 
-        allow read: if isClubMember(clubId);
+        // Membre pré-créé sans compte : lecture pour pré-remplir l'inscription par code
+        allow get: if isClubMember(clubId)
+
+          || (resource.data.get('activeInvitationId', null) != null
+
+            && resource.data.get('accountUid', null) == null);
+
+        allow list: if isClubMember(clubId);
 
         allow create: if isClubCoachOrAdmin(clubId)
 
@@ -117,7 +144,11 @@ service cloud.firestore {
 
             && request.auth.uid in get(/databases/$(database)/documents/clubs/$(clubId)).data.adminIds);
 
-        allow update: if isOwner(memberId) || isClubAdmin(clubId);
+        allow update: if isOwner(memberId)
+
+          || isClubAdmin(clubId)
+
+          || isLinkingAccountToPrecreatedMember();
 
         allow delete: if isClubAdmin(clubId);
 
@@ -139,7 +170,10 @@ service cloud.firestore {
 
       match /invitations/{inviteId} {
 
-        allow read: if isSignedIn();
+        // Rejoindre par code (collectionGroup code + status), même sans être membre
+        allow read: if isSignedIn()
+
+          || resource.data.status == 'pending';
 
         allow create: if isClubCoachOrAdmin(clubId);
 
@@ -232,6 +266,18 @@ service cloud.firestore {
         && isClubAdmin(resource.data.clubId);
 
       allow delete: if false;
+
+    }
+
+
+
+    // Collection group : recherche par code (rejoindre) ou par email (invitations en attente).
+    // Obligatoire pour les requêtes collectionGroup() — la règle sous clubs/ ne suffit pas.
+    match /{path=**}/invitations/{inviteId} {
+
+      allow read: if isSignedIn()
+
+        || resource.data.status == 'pending';
 
     }
 

@@ -11,6 +11,7 @@ class ViroPressable extends StatefulWidget {
     super.key,
     required this.child,
     this.onTap,
+    this.onLongPress,
     this.enabled = true,
     this.borderRadius,
     this.floating = true,
@@ -19,6 +20,7 @@ class ViroPressable extends StatefulWidget {
 
   final Widget child;
   final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
   final bool enabled;
   final BorderRadius? borderRadius;
   final bool floating;
@@ -77,6 +79,7 @@ class _ViroPressableState extends State<ViroPressable>
         onTapUp: widget.enabled ? _onTapUp : null,
         onTapCancel: widget.enabled ? _onTapCancel : null,
         onTap: widget.enabled ? widget.onTap : null,
+        onLongPress: widget.enabled ? widget.onLongPress : null,
         child: AnimatedBuilder(
           animation: _scale,
           builder: (context, child) {

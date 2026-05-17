@@ -6,12 +6,17 @@ import 'package:viro_team_v2/config/routes.dart';
 import 'package:viro_team_v2/config/viro_colors.dart';
 import 'package:viro_team_v2/config/viro_icons.dart';
 import 'package:viro_team_v2/config/viro_spacing.dart';
+import 'package:viro_team_v2/constants/firestore_fields.dart';
 import 'package:viro_team_v2/features/auth/providers/auth_providers.dart';
+import 'package:viro_team_v2/features/club/providers/club_detail_providers.dart';
 import 'package:viro_team_v2/features/clubs/providers/user_clubs_provider.dart';
+import 'package:viro_team_v2/features/home/providers/home_teams_provider.dart';
 import 'package:viro_team_v2/features/home/providers/member_events_provider.dart';
 import 'package:viro_team_v2/features/home/widgets/club_selector_bar.dart';
+import 'package:viro_team_v2/features/planning/utils/planning_event_display.dart';
+import 'package:viro_team_v2/features/planning/widgets/planning_event_detail_sheet.dart';
+import 'package:viro_team_v2/models/club_team.dart';
 import 'package:viro_team_v2/features/home/widgets/event_planning_card.dart';
-import 'package:viro_team_v2/features/home/widgets/event_rsvp_card.dart';
 import 'package:viro_team_v2/features/home/widgets/home_quiet_content.dart';
 import 'package:viro_team_v2/models/club_event.dart';
 import 'package:viro_team_v2/providers/service_providers.dart';
@@ -28,7 +33,6 @@ class HomeMemberScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeMemberScreenState extends ConsumerState<HomeMemberScreen> {
-  final _hiddenPendingIds = <String>{};
   final _scrollController = ScrollController();
 
   @override
@@ -46,8 +50,6 @@ class _HomeMemberScreenState extends ConsumerState<HomeMemberScreen> {
     );
   }
 
-  String _eventKey(ClubEvent e) => '${e.clubId}_${e.id}';
-
   Map<String, String> _clubNames(List<UserClubEntry> clubs) => {
         for (final e in clubs) e.$1.id: e.$1.name,
       };
@@ -60,27 +62,49 @@ class _HomeMemberScreenState extends ConsumerState<HomeMemberScreen> {
           ),
       };
 
+  void _showEventDetail({
+    required ClubEvent event,
+    required Map<String, ClubTeam> teams,
+    required bool canManageEvents,
+  }) {
+    PlanningEventDetailSheet.show(
+      context: context,
+      ref: ref,
+      clubId: event.clubId,
+      event: event,
+      teamLabel: PlanningEventDisplay.teamLabel(event, teams),
+      excludeCoachUids: PlanningEventDisplay.coachUidsToExclude(event, teams),
+      canManageEvents: canManageEvents,
+      onCanceled: () {},
+    );
+  }
+
   Future<void> _setRsvp(ClubEvent event, RsvpStatus status) async {
-    final uid = ref.read(authStateProvider).value?.uid;
-    if (uid == null) return;
+    final authUid = ref.read(authStateProvider).value?.uid;
+    if (authUid == null) return;
 
-    setState(() => _hiddenPendingIds.add(_eventKey(event)));
+    final eventService = ref.read(eventServiceProvider);
+    final audienceId = await eventService.resolveAudienceId(
+      clubId: event.clubId,
+      authUid: authUid,
+    );
 
-    await ref.read(eventServiceProvider).updateRsvp(
-          clubId: event.clubId,
-          eventId: event.id,
-          uid: uid,
-          status: status,
-        );
+    await eventService.updateRsvp(
+      clubId: event.clubId,
+      eventId: event.id,
+      uid: audienceId,
+      status: status,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final clubsAsync = ref.watch(userClubsProvider);
     final eventsAsync = ref.watch(memberEventsProvider);
+    final teamsByClub = ref.watch(homeClubTeamsProvider).value ??
+        const <String, Map<String, ClubTeam>>{};
     final pendingCounts = ref.watch(pendingCountByClubProvider);
     final userAsync = ref.watch(viroUserFutureProvider);
-    final theme = Theme.of(context).textTheme;
 
     return ViroScaffold(
       appBar: ViroAppBar(
@@ -118,11 +142,7 @@ class _HomeMemberScreenState extends ConsumerState<HomeMemberScreen> {
                   loading: () => const _HomeLoadingBody(),
                   error: (e, _) => Center(child: Text('Erreur : $e')),
                   data: (state) {
-                    final pending = state.pending
-                        .where((e) => !_hiddenPendingIds.contains(_eventKey(e)))
-                        .toList();
-                    final isFullyQuiet =
-                        pending.isEmpty && state.upcoming.isEmpty;
+                    final isFullyQuiet = state.upcoming.isEmpty;
                     final firstName = userAsync.value?.firstName;
 
                     return RefreshIndicator(
@@ -133,48 +153,6 @@ class _HomeMemberScreenState extends ConsumerState<HomeMemberScreen> {
                       child: CustomScrollView(
                         controller: _scrollController,
                         slivers: [
-                          if (pending.isNotEmpty) ...[
-                            SliverToBoxAdapter(
-                              child: _SectionTitle(
-                                icon: ViroIcons.bell,
-                                title: 'À répondre',
-                              ),
-                            ),
-                            SliverPadding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: ViroSpacing.screenHorizontal,
-                              ),
-                              sliver: SliverList(
-                                delegate: SliverChildBuilderDelegate(
-                                  (context, index) {
-                                    final event = pending[index];
-                                    return AnimatedSize(
-                                      duration: const Duration(
-                                        milliseconds: 300,
-                                      ),
-                                      child: EventRsvpCard(
-                                        event: event,
-                                        clubName:
-                                            names[event.clubId] ?? 'Club',
-                                        clubColor:
-                                            colors[event.clubId] ??
-                                                ViroColors.primary600,
-                                        onPresent: () => _setRsvp(
-                                          event,
-                                          RsvpStatus.yes,
-                                        ),
-                                        onAbsent: () => _setRsvp(
-                                          event,
-                                          RsvpStatus.no,
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                  childCount: pending.length,
-                                ),
-                              ),
-                            ),
-                          ],
                           if (!isFullyQuiet)
                             SliverToBoxAdapter(
                               child: _SectionTitle(
@@ -187,24 +165,6 @@ class _HomeMemberScreenState extends ConsumerState<HomeMemberScreen> {
                               child: HomeQuietContent(
                                 clubs: clubs,
                                 firstName: firstName,
-                              ),
-                            )
-                          else if (state.upcoming.isEmpty)
-                            SliverToBoxAdapter(
-                              child: Padding(
-                                padding: const EdgeInsets.fromLTRB(
-                                  ViroSpacing.screenHorizontal,
-                                  0,
-                                  ViroSpacing.screenHorizontal,
-                                  ViroSpacing.lg,
-                                ),
-                                child: Text(
-                                  'Aucun autre événement à venir',
-                                  style: theme.bodyMedium?.copyWith(
-                                    color: ViroColors.gray600,
-                                  ),
-                                  textAlign: TextAlign.center,
-                                ),
                               ),
                             )
                           else
@@ -223,9 +183,54 @@ class _HomeMemberScreenState extends ConsumerState<HomeMemberScreen> {
                                         .read(authStateProvider)
                                         .value
                                         ?.uid;
+                                    final teams =
+                                        teamsByClub[event.clubId] ?? {};
+                                    final exclude =
+                                        PlanningEventDisplay.coachUidsToExclude(
+                                      event,
+                                      teams,
+                                    );
+                                    final counts = event
+                                        .rsvpCountsExcluding(exclude);
+                                    final coachView = uid != null &&
+                                        PlanningEventDisplay
+                                            .showCoachRsvpSummary(
+                                          event,
+                                          uid,
+                                          teams,
+                                        );
+                                    final audienceId = uid != null
+                                        ? (ref
+                                                .watch(
+                                                  clubMemberProvider(
+                                                    event.clubId,
+                                                  ),
+                                                )
+                                                .value
+                                                ?.memberId ??
+                                            uid)
+                                        : null;
+                                    final invited = uid != null &&
+                                        event.isInvitedAsPlayer(
+                                          uid,
+                                          clubAudienceId: audienceId,
+                                        );
                                     final status = uid != null
-                                        ? event.rsvpFor(uid)
+                                        ? event.rsvpStatusForUser(
+                                            uid,
+                                            clubAudienceId: audienceId,
+                                          )
                                         : RsvpStatus.none;
+                                    final clubMember = ref
+                                        .watch(
+                                          clubMemberProvider(event.clubId),
+                                        )
+                                        .value;
+                                    final canManageEvents = clubMember !=
+                                            null &&
+                                        MemberRoleHierarchy.isCoachOrAbove(
+                                          clubMember.role,
+                                        );
 
                                     return EventPlanningCard(
                                       event: event,
@@ -233,24 +238,51 @@ class _HomeMemberScreenState extends ConsumerState<HomeMemberScreen> {
                                           names[event.clubId] ?? 'Club',
                                       clubColor: colors[event.clubId] ??
                                           ViroColors.primary600,
-                                      rsvpStatus: status,
-                                      showRsvpButtons:
+                                      coachView: coachView,
+                                      onCoachTap: coachView
+                                          ? () => _showEventDetail(
+                                                event: event,
+                                                teams: teams,
+                                                canManageEvents:
+                                                    canManageEvents,
+                                              )
+                                          : null,
+                                      onLongPress: () => _showEventDetail(
+                                        event: event,
+                                        teams: teams,
+                                        canManageEvents: canManageEvents,
+                                      ),
+                                      coachRsvpCounts:
+                                          coachView ? counts : null,
+                                      presentCount:
+                                          coachView ? null : counts.yes,
+                                      rsvpStatus:
+                                          coachView ? null : status,
+                                      showRsvpButtons: !coachView &&
+                                          invited &&
                                           status == RsvpStatus.none,
-                                      onToggleRsvp: () {
-                                        if (uid == null) return;
-                                        final next = status == RsvpStatus.yes
-                                            ? RsvpStatus.no
-                                            : RsvpStatus.yes;
-                                        _setRsvp(event, next);
-                                      },
-                                      onPresent: () => _setRsvp(
-                                        event,
-                                        RsvpStatus.yes,
-                                      ),
-                                      onAbsent: () => _setRsvp(
-                                        event,
-                                        RsvpStatus.no,
-                                      ),
+                                      onToggleRsvp: coachView
+                                          ? null
+                                          : () {
+                                              if (uid == null) return;
+                                              final next =
+                                                  status == RsvpStatus.yes
+                                                      ? RsvpStatus.no
+                                                      : RsvpStatus.yes;
+                                              _setRsvp(event, next);
+                                            },
+                                      onPresent: coachView
+                                          ? null
+                                          : () => _setRsvp(
+                                                event,
+                                                RsvpStatus.yes,
+                                              ),
+                                      onAbsent: coachView
+                                          ? null
+                                          : () => _setRsvp(
+                                                event,
+                                                RsvpStatus.no,
+                                              ),
                                     );
                                   },
                                   childCount: state.upcoming.length,
@@ -313,8 +345,6 @@ class _HomeLoadingBody extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          SectionShimmer(itemCount: 2),
-          SizedBox(height: ViroSpacing.lg),
           SectionShimmer(itemCount: 3),
         ],
       ),

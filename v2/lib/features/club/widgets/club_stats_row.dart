@@ -79,14 +79,11 @@ class ClubStatsRow extends StatelessWidget {
     if (cards.isEmpty) return const SizedBox.shrink();
 
     return SizedBox(
-      height: 110,
+      height: 118,
       child: ListView(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.fromLTRB(
-          ViroSpacing.screenHorizontal,
-          ViroSpacing.xs,
-          ViroSpacing.screenHorizontal,
-          ViroSpacing.sm,
+        padding: const EdgeInsets.symmetric(
+          horizontal: ViroSpacing.screenHorizontal,
         ),
         children: cards,
       ),

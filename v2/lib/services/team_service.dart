@@ -36,39 +36,49 @@ class TeamService {
     });
   }
 
-  /// Équipes où [uid] est joueur ou coach.
+  /// Équipes où [uid] (et [alternateUid] si fourni) est joueur ou coach.
   Stream<List<ClubTeam>> watchUserTeams({
     required String clubId,
     required String uid,
+    String? alternateUid,
   }) {
-    final playerStream = _teams(clubId)
-        .where(FirestoreFields.playerIds, arrayContains: uid)
-        .snapshots()
-        .map(
-          (snap) => snap.docs
-              .map((d) => ClubTeam.fromFirestore(clubId: clubId, doc: d))
-              .toList(),
-        );
+    final ids = <String>{uid};
+    final alt = alternateUid;
+    if (alt != null && alt.isNotEmpty) ids.add(alt);
 
-    final coachStream = _teams(clubId)
-        .where(FirestoreFields.coachIds, arrayContains: uid)
-        .snapshots()
-        .map(
-          (snap) => snap.docs
-              .map((d) => ClubTeam.fromFirestore(clubId: clubId, doc: d))
-              .toList(),
-        );
+    final streams = <Stream<List<ClubTeam>>>[];
+    for (final id in ids) {
+      streams.add(
+        _teams(clubId)
+            .where(FirestoreFields.playerIds, arrayContains: id)
+            .snapshots()
+            .map(
+              (snap) => snap.docs
+                  .map((d) => ClubTeam.fromFirestore(clubId: clubId, doc: d))
+                  .toList(),
+            ),
+      );
+      streams.add(
+        _teams(clubId)
+            .where(FirestoreFields.coachIds, arrayContains: id)
+            .snapshots()
+            .map(
+              (snap) => snap.docs
+                  .map((d) => ClubTeam.fromFirestore(clubId: clubId, doc: d))
+                  .toList(),
+            ),
+      );
+    }
 
-    return combineLatestListStreams([playerStream, coachStream]).map((teams) {
+    return combineLatestListStreams(streams).map((teams) {
       final byId = <String, ClubTeam>{};
       for (final team in teams) {
         byId[team.id] = team;
       }
-      final merged = byId.values.toList()
+      return byId.values.toList()
         ..sort(
           (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
         );
-      return merged;
     });
   }
 

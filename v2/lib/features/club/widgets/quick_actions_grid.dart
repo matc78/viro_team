@@ -104,30 +104,31 @@ class _QuickActionCell extends StatelessWidget {
   }
 }
 
-/// Accès rapides membre : Mes équipes, Tournois.
+/// Accès rapides membre : Planning, Mes équipes.
 class MemberQuickActionsGrid extends StatelessWidget {
   const MemberQuickActionsGrid({
     super.key,
+    this.onPlanning,
     this.onMyTeams,
-    this.onTournaments,
   });
 
+  final VoidCallback? onPlanning;
   final VoidCallback? onMyTeams;
-  final VoidCallback? onTournaments;
 
   @override
   Widget build(BuildContext context) {
     return _QuickActionsGridBase(
       actions: [
+        if (onPlanning != null)
+          QuickAction(
+            label: 'Planning',
+            icon: ViroIcons.calendar,
+            onTap: onPlanning,
+          ),
         QuickAction(
           label: 'Mes équipes',
           icon: ViroIcons.users,
           onTap: onMyTeams,
-        ),
-        QuickAction(
-          label: 'Tournois',
-          icon: ViroIcons.trophy,
-          onTap: onTournaments,
         ),
       ],
     );

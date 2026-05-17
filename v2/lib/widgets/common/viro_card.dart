@@ -10,6 +10,7 @@ class ViroCard extends StatelessWidget {
     super.key,
     required this.child,
     this.onTap,
+    this.onLongPress,
     this.padding,
     this.margin,
     this.accentColor,
@@ -18,6 +19,7 @@ class ViroCard extends StatelessWidget {
 
   final Widget child;
   final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
   final EdgeInsetsGeometry? padding;
   final EdgeInsetsGeometry? margin;
   final Color? accentColor;
@@ -65,10 +67,11 @@ class ViroCard extends StatelessWidget {
       ),
     );
 
-    if (onTap == null) return content;
+    if (onTap == null && onLongPress == null) return content;
 
     return ViroPressable(
       onTap: onTap,
+      onLongPress: onLongPress,
       floating: elevated,
       borderRadius: radius,
       child: content,
@@ -99,21 +102,45 @@ class ViroStatsCard extends StatelessWidget {
       onTap: onTap,
       padding: const EdgeInsets.symmetric(
         horizontal: ViroSpacing.md,
-        vertical: ViroSpacing.md,
+        vertical: ViroSpacing.sm + 2,
       ),
       margin: EdgeInsets.zero,
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: textTheme.bodyMedium),
-          const SizedBox(height: 4),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: textTheme.bodySmall?.copyWith(
+              color: ViroColors.gray600,
+              fontWeight: FontWeight.w500,
+              height: 1.2,
+            ),
+          ),
+          const SizedBox(height: ViroSpacing.xs),
           Text(
             value,
-            style: textTheme.titleMedium?.copyWith(color: ViroColors.primary800),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: textTheme.titleSmall?.copyWith(
+              color: ViroColors.primary800,
+              fontWeight: FontWeight.w700,
+              height: 1.2,
+            ),
           ),
           if (subtitle != null) ...[
             const SizedBox(height: 2),
-            Text(subtitle!, style: textTheme.bodySmall),
+            Text(
+              subtitle!,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: textTheme.bodySmall?.copyWith(
+                color: ViroColors.gray600,
+                height: 1.2,
+              ),
+            ),
           ],
         ],
       ),

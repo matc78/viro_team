@@ -5,6 +5,7 @@ import 'package:viro_team_v2/models/club_announcement.dart';
 import 'package:viro_team_v2/models/club_event.dart';
 import 'package:viro_team_v2/models/club_member.dart';
 import 'package:viro_team_v2/providers/service_providers.dart';
+import 'package:viro_team_v2/services/event_service.dart';
 
 class ClubEventsState {
   const ClubEventsState({
@@ -37,23 +38,50 @@ final clubEventsProvider =
   final auth = ref.watch(authStateProvider).value;
   if (auth == null) return Stream.value(ClubEventsState.empty);
 
-  return ref.read(eventServiceProvider).watchUpcomingEventsForClub(
-        clubId: clubId,
-        uid: auth.uid,
-      ).map((events) {
-    final pending = <ClubEvent>[];
-    final upcoming = <ClubEvent>[];
+  final authUid = auth.uid;
+  final eventService = ref.read(eventServiceProvider);
 
-    for (final event in events) {
-      if (event.rsvpFor(auth.uid) == RsvpStatus.none) {
-        pending.add(event);
-      } else {
-        upcoming.add(event);
-      }
-    }
+  return eventService.watchClubMember(clubId: clubId, uid: authUid).asyncExpand(
+    (member) {
+      final audienceId = member?.memberId ?? authUid;
+      return eventService
+          .watchUpcomingEventsForClubMember(
+            clubId: clubId,
+            audienceId: audienceId,
+            authUid: authUid,
+          )
+          .map((events) {
+        final pending = <ClubEvent>[];
+        final upcoming = <ClubEvent>[];
 
-    return ClubEventsState(pending: pending, upcoming: upcoming);
-  });
+        for (final event in events) {
+          if (!EventService.isWithinUpcomingPlanningWindow(event.date)) {
+            continue;
+          }
+
+          upcoming.add(event);
+
+          final invitedAsPlayer = event.isInvitedAsPlayer(
+            authUid,
+            clubAudienceId: audienceId,
+          );
+          final needsRsvp = invitedAsPlayer &&
+              event.rsvpStatusForUser(
+                authUid,
+                clubAudienceId: audienceId,
+              ) ==
+                  RsvpStatus.none;
+
+          if (needsRsvp) pending.add(event);
+        }
+
+        return ClubEventsState(
+          pending: EventService.sortedByDate(pending),
+          upcoming: EventService.sortedByDate(upcoming),
+        );
+      });
+    },
+  );
 });
 
 final clubAnnouncementsProvider =
@@ -69,6 +97,6 @@ final clubAttendanceRateProvider =
   if (auth == null) return null;
   return ref.read(eventServiceProvider).computeAttendanceRate(
         clubId: clubId,
-        uid: auth.uid,
+        authUid: auth.uid,
       );
 });

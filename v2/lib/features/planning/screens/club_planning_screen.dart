@@ -5,6 +5,8 @@ import 'package:viro_team_v2/config/routes.dart';
 import 'package:viro_team_v2/config/viro_colors.dart';
 import 'package:viro_team_v2/config/viro_icons.dart';
 import 'package:viro_team_v2/config/viro_spacing.dart';
+import 'package:viro_team_v2/constants/firestore_fields.dart';
+import 'package:viro_team_v2/features/club/providers/club_detail_providers.dart';
 import 'package:viro_team_v2/features/planning/providers/planning_providers.dart';
 import 'package:viro_team_v2/providers/service_providers.dart';
 import 'package:viro_team_v2/features/planning/utils/planning_event_display.dart';
@@ -73,29 +75,20 @@ class _ClubPlanningScreenState extends ConsumerState<ClubPlanningScreen> {
     );
   }
 
-  String? _teamLabel(ClubEvent event, Map<String, ClubTeam> teamsById) {
-    if (event.allTeams) return 'Tout le club';
-    if (event.teamIds.isEmpty) return null;
-    final names = event.teamIds
-        .map((id) => teamsById[id]?.name)
-        .whereType<String>()
-        .toList();
-    if (names.isEmpty) return null;
-    return names.join(', ');
-  }
-
   void _showEventSheet(
     ClubEvent event,
-    String? teamLabel,
-    Set<String> excludeCoachUids,
-  ) {
+    Map<String, ClubTeam> teamsById, {
+    required bool canManage,
+  }) {
     PlanningEventDetailSheet.show(
       context: context,
       ref: ref,
       clubId: widget.clubId,
       event: event,
-      teamLabel: teamLabel,
-      excludeCoachUids: excludeCoachUids,
+      teamLabel: PlanningEventDisplay.teamLabel(event, teamsById),
+      excludeCoachUids:
+          PlanningEventDisplay.coachUidsToExclude(event, teamsById),
+      canManageEvents: canManage,
       onCanceled: () {},
     );
   }
@@ -103,9 +96,13 @@ class _ClubPlanningScreenState extends ConsumerState<ClubPlanningScreen> {
   @override
   Widget build(BuildContext context) {
     final clubId = widget.clubId;
-    final eventsAsync = ref.watch(
-      clubPlanningEventsProvider((clubId: clubId, day: _selectedDay)),
-    );
+    final member = ref.watch(clubMemberProvider(clubId)).value;
+    final canManage = member != null &&
+        MemberRoleHierarchy.isCoachOrAbove(member.role);
+    final dayParams = (clubId: clubId, day: _selectedDay);
+    final eventsAsync = canManage
+        ? ref.watch(clubPlanningEventsProvider(dayParams))
+        : ref.watch(memberClubPlanningEventsProvider(dayParams));
     final teamsAsync = ref.watch(clubTeamsProvider(clubId));
 
     final teamsById = teamsAsync.value?.fold<Map<String, ClubTeam>>(
@@ -122,13 +119,15 @@ class _ClubPlanningScreenState extends ConsumerState<ClubPlanningScreen> {
         ),
         title: const Text('Planning'),
       ),
-      floatingActionButton: ViroFloatingActionButton(
-        icon: ViroIcons.add,
-        onPressed: () {
-          final iso = _selectedDay.toIso8601String().split('T').first;
-          context.push(AppRoutes.clubAddEventPath(clubId, date: iso));
-        },
-      ),
+      floatingActionButton: canManage
+          ? ViroFloatingActionButton(
+              icon: ViroIcons.add,
+              onPressed: () {
+                final iso = _selectedDay.toIso8601String().split('T').first;
+                context.push(AppRoutes.clubAddEventPath(clubId, date: iso));
+              },
+            )
+          : null,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -156,7 +155,9 @@ class _ClubPlanningScreenState extends ConsumerState<ClubPlanningScreen> {
                     child: Padding(
                       padding: const EdgeInsets.all(ViroSpacing.xl),
                       child: Text(
-                        'Aucun événement ce jour-là.\nAppuyez sur + pour en créer un.',
+                        canManage
+                            ? 'Aucun événement ce jour-là.\nAppuyez sur + pour en créer un.'
+                            : 'Aucun événement ce jour-là.',
                         textAlign: TextAlign.center,
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                               color: ViroColors.gray600,
@@ -178,7 +179,8 @@ class _ClubPlanningScreenState extends ConsumerState<ClubPlanningScreen> {
                       const SizedBox(height: ViroSpacing.sm),
                   itemBuilder: (context, index) {
                     final event = events[index];
-                    final label = _teamLabel(event, teamsById);
+                    final label =
+                        PlanningEventDisplay.teamLabel(event, teamsById);
                     final excludeCoaches =
                         PlanningEventDisplay.coachUidsToExclude(
                       event,
@@ -190,8 +192,8 @@ class _ClubPlanningScreenState extends ConsumerState<ClubPlanningScreen> {
                       excludeCoachUids: excludeCoaches,
                       onTap: () => _showEventSheet(
                         event,
-                        label,
-                        excludeCoaches,
+                        teamsById,
+                        canManage: canManage,
                       ),
                     );
                   },

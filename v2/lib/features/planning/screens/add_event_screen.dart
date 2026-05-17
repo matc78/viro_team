@@ -5,7 +5,9 @@ import 'package:intl/intl.dart';
 import 'package:viro_team_v2/config/viro_colors.dart';
 import 'package:viro_team_v2/config/viro_icons.dart';
 import 'package:viro_team_v2/config/viro_spacing.dart';
+import 'package:viro_team_v2/constants/firestore_fields.dart';
 import 'package:viro_team_v2/features/auth/providers/auth_providers.dart';
+import 'package:viro_team_v2/features/club/providers/club_detail_providers.dart';
 import 'package:viro_team_v2/features/teams/providers/team_providers.dart';
 import 'package:viro_team_v2/models/club_event.dart';
 import 'package:viro_team_v2/models/club_team.dart';
@@ -235,6 +237,17 @@ class _AddEventScreenState extends ConsumerState<AddEventScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final member = ref.watch(clubMemberProvider(widget.clubId)).value;
+    if (member != null &&
+        !MemberRoleHierarchy.isCoachOrAbove(member.role)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) context.pop();
+      });
+      return const ViroScaffold(
+        body: Center(child: Text('Réservé aux coachs et administrateurs')),
+      );
+    }
+
     final teamsAsync = ref.watch(clubTeamsProvider(widget.clubId));
 
     return ViroScaffold(

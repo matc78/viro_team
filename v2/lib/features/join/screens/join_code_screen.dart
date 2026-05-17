@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:viro_team_v2/config/routes.dart';
@@ -26,7 +27,7 @@ class _JoinCodeScreenState extends ConsumerState<JoinCodeScreen> {
   }
 
   Future<void> _validate() async {
-    final code = _codeController.text.trim();
+    final code = _codeController.text.trim().toUpperCase();
     if (code.isEmpty) return;
 
     setState(() => _loading = true);
@@ -71,11 +72,19 @@ class _JoinCodeScreenState extends ConsumerState<JoinCodeScreen> {
               const SizedBox(height: ViroSpacing.xl),
               TextField(
                 controller: _codeController,
-                textCapitalization: TextCapitalization.characters,
+                autocorrect: false,
                 decoration: const InputDecoration(
                   labelText: 'Code d\'invitation',
                   hintText: 'Ex. ASMP1K2E',
                 ),
+                inputFormatters: [
+                  TextInputFormatter.withFunction(
+                    (oldValue, newValue) => TextEditingValue(
+                      text: newValue.text.toUpperCase(),
+                      selection: newValue.selection,
+                    ),
+                  ),
+                ],
                 onSubmitted: (_) => _validate(),
               ),
               if (pending.error != null) ...[

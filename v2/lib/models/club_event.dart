@@ -52,6 +52,7 @@ class ClubEvent {
     this.allTeams = false,
     this.teamMemberIds = const [],
     this.rsvp = const {},
+    this.legacyAttendance = const {},
     this.canceled = false,
     this.seriesId,
   });
@@ -70,6 +71,8 @@ class ClubEvent {
   final bool allTeams;
   final List<String> teamMemberIds;
   final Map<String, String> rsvp;
+  /// Présences v1 (`attendance`) — utilisé si `rsvp` est vide.
+  final Map<String, dynamic> legacyAttendance;
   final bool canceled;
   final String? seriesId;
 
@@ -78,6 +81,72 @@ class ClubEvent {
 
   RsvpStatus rsvpFor(String uid) =>
       RsvpStatus.fromString(rsvp[uid]);
+
+  /// Clé RSVP / audience réellement présente dans [teamMemberIds].
+  String audienceKeyFor(String authUid, {String? clubAudienceId}) {
+    final primary = clubAudienceId ?? authUid;
+    if (teamMemberIds.contains(primary)) return primary;
+    if (teamMemberIds.contains(authUid)) return authUid;
+    return primary;
+  }
+
+  bool isInvitedAsPlayer(
+    String authUid, {
+    String? clubAudienceId,
+  }) =>
+      teamMemberIds.contains(
+        audienceKeyFor(authUid, clubAudienceId: clubAudienceId),
+      );
+
+  RsvpStatus rsvpStatusForUser(
+    String authUid, {
+    String? clubAudienceId,
+  }) {
+    final keys = <String>{
+      audienceKeyFor(authUid, clubAudienceId: clubAudienceId),
+      authUid,
+    };
+    for (final id in teamMemberIds) {
+      if (rsvp.containsKey(id)) keys.add(id);
+    }
+    for (final key in keys) {
+      final value = rsvp[key];
+      if (value != null) {
+        return RsvpStatus.fromString(value);
+      }
+    }
+    if (legacyAttendance.isNotEmpty) {
+      for (final key in keys) {
+        final entry = legacyAttendance[key];
+        final mapped = _rsvpFromLegacyAttendance(entry);
+        if (mapped != RsvpStatus.none) return mapped;
+      }
+    }
+    return RsvpStatus.none;
+  }
+
+  static RsvpStatus _rsvpFromLegacyAttendance(dynamic entry) {
+    final status = entry is Map
+        ? entry[FirestoreFields.status] as String?
+        : entry?.toString();
+    return switch (status) {
+      'present' || 'yes' => RsvpStatus.yes,
+      'absent' || 'no' => RsvpStatus.no,
+      _ => RsvpStatus.none,
+    };
+  }
+
+  static String normalizeEventType(String? raw) {
+    final t = raw?.trim().toLowerCase() ?? '';
+    return switch (t) {
+      'training' || 'entraînement' || 'entrainement' => EventTypes.training,
+      'match' => EventTypes.match,
+      'tournament' || 'tournoi' => EventTypes.tournament,
+      'other' || 'autre' || 'évènement' || 'événement' || 'evenement' =>
+        EventTypes.other,
+      _ => raw != null && raw.isNotEmpty ? raw : EventTypes.other,
+    };
+  }
 
   ({int yes, int no, int none}) get rsvpCounts => rsvpCountsExcluding({});
 
@@ -105,20 +174,44 @@ class ClubEvent {
 
   bool get isUpcoming => !canceled && !date.isBefore(_startOfDay(DateTime.now()));
 
+  /// Jour calendaire de l'événement (indépendant du fuseau à la lecture).
+  static DateTime calendarDateFromFirestore(Map<String, dynamic> data) {
+    final dateId = data[FirestoreFields.dateId] as String?;
+    if (dateId != null && RegExp(r'^\d{8}$').hasMatch(dateId)) {
+      return DateTime(
+        int.parse(dateId.substring(0, 4)),
+        int.parse(dateId.substring(4, 6)),
+        int.parse(dateId.substring(6, 8)),
+      );
+    }
+
+    final ts = data[FirestoreFields.date] as Timestamp?;
+    if (ts == null) return _startOfDay(DateTime.now());
+
+    final local = ts.toDate();
+    // Legacy : minuit local (ex. Europe) → souvent J-1 à 22h en UTC à la lecture.
+    if (local.hour >= 22) {
+      final next = local.add(const Duration(days: 1));
+      return DateTime(next.year, next.month, next.day);
+    }
+    return _startOfDay(local);
+  }
+
   factory ClubEvent.fromFirestore({
     required String clubId,
     required DocumentSnapshot<Map<String, dynamic>> doc,
   }) {
     final data = doc.data() ?? {};
     final rsvpRaw = data[FirestoreFields.rsvp] as Map<String, dynamic>? ?? {};
+    final attendanceRaw =
+        data[FirestoreFields.attendance] as Map<String, dynamic>? ?? {};
 
     return ClubEvent(
       id: doc.id,
       clubId: clubId,
-      type: data[FirestoreFields.type] as String? ?? EventTypes.other,
+      type: normalizeEventType(data[FirestoreFields.type] as String?),
       title: data[FirestoreFields.title] as String? ?? '',
-      date: (data[FirestoreFields.date] as Timestamp?)?.toDate() ??
-          DateTime.now(),
+      date: calendarDateFromFirestore(data),
       location: data[FirestoreFields.location] as String?,
       startTime: data[FirestoreFields.startTime] as String?,
       endTime: data[FirestoreFields.endTime] as String?,
@@ -134,6 +227,7 @@ class ClubEvent {
               .toList() ??
           [],
       rsvp: rsvpRaw.map((k, v) => MapEntry(k, v.toString())),
+      legacyAttendance: attendanceRaw,
       canceled: data[FirestoreFields.canceled] as bool? ?? false,
       seriesId: data[FirestoreFields.seriesId] as String?,
     );

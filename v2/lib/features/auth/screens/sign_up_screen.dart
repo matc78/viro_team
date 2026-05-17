@@ -32,6 +32,34 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
   final _passwordController = TextEditingController();
   bool _loading = false;
   String? _error;
+  bool _prefillApplied = false;
+
+  void _applyInvitationPrefill(PendingInvitationState pending) {
+    if (_prefillApplied || !pending.hasInvitation) return;
+
+    final inv = pending.invitation!;
+    var applied = false;
+
+    final first = inv.firstName?.trim();
+    if (first != null && first.isNotEmpty && _firstNameController.text.isEmpty) {
+      _firstNameController.text = first;
+      applied = true;
+    }
+
+    final last = inv.lastName?.trim();
+    if (last != null && last.isNotEmpty && _lastNameController.text.isEmpty) {
+      _lastNameController.text = last;
+      applied = true;
+    }
+
+    final email = inv.email?.trim();
+    if (email != null && email.isNotEmpty && _emailController.text.isEmpty) {
+      _emailController.text = email;
+      applied = true;
+    }
+
+    if (applied) _prefillApplied = true;
+  }
 
   @override
   void initState() {
@@ -45,6 +73,9 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
       if (code != null && code.isNotEmpty) {
         ref.read(pendingInviteCodeProvider.notifier).setCode(code);
         ref.read(pendingInvitationProvider.notifier).lookupCode(code);
+      }
+      if (intent == SignUpIntent.join) {
+        _applyInvitationPrefill(ref.read(pendingInvitationProvider));
       }
     });
   }
@@ -109,6 +140,10 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
   Widget build(BuildContext context) {
     final intent = ref.watch(signUpIntentProvider);
     final isJoin = intent == SignUpIntent.join;
+
+    ref.listen(pendingInvitationProvider, (_, next) {
+      if (isJoin) _applyInvitationPrefill(next);
+    });
 
     return ViroScaffold(
       appBar: ViroAppBar(

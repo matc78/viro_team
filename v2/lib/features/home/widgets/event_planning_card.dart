@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:viro_team_v2/config/viro_colors.dart';
 import 'package:viro_team_v2/config/viro_icons.dart';
 import 'package:viro_team_v2/config/viro_spacing.dart';
+import 'package:viro_team_v2/features/planning/widgets/planning_rsvp_badge.dart';
 import 'package:viro_team_v2/models/club_event.dart';
 import 'package:viro_team_v2/utils/date_format_fr.dart';
 import 'package:viro_team_v2/widgets/common/club_chip.dart';
@@ -13,21 +14,35 @@ class EventPlanningCard extends StatelessWidget {
     required this.event,
     required this.clubName,
     required this.clubColor,
-    required this.rsvpStatus,
-    required this.onToggleRsvp,
+    required this.coachView,
+    this.coachRsvpCounts,
+    this.presentCount,
+    this.rsvpStatus,
     this.showRsvpButtons = false,
-    required this.onPresent,
-    required this.onAbsent,
+    this.onCoachTap,
+    this.onLongPress,
+    this.onToggleRsvp,
+    this.onPresent,
+    this.onAbsent,
   });
 
   final ClubEvent event;
   final String clubName;
   final Color clubColor;
-  final RsvpStatus rsvpStatus;
-  final VoidCallback onToggleRsvp;
+
+  /// Coach : badges présents / absents / en attente.
+  final bool coachView;
+  final ({int yes, int no, int none})? coachRsvpCounts;
+
+  /// Joueur : nombre de présents + RSVP personnel.
+  final int? presentCount;
+  final RsvpStatus? rsvpStatus;
   final bool showRsvpButtons;
-  final VoidCallback onPresent;
-  final VoidCallback onAbsent;
+  final VoidCallback? onCoachTap;
+  final VoidCallback? onLongPress;
+  final VoidCallback? onToggleRsvp;
+  final VoidCallback? onPresent;
+  final VoidCallback? onAbsent;
 
   IconData get _typeIcon => switch (event.type) {
         EventTypes.training => ViroIcons.whistle,
@@ -43,7 +58,10 @@ class EventPlanningCard extends StatelessWidget {
     final timeStr = formatEventTime(event.startTime);
 
     return ViroCard(
-      onTap: showRsvpButtons ? null : onToggleRsvp,
+      onTap: coachView
+          ? onCoachTap
+          : (showRsvpButtons ? null : onToggleRsvp),
+      onLongPress: onLongPress,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -72,31 +90,51 @@ class EventPlanningCard extends StatelessWidget {
             style: theme.bodySmall?.copyWith(color: ViroColors.gray600),
           ),
           const SizedBox(height: ViroSpacing.sm),
-          if (showRsvpButtons)
+          if (coachView && coachRsvpCounts != null)
+            Center(child: PlanningRsvpSummaryRow(counts: coachRsvpCounts!))
+          else ...[
             Row(
               children: [
-                Expanded(
-                  child: _StatusChip(
-                    label: 'Présent',
+                Expanded(child: _buildPlayerRsvpRow(context)),
+                if (presentCount != null) ...[
+                  const SizedBox(width: ViroSpacing.md),
+                  PlanningRsvpCountBadge(
+                    icon: ViroIcons.check,
+                    count: presentCount!,
                     color: ViroColors.success,
-                    onTap: onPresent,
                   ),
-                ),
-                const SizedBox(width: ViroSpacing.sm),
-                Expanded(
-                  child: _StatusChip(
-                    label: 'Absent',
-                    color: ViroColors.error,
-                    onTap: onAbsent,
-                  ),
-                ),
+                ],
               ],
-            )
-          else
-            _StatusBadge(status: rsvpStatus),
+            ),
+          ],
         ],
       ),
     );
+  }
+
+  Widget _buildPlayerRsvpRow(BuildContext context) {
+    if (showRsvpButtons) {
+      return Row(
+        children: [
+          Expanded(
+            child: _StatusChip(
+              label: 'Présent',
+              color: ViroColors.success,
+              onTap: onPresent!,
+            ),
+          ),
+          const SizedBox(width: ViroSpacing.sm),
+          Expanded(
+            child: _StatusChip(
+              label: 'Absent',
+              color: ViroColors.error,
+              onTap: onAbsent!,
+            ),
+          ),
+        ],
+      );
+    }
+    return _StatusBadge(status: rsvpStatus ?? RsvpStatus.none);
   }
 }
 

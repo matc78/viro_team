@@ -23,6 +23,7 @@ class PlanningEventDetailSheet extends ConsumerStatefulWidget {
     required this.event,
     this.teamLabel,
     this.excludeCoachUids = const {},
+    this.canManageEvents = true,
     required this.onCanceled,
   });
 
@@ -30,6 +31,7 @@ class PlanningEventDetailSheet extends ConsumerStatefulWidget {
   final ClubEvent event;
   final String? teamLabel;
   final Set<String> excludeCoachUids;
+  final bool canManageEvents;
   final VoidCallback onCanceled;
 
   static Future<void> show({
@@ -39,19 +41,43 @@ class PlanningEventDetailSheet extends ConsumerStatefulWidget {
     required ClubEvent event,
     String? teamLabel,
     Set<String> excludeCoachUids = const {},
+    bool canManageEvents = true,
     required VoidCallback onCanceled,
   }) {
     return showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
+      isDismissible: true,
+      enableDrag: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => PlanningEventDetailSheet(
-        clubId: clubId,
-        event: event,
-        teamLabel: teamLabel,
-        excludeCoachUids: excludeCoachUids,
-        onCanceled: onCanceled,
-      ),
+      builder: (sheetContext) {
+        final height = MediaQuery.sizeOf(sheetContext).height;
+        return SizedBox(
+          height: height,
+          child: Column(
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => Navigator.pop(sheetContext),
+                  behavior: HitTestBehavior.opaque,
+                  child: const ColoredBox(color: Colors.transparent),
+                ),
+              ),
+              SizedBox(
+                height: height * 0.72,
+                child: PlanningEventDetailSheet(
+                  clubId: clubId,
+                  event: event,
+                  teamLabel: teamLabel,
+                  excludeCoachUids: excludeCoachUids,
+                  canManageEvents: canManageEvents,
+                  onCanceled: onCanceled,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -227,37 +253,31 @@ class _PlanningEventDetailSheetState
     final playerCount =
         event.playerMemberIds(widget.excludeCoachUids).length;
 
-    return DraggableScrollableSheet(
-      initialChildSize: 0.72,
-      minChildSize: 0.4,
-      maxChildSize: 0.92,
-      builder: (context, scrollController) {
-        return DecoratedBox(
-          decoration: const BoxDecoration(
-            color: ViroColors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        color: ViroColors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Column(
+        children: [
+          const SizedBox(height: ViroSpacing.sm),
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: ViroColors.gray300,
+              borderRadius: BorderRadius.circular(2),
+            ),
           ),
-          child: Column(
-            children: [
-              const SizedBox(height: ViroSpacing.sm),
-              Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: ViroColors.gray300,
-                  borderRadius: BorderRadius.circular(2),
-                ),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(
+                ViroSpacing.lg,
+                ViroSpacing.md,
+                ViroSpacing.lg,
+                ViroSpacing.md,
               ),
-              Expanded(
-                child: ListView(
-                  controller: scrollController,
-                  padding: const EdgeInsets.fromLTRB(
-                    ViroSpacing.lg,
-                    ViroSpacing.md,
-                    ViroSpacing.lg,
-                    ViroSpacing.md,
-                  ),
-                  children: [
+              children: [
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -379,24 +399,24 @@ class _PlanningEventDetailSheetState
                     ),
                     const SizedBox(height: ViroSpacing.sm),
                     _buildMembersList(theme),
-                    const SizedBox(height: ViroSpacing.lg),
-                    OutlinedButton(
-                      onPressed: _cancelEvent,
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: ViroColors.error,
-                        side: const BorderSide(color: ViroColors.error),
-                        minimumSize: const Size.fromHeight(48),
+                    if (widget.canManageEvents) ...[
+                      const SizedBox(height: ViroSpacing.lg),
+                      OutlinedButton(
+                        onPressed: _cancelEvent,
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: ViroColors.error,
+                          side: const BorderSide(color: ViroColors.error),
+                          minimumSize: const Size.fromHeight(48),
+                        ),
+                        child: const Text('Annuler l\'événement'),
                       ),
-                      child: const Text('Annuler l\'événement'),
-                    ),
-                    SizedBox(height: MediaQuery.paddingOf(context).bottom),
-                  ],
-                ),
-              ),
-            ],
+                    ],
+                SizedBox(height: MediaQuery.paddingOf(context).bottom),
+              ],
+            ),
           ),
-        );
-      },
+        ],
+      ),
     );
   }
 }

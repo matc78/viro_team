@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:viro_team_v2/features/auth/providers/auth_providers.dart';
+import 'package:viro_team_v2/features/club/providers/club_detail_providers.dart';
 import 'package:viro_team_v2/models/club_team.dart';
 import 'package:viro_team_v2/providers/service_providers.dart';
 
@@ -8,9 +9,13 @@ final myTeamsProvider =
   final auth = ref.watch(authStateProvider).value;
   if (auth == null) return Stream.value([]);
 
+  final member = ref.watch(clubMemberProvider(clubId)).value;
+  final audienceId = member?.memberId ?? auth.uid;
+
   return ref.read(teamServiceProvider).watchUserTeams(
         clubId: clubId,
-        uid: auth.uid,
+        uid: audienceId,
+        alternateUid: auth.uid,
       );
 });
 

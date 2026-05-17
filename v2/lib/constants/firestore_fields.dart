@@ -74,6 +74,7 @@ abstract final class FirestoreFields {
   static const String location = 'location';
   static const String allTeams = 'allTeams';
   static const String date = 'date';
+  static const String dateId = 'dateId';
   static const String startTime = 'startTime';
   static const String endTime = 'endTime';
   static const String meetingTime = 'meetingTime';

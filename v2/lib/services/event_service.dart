@@ -25,6 +25,11 @@ class EventService {
           .doc(clubId)
           .collection(ProjectConfig.announcementsSubcollection);
 
+  CollectionReference<Map<String, dynamic>> _teams(String clubId) => _db
+      .collection(ProjectConfig.clubsCollection)
+      .doc(clubId)
+      .collection(ProjectConfig.teamsSubcollection);
+
   DocumentReference<Map<String, dynamic>> _memberRef(
     String clubId,
     String uid,
@@ -43,44 +48,319 @@ class EventService {
   static DateTime _startOfDay(DateTime d) =>
       DateTime(d.year, d.month, d.day);
 
-  static DateTime _endOfDay(DateTime d) =>
-      _startOfDay(d).add(const Duration(days: 1));
+  /// Même jour calendaire (fuseau local).
+  static bool sameCalendarDay(DateTime a, DateTime b) {
+    final da = _startOfDay(a);
+    final db = _startOfDay(b);
+    return da.year == db.year && da.month == db.month && da.day == db.day;
+  }
+
+  static String dateIdFor(DateTime day) {
+    final d = _startOfDay(day);
+    final m = d.month.toString().padLeft(2, '0');
+    final dayStr = d.day.toString().padLeft(2, '0');
+    return '${d.year}$m$dayStr';
+  }
+
+  /// Borne basse Firestore : inclut les événements « minuit local » stockés en UTC.
+  static Timestamp get _upcomingQueryLowerBound => Timestamp.fromDate(
+        _startOfToday().subtract(const Duration(days: 1)),
+      );
+
+  static List<ClubEvent> _filterUpcomingWindow(Iterable<ClubEvent> events) =>
+      events
+          .where((e) => !e.canceled && isWithinUpcomingPlanningWindow(e.date))
+          .toList();
+
+  /// Fenêtre « Planning à venir » : 14 jours calendaires à partir d'aujourd'hui.
+  static const int upcomingPlanningHorizonDays = 14;
+
+  static bool isWithinUpcomingPlanningWindow(DateTime eventDate) {
+    final start = _startOfToday();
+    final endExclusive =
+        start.add(const Duration(days: upcomingPlanningHorizonDays));
+    final day = _startOfDay(eventDate);
+    return !day.isBefore(start) && day.isBefore(endExclusive);
+  }
 
   Stream<List<ClubEvent>> watchUpcomingEventsForClub({
     required String clubId,
     required String uid,
+    String? alternateUid,
+  }) {
+    final lowerBound = _upcomingQueryLowerBound;
+    final alt = alternateUid;
+    final streams = <Stream<List<ClubEvent>>>[
+      _watchUpcomingEventsForClubAudience(
+        clubId: clubId,
+        uid: uid,
+        lowerBound: lowerBound,
+      ),
+      if (alt != null && alt.isNotEmpty && alt != uid)
+        _watchUpcomingEventsForClubAudience(
+          clubId: clubId,
+          uid: alt,
+          lowerBound: lowerBound,
+        ),
+    ];
+
+    return combineLatestListStreams(streams).map(_dedupeEvents);
+  }
+
+  Stream<List<ClubEvent>> _watchUpcomingEventsForClubAudience({
+    required String clubId,
+    required String uid,
+    required Timestamp lowerBound,
   }) {
     return _events(clubId)
         .where(FirestoreFields.teamMemberIds, arrayContains: uid)
-        .where(
-          FirestoreFields.date,
-          isGreaterThanOrEqualTo: Timestamp.fromDate(_startOfToday()),
-        )
+        .where(FirestoreFields.date, isGreaterThanOrEqualTo: lowerBound)
         .orderBy(FirestoreFields.date)
         .snapshots()
-        .map((snap) => snap.docs
-            .map((d) => ClubEvent.fromFirestore(clubId: clubId, doc: d))
-            .where((e) => !e.canceled)
-            .toList());
+        .map(
+          (snap) => sortedByDate(
+            _filterUpcomingWindow(
+              snap.docs.map(
+                (d) => ClubEvent.fromFirestore(clubId: clubId, doc: d),
+              ),
+            ),
+          ),
+        );
   }
 
-  Stream<List<ClubEvent>> watchUpcomingEventsForClubs({
+  /// Événements des équipes où [authUid] est coach (hors convocation joueur).
+  Stream<List<ClubEvent>> watchUpcomingEventsAsCoach({
+    required String clubId,
+    required String authUid,
+  }) {
+    return _teams(clubId)
+        .where(FirestoreFields.coachIds, arrayContains: authUid)
+        .snapshots()
+        .asyncExpand((teamsSnap) {
+      final teamIds = teamsSnap.docs.map((d) => d.id).toList();
+      if (teamIds.isEmpty) return Stream.value(<ClubEvent>[]);
+
+      final lowerBound = _upcomingQueryLowerBound;
+      final streams = teamIds.map((teamId) {
+        return _events(clubId)
+            .where(FirestoreFields.teamIds, arrayContains: teamId)
+            .where(
+              FirestoreFields.date,
+              isGreaterThanOrEqualTo: lowerBound,
+            )
+            .orderBy(FirestoreFields.date)
+            .snapshots()
+            .map(
+              (snap) => sortedByDate(
+                _filterUpcomingWindow(
+                  snap.docs.map(
+                    (d) => ClubEvent.fromFirestore(clubId: clubId, doc: d),
+                  ),
+                ),
+              ),
+            );
+      }).toList();
+
+      return combineLatestListStreams(streams).map(_dedupeEvents);
+    });
+  }
+
+  /// Joueur convoqué + entraînements des équipes coachées.
+  Stream<List<ClubEvent>> watchUpcomingEventsForClubMember({
+    required String clubId,
+    required String audienceId,
+    required String authUid,
+  }) {
+    final asPlayer = watchUpcomingEventsForClub(
+      clubId: clubId,
+      uid: audienceId,
+      alternateUid: authUid,
+    );
+    final asCoach =
+        watchUpcomingEventsAsCoach(clubId: clubId, authUid: authUid);
+    final asTeamPlayer = watchUpcomingEventsForPlayerTeams(
+      clubId: clubId,
+      audienceId: audienceId,
+      authUid: authUid,
+    );
+
+    return combineLatestListStreams([asPlayer, asCoach, asTeamPlayer])
+        .map(_dedupeEvents);
+  }
+
+  /// Événements des équipes du joueur (compat. v1 : `teamIds` / `teamName`).
+  Stream<List<ClubEvent>> watchUpcomingEventsForPlayerTeams({
+    required String clubId,
+    required String audienceId,
+    required String authUid,
+  }) {
+    return _teams(clubId).snapshots().asyncExpand((teamsSnap) {
+      final playerTeamIds = <String>[];
+      final playerTeamNames = <String>{};
+
+      for (final doc in teamsSnap.docs) {
+        final data = doc.data();
+        final playerIds =
+            (data[FirestoreFields.playerIds] as List<dynamic>?)
+                ?.whereType<String>() ??
+            [];
+        if (playerIds.contains(audienceId) || playerIds.contains(authUid)) {
+          playerTeamIds.add(doc.id);
+          final name = data[FirestoreFields.name] as String?;
+          if (name != null && name.isNotEmpty) playerTeamNames.add(name);
+        }
+      }
+
+      if (playerTeamIds.isEmpty) return Stream.value(<ClubEvent>[]);
+
+      final lowerBound = _upcomingQueryLowerBound;
+      final streams = <Stream<List<ClubEvent>>>[];
+
+      for (final teamId in playerTeamIds) {
+        streams.add(
+          _events(clubId)
+              .where(FirestoreFields.teamIds, arrayContains: teamId)
+              .where(FirestoreFields.date, isGreaterThanOrEqualTo: lowerBound)
+              .orderBy(FirestoreFields.date)
+              .snapshots()
+              .map(
+                (snap) => sortedByDate(
+                  _filterUpcomingWindow(
+                    snap.docs.map(
+                      (d) => ClubEvent.fromFirestore(clubId: clubId, doc: d),
+                    ),
+                  ),
+                ),
+              ),
+        );
+      }
+
+      // Événements v1 sans `teamIds` mais avec `teamName`.
+      if (playerTeamNames.isNotEmpty) {
+        streams.add(
+          _events(clubId)
+              .where(FirestoreFields.date, isGreaterThanOrEqualTo: lowerBound)
+              .orderBy(FirestoreFields.date)
+              .snapshots()
+              .map(
+                (snap) => sortedByDate(
+                  _filterUpcomingWindow(
+                    snap.docs.where((doc) {
+                      final data = doc.data();
+                      final teamIds =
+                          (data[FirestoreFields.teamIds] as List<dynamic>?)
+                              ?.whereType<String>() ??
+                          [];
+                      if (teamIds.isNotEmpty) return false;
+                      final legacyName = data['teamName'] as String?;
+                      if (legacyName == null ||
+                          !playerTeamNames.contains(legacyName)) {
+                        return false;
+                      }
+                      return true;
+                    }).map(
+                      (d) => ClubEvent.fromFirestore(clubId: clubId, doc: d),
+                    ),
+                  ),
+                ),
+              ),
+        );
+      }
+
+      return combineLatestListStreams(streams).map(_dedupeEvents);
+    });
+  }
+
+  static int compareByDate(ClubEvent a, ClubEvent b) =>
+      a.date.compareTo(b.date);
+
+  static List<ClubEvent> sortedByDate(Iterable<ClubEvent> events) {
+    final list = events.toList();
+    list.sort(compareByDate);
+    return list;
+  }
+
+  static List<ClubEvent> _dedupeEvents(List<ClubEvent> events) {
+    final byKey = <String, ClubEvent>{};
+    for (final event in events) {
+      byKey['${event.clubId}_${event.id}'] = event;
+    }
+    return sortedByDate(byKey.values);
+  }
+
+  /// ID présent dans `teamMemberIds` / `playerIds` (doc `members/{memberId}`).
+  static String _rosterAudienceId(ClubMember member, String authUid) =>
+      member.memberId;
+
+  /// Identifiant utilisé dans `teamMemberIds` / `rsvp` pour un membre du club.
+  Future<String> resolveAudienceId({
+    required String clubId,
+    required String authUid,
+  }) async {
+    final indexSnap = await _db
+        .collection(ProjectConfig.clubsCollection)
+        .doc(clubId)
+        .collection(ProjectConfig.memberAccountsSubcollection)
+        .doc(authUid)
+        .get();
+
+    if (indexSnap.exists) {
+      final linked =
+          indexSnap.data()?[FirestoreFields.linkedMemberId] as String?;
+      if (linked != null && linked.isNotEmpty) return linked;
+    }
+
+    final memberSnap = await _memberRef(clubId, authUid).get();
+    if (memberSnap.exists) {
+      final accountUid =
+          memberSnap.data()?[FirestoreFields.accountUid] as String?;
+      if (accountUid != null && accountUid.isNotEmpty) return authUid;
+      return memberSnap.id;
+    }
+
+    return authUid;
+  }
+
+  /// Événements à venir pour un membre, tous ses clubs (spec home globale).
+  Stream<List<ClubEvent>> watchUpcomingEventsForUser({
     required List<String> clubIds,
-    required String uid,
+    required String authUid,
   }) {
     if (clubIds.isEmpty) return Stream.value([]);
 
-    final streams = clubIds
-        .map(
-          (clubId) => watchUpcomingEventsForClub(clubId: clubId, uid: uid),
-        )
-        .toList();
+    final audienceStreams = clubIds.map((clubId) {
+      return watchClubMember(clubId: clubId, uid: authUid).map(
+        (member) => [
+          MapEntry(
+            clubId,
+            member == null ? authUid : _rosterAudienceId(member, authUid),
+          ),
+        ],
+      );
+    }).toList();
 
-    return combineLatestListStreams(streams).map((events) {
-      events.sort((a, b) => a.date.compareTo(b.date));
-      return events;
+    return combineLatestListStreams(audienceStreams).asyncExpand((entries) {
+      final audienceByClub = Map<String, String>.fromEntries(entries);
+
+      final eventStreams = clubIds.map((clubId) {
+        final audienceId = audienceByClub[clubId] ?? authUid;
+        return watchUpcomingEventsForClubMember(
+          clubId: clubId,
+          audienceId: audienceId,
+          authUid: authUid,
+        );
+      }).toList();
+
+      return combineLatestListStreams(eventStreams).map(_dedupeEvents);
     });
   }
+
+  /// @deprecated Préférer [watchUpcomingEventsForUser].
+  Stream<List<ClubEvent>> watchUpcomingEventsForClubs({
+    required List<String> clubIds,
+    required String uid,
+  }) =>
+      watchUpcomingEventsForUser(clubIds: clubIds, authUid: uid);
 
   Stream<List<ClubEvent>> watchPastEventsForClub({
     required String clubId,
@@ -104,31 +384,52 @@ class EventService {
             .toList());
   }
 
-  /// Tous les événements d'un jour (vue coach/admin planning).
+  /// Tous les événements d'un jour (vue planning club).
   Stream<List<ClubEvent>> watchClubEventsOnDay({
     required String clubId,
     required DateTime day,
   }) {
-    final start = _startOfDay(day);
-    final end = _endOfDay(day);
+    final dayStart = _startOfDay(day);
+    // Fenêtre élargie + filtre calendaire : évite les ratés timezone / Timestamp.
+    final queryFrom = dayStart.subtract(const Duration(hours: 14));
+    final queryTo = dayStart.add(const Duration(days: 1, hours: 14));
 
     return _events(clubId)
         .where(
           FirestoreFields.date,
-          isGreaterThanOrEqualTo: Timestamp.fromDate(start),
+          isGreaterThanOrEqualTo: Timestamp.fromDate(queryFrom),
         )
         .where(
           FirestoreFields.date,
-          isLessThan: Timestamp.fromDate(end),
+          isLessThan: Timestamp.fromDate(queryTo),
         )
         .orderBy(FirestoreFields.date)
         .snapshots()
         .map(
-          (snap) => snap.docs
-              .map((d) => ClubEvent.fromFirestore(clubId: clubId, doc: d))
-              .where((e) => !e.canceled)
-              .toList(),
+          (snap) => sortedByDate(
+            snap.docs
+                .map((d) => ClubEvent.fromFirestore(clubId: clubId, doc: d))
+                .where((e) => !e.canceled && sameCalendarDay(e.date, day)),
+          ),
         );
+  }
+
+  /// Événements d'un jour pour un membre (mêmes sources que l'accueil joueur).
+  Stream<List<ClubEvent>> watchMemberEventsOnDay({
+    required String clubId,
+    required DateTime day,
+    required String audienceId,
+    required String authUid,
+  }) {
+    return watchUpcomingEventsForClubMember(
+      clubId: clubId,
+      audienceId: audienceId,
+      authUid: authUid,
+    ).map(
+      (events) => sortedByDate(
+        events.where((e) => sameCalendarDay(e.date, day)),
+      ),
+    );
   }
 
   Future<DateTime?> getFirstEventDate(String clubId) async {
@@ -175,7 +476,10 @@ class EventService {
         FirestoreFields.location: location ?? '',
         FirestoreFields.teamIds: teamIds,
         FirestoreFields.allTeams: allTeams,
-        FirestoreFields.date: Timestamp.fromDate(_startOfDay(date)),
+        FirestoreFields.date: Timestamp.fromDate(
+          DateTime.utc(date.year, date.month, date.day),
+        ),
+        FirestoreFields.dateId: dateIdFor(date),
         if (startTime != null) FirestoreFields.startTime: startTime,
         if (endTime != null) FirestoreFields.endTime: endTime,
         if (meetingTime != null) FirestoreFields.meetingTime: meetingTime,
@@ -327,11 +631,15 @@ class EventService {
   /// Taux de présence sur les 30 derniers jours (events passés pointés).
   Future<double?> computeAttendanceRate({
     required String clubId,
-    required String uid,
+    required String authUid,
   }) async {
+    final audienceId = await resolveAudienceId(
+      clubId: clubId,
+      authUid: authUid,
+    );
     final since = DateTime.now().subtract(const Duration(days: 30));
     final snap = await _events(clubId)
-        .where(FirestoreFields.teamMemberIds, arrayContains: uid)
+        .where(FirestoreFields.teamMemberIds, arrayContains: audienceId)
         .where(
           FirestoreFields.date,
           isGreaterThanOrEqualTo: Timestamp.fromDate(since),
@@ -350,7 +658,7 @@ class EventService {
       if (data[FirestoreFields.canceled] == true) continue;
       final attendance =
           data[FirestoreFields.attendance] as Map<String, dynamic>? ?? {};
-      final entry = attendance[uid];
+      final entry = attendance[audienceId] ?? attendance[authUid];
       if (entry == null) continue;
       total++;
       final status = entry is Map

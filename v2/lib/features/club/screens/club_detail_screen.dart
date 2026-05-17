@@ -13,7 +13,6 @@ import 'package:viro_team_v2/features/club/widgets/announcement_preview.dart';
 import 'package:viro_team_v2/features/club/widgets/club_stats_row.dart';
 import 'package:viro_team_v2/features/club/widgets/quick_actions_grid.dart';
 import 'package:viro_team_v2/utils/viro_snackbar.dart';
-import 'package:viro_team_v2/features/home/widgets/event_planning_card.dart';
 import 'package:viro_team_v2/features/home/widgets/event_rsvp_card.dart';
 import 'package:viro_team_v2/models/club.dart';
 import 'package:viro_team_v2/models/club_announcement.dart';
@@ -38,17 +37,23 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen> {
   final _hiddenPendingIds = <String>{};
 
   Future<void> _setRsvp(ClubEvent event, RsvpStatus status) async {
-    final uid = ref.read(authStateProvider).value?.uid;
-    if (uid == null) return;
+    final authUid = ref.read(authStateProvider).value?.uid;
+    if (authUid == null) return;
 
     setState(() => _hiddenPendingIds.add(event.id));
 
-    await ref.read(eventServiceProvider).updateRsvp(
-          clubId: event.clubId,
-          eventId: event.id,
-          uid: uid,
-          status: status,
-        );
+    final eventService = ref.read(eventServiceProvider);
+    final audienceId = await eventService.resolveAudienceId(
+      clubId: event.clubId,
+      authUid: authUid,
+    );
+
+    await eventService.updateRsvp(
+      clubId: event.clubId,
+      eventId: event.id,
+      uid: audienceId,
+      status: status,
+    );
   }
 
   @override
@@ -133,10 +138,14 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen> {
                       children: [
                         const _SectionTitle(title: 'Accès rapides'),
                         MemberQuickActionsGrid(
+                          onPlanning: MemberRoleHierarchy.isCoachOrAbove(m.role)
+                              ? null
+                              : () => context.push(
+                                    AppRoutes.clubPlanningPath(clubId),
+                                  ),
                           onMyTeams: () => context.push(
                             AppRoutes.clubMyTeamsPath(clubId),
                           ),
-                          onTournaments: showComingSoon,
                         ),
                         if (MemberRoleHierarchy.isCoachOrAbove(m.role)) ...[
                           const _SectionTitle(title: 'Gestion du club'),
@@ -191,8 +200,6 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen> {
         final pending = state.pending
             .where((e) => !_hiddenPendingIds.contains(e.id))
             .toList();
-        final uid = ref.read(authStateProvider).value?.uid;
-
         return [
           if (pending.isNotEmpty) ...[
             const SliverToBoxAdapter(
@@ -215,43 +222,6 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen> {
                     );
                   },
                   childCount: pending.length,
-                ),
-              ),
-            ),
-          ],
-          if (state.upcoming.isNotEmpty) ...[
-            const SliverToBoxAdapter(
-              child: _SectionTitle(title: 'Planning du club'),
-            ),
-            SliverPadding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: ViroSpacing.screenHorizontal,
-              ),
-              sliver: SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) {
-                    final event = state.upcoming[index];
-                    final status = uid != null
-                        ? event.rsvpFor(uid)
-                        : RsvpStatus.none;
-                    return EventPlanningCard(
-                      event: event,
-                      clubName: club.name,
-                      clubColor: accent,
-                      rsvpStatus: status,
-                      showRsvpButtons: status == RsvpStatus.none,
-                      onToggleRsvp: () {
-                        if (uid == null) return;
-                        final next = status == RsvpStatus.yes
-                            ? RsvpStatus.no
-                            : RsvpStatus.yes;
-                        _setRsvp(event, next);
-                      },
-                      onPresent: () => _setRsvp(event, RsvpStatus.yes),
-                      onAbsent: () => _setRsvp(event, RsvpStatus.no),
-                    );
-                  },
-                  childCount: state.upcoming.length,
                 ),
               ),
             ),

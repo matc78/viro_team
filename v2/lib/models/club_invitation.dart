@@ -16,6 +16,8 @@ class ClubInvitation {
     this.acceptedAt,
     this.clubName,
     this.clubSport,
+    this.firstName,
+    this.lastName,
   });
 
   final String id;
@@ -31,6 +33,8 @@ class ClubInvitation {
   final DateTime? acceptedAt;
   final String? clubName;
   final String? clubSport;
+  final String? firstName;
+  final String? lastName;
 
   bool get isExpired {
     if (expiresAt == null) return false;
@@ -56,6 +60,10 @@ class ClubInvitation {
       sentAt: (data[FirestoreFields.sentAt] as Timestamp?)?.toDate(),
       expiresAt: (data[FirestoreFields.expiresAt] as Timestamp?)?.toDate(),
       acceptedAt: (data[FirestoreFields.acceptedAt] as Timestamp?)?.toDate(),
+      clubName: data[FirestoreFields.clubName] as String?,
+      clubSport: data[FirestoreFields.clubSport] as String?,
+      firstName: data[FirestoreFields.firstName] as String?,
+      lastName: data[FirestoreFields.lastName] as String?,
     );
   }
 
@@ -75,6 +83,10 @@ class ClubInvitation {
       sentAt: (data[FirestoreFields.sentAt] as Timestamp?)?.toDate(),
       expiresAt: (data[FirestoreFields.expiresAt] as Timestamp?)?.toDate(),
       acceptedAt: (data[FirestoreFields.acceptedAt] as Timestamp?)?.toDate(),
+      clubName: data[FirestoreFields.clubName] as String?,
+      clubSport: data[FirestoreFields.clubSport] as String?,
+      firstName: data[FirestoreFields.firstName] as String?,
+      lastName: data[FirestoreFields.lastName] as String?,
     );
   }
 }

@@ -176,6 +176,10 @@ class MemberService {
         FirestoreFields.sentBy: sentByUid,
         FirestoreFields.sentAt: FieldValue.serverTimestamp(),
         FirestoreFields.expiresAt: Timestamp.fromDate(expiresAt),
+        FirestoreFields.clubName: club.name,
+        FirestoreFields.clubSport: club.sport,
+        FirestoreFields.firstName: trimmedFirst,
+        FirestoreFields.lastName: trimmedLast,
       });
 
       tx.update(clubRef, {
@@ -209,6 +213,8 @@ class MemberService {
       expiresAt: expiresAt,
       clubName: club.name,
       clubSport: club.sport,
+      firstName: trimmedFirst,
+      lastName: trimmedLast,
     );
 
     return AddMemberResult(member: member, invitation: invitation);
