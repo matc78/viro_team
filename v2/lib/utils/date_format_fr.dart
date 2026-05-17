@@ -22,13 +22,33 @@ String formatWeekdayLong(DateTime date) =>
 /// Jour et mois numériques (ex. « 20/05 »).
 String formatDayMonth(DateTime date) => _dayMonthFormat.format(date);
 
+/// Écart en jours calendaires entre [date] et aujourd'hui (positif = futur).
+int planningDaysFromToday(DateTime date) {
+  final dayOnly = _dateOnly(date);
+  final today = _dateOnly(DateTime.now());
+  return dayOnly.difference(today).inDays;
+}
+
+/// Libellé discret de l'écart (ex. « +3 », « -2 »). Null si aujourd'hui.
+String? formatPlanningDayOffset(int daysFromToday) {
+  if (daysFromToday == 0) return null;
+  if (daysFromToday > 0) return '+$daysFromToday';
+  return '$daysFromToday';
+}
+
 /// Parties d'un en-tête de jour du planning global.
-({String? badge, String weekday, int day, String month}) planningDayHeaderParts(
-  DateTime date,
-) {
+({
+  String? badge,
+  String weekday,
+  int day,
+  String month,
+  int daysFromToday,
+  String? dayOffsetLabel,
+}) planningDayHeaderParts(DateTime date) {
   final dayOnly = _dateOnly(date);
   final today = _dateOnly(DateTime.now());
   final tomorrow = today.add(const Duration(days: 1));
+  final daysFromToday = planningDaysFromToday(dayOnly);
 
   String? badge;
   if (dayOnly == today) {
@@ -42,6 +62,8 @@ String formatDayMonth(DateTime date) => _dayMonthFormat.format(date);
     weekday: formatWeekdayLong(dayOnly),
     day: dayOnly.day,
     month: _capitalizeFr(DateFormat('MMMM', 'fr_FR').format(dayOnly)),
+    daysFromToday: daysFromToday,
+    dayOffsetLabel: formatPlanningDayOffset(daysFromToday),
   );
 }
 

@@ -56,6 +56,20 @@ class PlanningDaySectionHeader extends StatelessWidget {
                   height: 1.1,
                 ),
               ),
+              if (parts.dayOffsetLabel != null) ...[
+                const SizedBox(width: 6),
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Text(
+                    parts.dayOffsetLabel!,
+                    style: theme.labelSmall?.copyWith(
+                      color: ViroColors.gray400,
+                      fontWeight: FontWeight.w400,
+                      height: 1,
+                    ),
+                  ),
+                ),
+              ],
               if (parts.badge != null) ...[
                 const SizedBox(width: ViroSpacing.sm),
                 Container(
