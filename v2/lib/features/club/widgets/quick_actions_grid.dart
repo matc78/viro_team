@@ -110,10 +110,12 @@ class MemberQuickActionsGrid extends StatelessWidget {
     super.key,
     this.onPlanning,
     this.onMyTeams,
+    this.onAnnouncements,
   });
 
   final VoidCallback? onPlanning;
   final VoidCallback? onMyTeams;
+  final VoidCallback? onAnnouncements;
 
   @override
   Widget build(BuildContext context) {
@@ -130,6 +132,12 @@ class MemberQuickActionsGrid extends StatelessWidget {
           icon: ViroIcons.users,
           onTap: onMyTeams,
         ),
+        if (onAnnouncements != null)
+          QuickAction(
+            label: 'Annonces',
+            icon: ViroIcons.bell,
+            onTap: onAnnouncements,
+          ),
       ],
     );
   }

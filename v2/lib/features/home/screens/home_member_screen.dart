@@ -21,6 +21,7 @@ import 'package:viro_team_v2/features/planning/widgets/planning_event_detail_she
 import 'package:viro_team_v2/models/club_team.dart';
 import 'package:viro_team_v2/features/home/widgets/event_planning_card.dart';
 import 'package:viro_team_v2/features/home/widgets/planning_day_section_header.dart';
+import 'package:viro_team_v2/features/announcements/widgets/home_announcement_banner.dart';
 import 'package:viro_team_v2/features/home/widgets/home_quiet_content.dart';
 import 'package:viro_team_v2/models/club_event.dart';
 import 'package:viro_team_v2/providers/service_providers.dart';
@@ -168,6 +169,9 @@ class _HomeMemberScreenState extends ConsumerState<HomeMemberScreen> {
                       child: CustomScrollView(
                         controller: _scrollController,
                         slivers: [
+                          const SliverToBoxAdapter(
+                            child: HomeAnnouncementBanner(),
+                          ),
                           if (!isFullyQuiet)
                             SliverToBoxAdapter(
                               child: _SectionTitle(

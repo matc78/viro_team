@@ -78,6 +78,21 @@ service cloud.firestore {
 
 
 
+    // Le membre connecté peut modifier son doc (y compris via member_accounts).
+    function ownsMemberDoc(clubId, memberId) {
+
+      return isOwner(memberId)
+
+        || (isSignedIn()
+
+          && exists(/databases/$(database)/documents/clubs/$(clubId)/member_accounts/$(request.auth.uid))
+
+          && get(/databases/$(database)/documents/clubs/$(clubId)/member_accounts/$(request.auth.uid)).data.memberId == memberId);
+
+    }
+
+
+
     // Liaison compte Firebase → membre pré-créé lors de l'acceptation d'une invitation.
     function isLinkingAccountToPrecreatedMember() {
 
@@ -144,7 +159,7 @@ service cloud.firestore {
 
             && request.auth.uid in get(/databases/$(database)/documents/clubs/$(clubId)).data.adminIds);
 
-        allow update: if isOwner(memberId)
+        allow update: if ownsMemberDoc(clubId, memberId)
 
           || isClubAdmin(clubId)
 

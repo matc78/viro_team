@@ -1,7 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:viro_team_v2/features/auth/providers/auth_providers.dart';
 import 'package:viro_team_v2/models/club.dart';
-import 'package:viro_team_v2/models/club_announcement.dart';
 import 'package:viro_team_v2/models/club_event.dart';
 import 'package:viro_team_v2/models/club_member.dart';
 import 'package:viro_team_v2/providers/service_providers.dart';
@@ -82,13 +81,6 @@ final clubEventsProvider =
       });
     },
   );
-});
-
-final clubAnnouncementsProvider =
-    StreamProvider.family<List<ClubAnnouncement>, String>((ref, clubId) {
-  return ref.read(eventServiceProvider).watchRecentAnnouncements(
-        clubId: clubId,
-      );
 });
 
 final clubAttendanceRateProvider =

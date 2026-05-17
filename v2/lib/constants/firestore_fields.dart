@@ -102,6 +102,7 @@ abstract final class FirestoreFields {
   static const String targetType = 'targetType';
   static const String targetIds = 'targetIds';
   static const String durationDays = 'durationDays';
+  static const String dismissedAnnouncementIds = 'dismissedAnnouncementIds';
 
   // join_requests
   static const String clubName = 'clubName';

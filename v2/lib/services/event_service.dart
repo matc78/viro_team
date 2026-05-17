@@ -1,7 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:viro_team_v2/config/project_config.dart';
 import 'package:viro_team_v2/constants/firestore_fields.dart';
-import 'package:viro_team_v2/models/club_announcement.dart';
 import 'package:viro_team_v2/models/club_event.dart';
 import 'package:viro_team_v2/models/club_member.dart';
 import 'package:viro_team_v2/utils/firestore_instance.dart';
@@ -18,12 +17,6 @@ class EventService {
           .collection(ProjectConfig.clubsCollection)
           .doc(clubId)
           .collection(ProjectConfig.eventsSubcollection);
-
-  CollectionReference<Map<String, dynamic>> _announcements(String clubId) =>
-      _db
-          .collection(ProjectConfig.clubsCollection)
-          .doc(clubId)
-          .collection(ProjectConfig.announcementsSubcollection);
 
   CollectionReference<Map<String, dynamic>> _teams(String clubId) => _db
       .collection(ProjectConfig.clubsCollection)
@@ -577,20 +570,6 @@ class EventService {
         return ClubMember.fromFirestore(doc);
       });
     });
-  }
-
-  Stream<List<ClubAnnouncement>> watchRecentAnnouncements({
-    required String clubId,
-    int limit = 3,
-  }) {
-    return _announcements(clubId)
-        .orderBy(FirestoreFields.createdAt, descending: true)
-        .limit(limit)
-        .snapshots()
-        .map(
-          (snap) =>
-              snap.docs.map(ClubAnnouncement.fromFirestore).toList(),
-        );
   }
 
   /// Prochain événement à venir, ou le plus récent passé (aperçu club).

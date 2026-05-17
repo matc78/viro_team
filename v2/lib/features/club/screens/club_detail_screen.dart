@@ -8,6 +8,7 @@ import 'package:viro_team_v2/config/viro_icons.dart';
 import 'package:viro_team_v2/config/viro_spacing.dart';
 import 'package:viro_team_v2/constants/firestore_fields.dart';
 import 'package:viro_team_v2/features/auth/providers/auth_providers.dart';
+import 'package:viro_team_v2/features/announcements/providers/announcement_providers.dart';
 import 'package:viro_team_v2/features/club/providers/club_detail_providers.dart';
 import 'package:viro_team_v2/features/club/widgets/announcement_preview.dart';
 import 'package:viro_team_v2/features/club/widgets/club_stats_row.dart';
@@ -62,7 +63,8 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen> {
     final clubAsync = ref.watch(clubProvider(clubId));
     final memberAsync = ref.watch(clubMemberProvider(clubId));
     final eventsAsync = ref.watch(clubEventsProvider(clubId));
-    final announcementsAsync = ref.watch(clubAnnouncementsProvider(clubId));
+    final announcementsAsync =
+        ref.watch(visibleClubAnnouncementsProvider(clubId));
     final attendanceAsync = ref.watch(clubAttendanceRateProvider(clubId));
 
     return ViroScaffold(
@@ -121,7 +123,10 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen> {
                 club: club,
                 member: memberAsync.value,
               ),
-              ..._buildAnnouncementsSlivers(announcementsAsync),
+              ..._buildAnnouncementsSlivers(
+                announcementsAsync,
+                clubId: clubId,
+              ),
               SliverToBoxAdapter(
                 child: memberAsync.when(
                   data: (m) {
@@ -145,6 +150,9 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen> {
                                   ),
                           onMyTeams: () => context.push(
                             AppRoutes.clubMyTeamsPath(clubId),
+                          ),
+                          onAnnouncements: () => context.push(
+                            AppRoutes.clubAnnouncementsPath(clubId),
                           ),
                         ),
                         if (MemberRoleHierarchy.isCoachOrAbove(m.role)) ...[
@@ -266,16 +274,33 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen> {
   }
 
   List<Widget> _buildAnnouncementsSlivers(
-    AsyncValue<List<ClubAnnouncement>> announcementsAsync,
-  ) {
+    AsyncValue<List<ClubAnnouncement>> announcementsAsync, {
+    required String clubId,
+  }) {
     return announcementsAsync.when(
       loading: () => const [],
       error: (_, _) => const [],
       data: (items) {
         if (items.isEmpty) return const [];
+        final previews = items.take(3).toList();
         return [
-          const SliverToBoxAdapter(
-            child: _SectionTitle(title: 'Annonces'),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: ViroSpacing.screenHorizontal,
+              ),
+              child: Row(
+                children: [
+                  const Expanded(child: _SectionTitle(title: 'Annonces')),
+                  TextButton(
+                    onPressed: () => context.push(
+                      AppRoutes.clubAnnouncementsPath(clubId),
+                    ),
+                    child: const Text('Voir tout'),
+                  ),
+                ],
+              ),
+            ),
           ),
           SliverPadding(
             padding: const EdgeInsets.symmetric(
@@ -283,9 +308,13 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen> {
             ),
             sliver: SliverList(
               delegate: SliverChildBuilderDelegate(
-                (context, index) =>
-                    AnnouncementPreview(announcement: items[index]),
-                childCount: items.length,
+                (context, index) => Padding(
+                  padding: const EdgeInsets.only(bottom: ViroSpacing.sm),
+                  child: AnnouncementPreview(
+                    announcement: previews[index],
+                  ),
+                ),
+                childCount: previews.length,
               ),
             ),
           ),

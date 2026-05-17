@@ -18,6 +18,7 @@ class ClubMember {
     this.pendingInviteCode,
     this.pendingInviteExpiresAt,
     this.hasLinkedAccount = false,
+    this.dismissedAnnouncementIds = const [],
   });
 
   /// ID stable du document `members/{memberId}`.
@@ -41,6 +42,9 @@ class ClubMember {
 
   /// `true` si un compte utilisateur est lié (users.createdAt présent).
   final bool hasLinkedAccount;
+
+  /// Annonces masquées par le membre sur la home (croix).
+  final List<String> dismissedAnnouncementIds;
 
   /// Compatibilité : identifiant utilisé pour RSVP/events (accountUid ou memberId).
   String get effectiveUid => accountUid ?? memberId;
@@ -127,6 +131,11 @@ class ClubMember {
       joinedAt: (data[FirestoreFields.joinedAt] as Timestamp?)?.toDate(),
       activeInvitationId:
           data[FirestoreFields.activeInvitationId] as String?,
+      dismissedAnnouncementIds:
+          (data[FirestoreFields.dismissedAnnouncementIds] as List<dynamic>?)
+                  ?.whereType<String>()
+                  .toList() ??
+              [],
     );
   }
 

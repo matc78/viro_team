@@ -12,6 +12,7 @@ import 'package:viro_team_v2/features/auth/screens/onboarding_entry_screen.dart'
 
 import 'package:viro_team_v2/features/auth/screens/sign_up_screen.dart';
 
+import 'package:viro_team_v2/features/announcements/screens/club_announcements_screen.dart';
 import 'package:viro_team_v2/features/club/screens/club_detail_screen.dart';
 import 'package:viro_team_v2/features/planning/screens/add_event_screen.dart';
 import 'package:viro_team_v2/features/planning/screens/club_planning_screen.dart';
@@ -71,6 +72,8 @@ abstract final class AppRoutes {
 
   static const clubAddEvent = '/club/:clubId/planning/add';
 
+  static const clubAnnouncements = '/club/:clubId/announcements';
+
   static const designPreview = '/dev/design';
 
 
@@ -85,6 +88,9 @@ abstract final class AppRoutes {
       '/club/$clubId/teams/manage';
 
   static String clubPlanningPath(String clubId) => '/club/$clubId/planning';
+
+  static String clubAnnouncementsPath(String clubId) =>
+      '/club/$clubId/announcements';
 
   static String clubAddEventPath(String clubId, {String? date}) {
     final base = '/club/$clubId/planning/add';
@@ -349,6 +355,20 @@ final goRouterProvider = Provider<GoRouter>((ref) {
           final clubId = state.pathParameters['clubId']!;
 
           return ClubMembersScreen(clubId: clubId);
+
+        },
+
+      ),
+
+      GoRoute(
+
+        path: AppRoutes.clubAnnouncements,
+
+        builder: (_, state) {
+
+          final clubId = state.pathParameters['clubId']!;
+
+          return ClubAnnouncementsScreen(clubId: clubId);
 
         },
 

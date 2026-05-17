@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:viro_team_v2/services/announcement_service.dart';
 import 'package:viro_team_v2/services/auth_service.dart';
 import 'package:viro_team_v2/services/club_service.dart';
 import 'package:viro_team_v2/services/event_service.dart';
@@ -30,3 +31,6 @@ final memberServiceProvider =
     Provider<MemberService>((ref) => MemberService());
 
 final teamServiceProvider = Provider<TeamService>((ref) => TeamService());
+
+final announcementServiceProvider =
+    Provider<AnnouncementService>((ref) => AnnouncementService());
