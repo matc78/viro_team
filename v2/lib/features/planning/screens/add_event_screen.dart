@@ -8,7 +8,9 @@ import 'package:viro_team_v2/config/viro_spacing.dart';
 import 'package:viro_team_v2/constants/firestore_fields.dart';
 import 'package:viro_team_v2/features/auth/providers/auth_providers.dart';
 import 'package:viro_team_v2/features/club/providers/club_detail_providers.dart';
+import 'package:viro_team_v2/features/members/providers/member_providers.dart';
 import 'package:viro_team_v2/features/teams/providers/team_providers.dart';
+import 'package:viro_team_v2/features/teams/utils/team_roster_members.dart';
 import 'package:viro_team_v2/models/club_event.dart';
 import 'package:viro_team_v2/models/club_team.dart';
 import 'package:viro_team_v2/providers/service_providers.dart';
@@ -97,7 +99,13 @@ class _AddEventScreenState extends ConsumerState<AddEventScreen> {
     if (picked != null) setState(() => onPicked(picked));
   }
 
-  List<String> _audienceForTeam(ClubTeam team) => List<String>.from(team.playerIds);
+  List<String> _audienceForTeam(ClubTeam team) {
+    final members = ref.read(clubMembersProvider(widget.clubId)).value;
+    if (members == null || members.isEmpty) {
+      return List<String>.from(team.playerIds);
+    }
+    return audienceIdsForTeam(team, indexClubMembersByUid(members));
+  }
 
   String? _resolveLocation() {
     if (_isMatch) {

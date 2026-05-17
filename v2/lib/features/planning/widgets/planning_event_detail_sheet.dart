@@ -21,6 +21,7 @@ class PlanningEventDetailSheet extends ConsumerStatefulWidget {
     super.key,
     required this.clubId,
     required this.event,
+    required this.scrollController,
     this.teamLabel,
     this.excludeCoachUids = const {},
     this.canManageEvents = true,
@@ -29,6 +30,7 @@ class PlanningEventDetailSheet extends ConsumerStatefulWidget {
 
   final String clubId;
   final ClubEvent event;
+  final ScrollController scrollController;
   final String? teamLabel;
   final Set<String> excludeCoachUids;
   final bool canManageEvents;
@@ -49,35 +51,24 @@ class PlanningEventDetailSheet extends ConsumerStatefulWidget {
       isScrollControlled: true,
       isDismissible: true,
       enableDrag: true,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) {
-        final height = MediaQuery.sizeOf(sheetContext).height;
-        return SizedBox(
-          height: height,
-          child: Column(
-            children: [
-              Expanded(
-                child: GestureDetector(
-                  onTap: () => Navigator.pop(sheetContext),
-                  behavior: HitTestBehavior.opaque,
-                  child: const ColoredBox(color: Colors.transparent),
-                ),
-              ),
-              SizedBox(
-                height: height * 0.72,
-                child: PlanningEventDetailSheet(
-                  clubId: clubId,
-                  event: event,
-                  teamLabel: teamLabel,
-                  excludeCoachUids: excludeCoachUids,
-                  canManageEvents: canManageEvents,
-                  onCanceled: onCanceled,
-                ),
-              ),
-            ],
-          ),
-        );
-      },
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.65,
+        minChildSize: 0.4,
+        maxChildSize: 0.9,
+        builder: (_, scrollController) => PlanningEventDetailSheet(
+          clubId: clubId,
+          event: event,
+          scrollController: scrollController,
+          teamLabel: teamLabel,
+          excludeCoachUids: excludeCoachUids,
+          canManageEvents: canManageEvents,
+          onCanceled: onCanceled,
+        ),
+      ),
     );
   }
 
@@ -253,31 +244,18 @@ class _PlanningEventDetailSheetState
     final playerCount =
         event.playerMemberIds(widget.excludeCoachUids).length;
 
-    return DecoratedBox(
-      decoration: const BoxDecoration(
-        color: ViroColors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      child: Column(
-        children: [
-          const SizedBox(height: ViroSpacing.sm),
-          Container(
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: ViroColors.gray300,
-              borderRadius: BorderRadius.circular(2),
+    return Column(
+      children: [
+        Expanded(
+          child: ListView(
+            controller: widget.scrollController,
+            padding: const EdgeInsets.fromLTRB(
+              ViroSpacing.lg,
+              ViroSpacing.md,
+              ViroSpacing.lg,
+              ViroSpacing.md,
             ),
-          ),
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(
-                ViroSpacing.lg,
-                ViroSpacing.md,
-                ViroSpacing.lg,
-                ViroSpacing.md,
-              ),
-              children: [
+            children: [
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -411,12 +389,11 @@ class _PlanningEventDetailSheetState
                         child: const Text('Annuler l\'événement'),
                       ),
                     ],
-                SizedBox(height: MediaQuery.paddingOf(context).bottom),
-              ],
-            ),
+              SizedBox(height: MediaQuery.paddingOf(context).bottom),
+            ],
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

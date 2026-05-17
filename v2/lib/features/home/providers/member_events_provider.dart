@@ -63,14 +63,17 @@ MemberEventsState _categorizeMemberEvents(
     upcoming.add(event);
 
     final audienceId = audienceByClub[event.clubId] ?? authUid;
+    final audienceKeys = {authUid, audienceId};
     final invitedAsPlayer = event.isInvitedAsPlayer(
       authUid,
       clubAudienceId: audienceId,
+      memberAudienceKeys: audienceKeys,
     );
     final needsRsvp = invitedAsPlayer &&
         event.rsvpStatusForUser(
           authUid,
           clubAudienceId: audienceId,
+          memberAudienceKeys: audienceKeys,
         ) ==
             RsvpStatus.none;
 

@@ -1,4 +1,6 @@
+import 'package:viro_team_v2/features/teams/utils/team_roster_members.dart';
 import 'package:viro_team_v2/models/club_event.dart';
+import 'package:viro_team_v2/models/club_member.dart';
 import 'package:viro_team_v2/models/club_team.dart';
 import 'package:viro_team_v2/utils/date_format_fr.dart';
 
@@ -51,18 +53,31 @@ abstract final class PlanningEventDisplay {
   static bool isCoachForEvent(
     ClubEvent event,
     String authUid,
-    Map<String, ClubTeam> teamsById,
-  ) {
-    if (event.teamIds.isNotEmpty) {
-      for (final teamId in event.teamIds) {
-        if (teamsById[teamId]?.coachIds.contains(authUid) ?? false) {
-          return true;
-        }
+    Map<String, ClubTeam> teamsById, {
+    ClubMember? member,
+    Map<String, ClubMember>? membersByUid,
+  }) {
+    final resolved = member ??
+        (membersByUid != null
+            ? clubMemberForTeamUid(membersByUid, authUid)
+            : null);
+
+    final teamIds = event.teamIds.isNotEmpty
+        ? event.teamIds
+        : teamsById.keys.toList();
+
+    if (resolved != null) {
+      for (final teamId in teamIds) {
+        final team = teamsById[teamId];
+        if (team != null && team.isOnCoachRoster(resolved)) return true;
       }
       return false;
     }
-    for (final team in teamsById.values) {
-      if (team.coachIds.contains(authUid)) return true;
+
+    for (final teamId in teamIds) {
+      if (teamsById[teamId]?.coachIds.contains(authUid) ?? false) {
+        return true;
+      }
     }
     return false;
   }
@@ -71,10 +86,98 @@ abstract final class PlanningEventDisplay {
   static bool showCoachRsvpSummary(
     ClubEvent event,
     String authUid,
+    Map<String, ClubTeam> teamsById, {
+    String? clubAudienceId,
+    ClubMember? member,
+    Map<String, ClubMember>? membersByUid,
+  }) =>
+      !isInvitedAsPlayerOnEvent(
+        event,
+        authUid,
+        teamsById,
+        clubAudienceId: clubAudienceId,
+        member: member,
+        membersByUid: membersByUid,
+      ) &&
+      isCoachForEvent(
+        event,
+        authUid,
+        teamsById,
+        member: member,
+        membersByUid: membersByUid,
+      );
+
+  /// Coach d'équipe convoqué comme joueur sur cet événement.
+  static bool isDualRoleCoachPlayer(
+    ClubEvent event,
+    String authUid,
+    Map<String, ClubTeam> teamsById, {
+    String? clubAudienceId,
+    ClubMember? member,
+    Map<String, ClubMember>? membersByUid,
+  }) =>
+      isCoachForEvent(
+        event,
+        authUid,
+        teamsById,
+        member: member,
+        membersByUid: membersByUid,
+      ) &&
+      isInvitedAsPlayerOnEvent(
+        event,
+        authUid,
+        teamsById,
+        clubAudienceId: clubAudienceId,
+        member: member,
+        membersByUid: membersByUid,
+      );
+
+  /// Coach / admin : convoqué joueur seulement s'il est dans [ClubTeam.playerIds].
+  static bool isOnPlayerRosterForEvent(
+    ClubEvent event,
+    ClubMember member,
     Map<String, ClubTeam> teamsById,
-  ) =>
-      !event.isInvitedAsPlayer(authUid) &&
-      isCoachForEvent(event, authUid, teamsById);
+  ) {
+    final teamIds =
+        event.teamIds.isNotEmpty ? event.teamIds : teamsById.keys.toList();
+    for (final teamId in teamIds) {
+      final team = teamsById[teamId];
+      if (team != null && team.isOnPlayerRoster(member)) return true;
+    }
+    return false;
+  }
+
+  static bool isInvitedAsPlayerOnEvent(
+    ClubEvent event,
+    String authUid,
+    Map<String, ClubTeam> teamsById, {
+    String? clubAudienceId,
+    ClubMember? member,
+    Map<String, ClubMember>? membersByUid,
+  }) {
+    final resolved = member ??
+        (membersByUid != null
+            ? clubMemberForTeamUid(membersByUid, authUid)
+            : null);
+    final inAudience = event.isInvitedAsPlayer(
+      authUid,
+      clubAudienceId: clubAudienceId,
+      memberAudienceKeys:
+          resolved != null ? eventAudienceKeys(resolved) : null,
+    );
+    if (!inAudience) return false;
+
+    final isCoach = isCoachForEvent(
+      event,
+      authUid,
+      teamsById,
+      member: resolved,
+      membersByUid: membersByUid,
+    );
+    if (!isCoach) return true;
+    if (resolved == null) return false;
+    return isOnPlayerRosterForEvent(event, resolved, teamsById);
+  }
 
   /// Événement visible pour un joueur / coach membre (hors mode gestion).
   static bool isVisibleToMember({
@@ -93,25 +196,38 @@ abstract final class PlanningEventDisplay {
     return false;
   }
 
+  /// Identifiants à retirer de la liste / des compteurs RSVP joueurs.
+  /// Un coach n'y figure que s'il est aussi dans [ClubTeam.playerIds] (double casquette).
   static Set<String> coachUidsToExclude(
     ClubEvent event,
-    Map<String, ClubTeam> teamsById,
-  ) {
-    if (event.teamIds.isNotEmpty) {
-      final coaches = <String>{};
-      for (final teamId in event.teamIds) {
-        coaches.addAll(teamsById[teamId]?.coachIds ?? []);
+    Map<String, ClubTeam> teamsById, {
+    Map<String, ClubMember>? membersByUid,
+  }) {
+    final exclude = <String>{};
+    final teamIds =
+        event.teamIds.isNotEmpty ? event.teamIds : teamsById.keys.toList();
+
+    for (final teamId in teamIds) {
+      final team = teamsById[teamId];
+      if (team == null) continue;
+
+      for (final coachAuthUid in team.coachIds) {
+        final member = membersByUid != null
+            ? clubMemberForTeamUid(membersByUid, coachAuthUid)
+            : null;
+        final onPlayerRoster = member != null
+            ? team.isOnPlayerRoster(member)
+            : team.playerIds.contains(coachAuthUid);
+
+        if (!onPlayerRoster) {
+          exclude.add(coachAuthUid);
+          if (member != null) {
+            exclude.addAll(eventAudienceKeys(member));
+          }
+        }
       }
-      return coaches;
     }
-    // Événements créés avant teamIds : coach repéré sur une équipe du club.
-    final coaches = <String>{};
-    for (final team in teamsById.values) {
-      for (final coachId in team.coachIds) {
-        if (event.teamMemberIds.contains(coachId)) coaches.add(coachId);
-      }
-    }
-    return coaches;
+    return exclude;
   }
 
   static String scheduleLine(ClubEvent event) {

@@ -7,6 +7,8 @@ import 'package:viro_team_v2/config/viro_icons.dart';
 import 'package:viro_team_v2/config/viro_spacing.dart';
 import 'package:viro_team_v2/constants/firestore_fields.dart';
 import 'package:viro_team_v2/features/club/providers/club_detail_providers.dart';
+import 'package:viro_team_v2/features/members/providers/member_providers.dart';
+import 'package:viro_team_v2/features/teams/utils/team_roster_members.dart';
 import 'package:viro_team_v2/features/planning/providers/planning_providers.dart';
 import 'package:viro_team_v2/providers/service_providers.dart';
 import 'package:viro_team_v2/features/planning/utils/planning_event_display.dart';
@@ -86,8 +88,15 @@ class _ClubPlanningScreenState extends ConsumerState<ClubPlanningScreen> {
       clubId: widget.clubId,
       event: event,
       teamLabel: PlanningEventDisplay.teamLabel(event, teamsById),
-      excludeCoachUids:
-          PlanningEventDisplay.coachUidsToExclude(event, teamsById),
+      excludeCoachUids: PlanningEventDisplay.coachUidsToExclude(
+        event,
+        teamsById,
+        membersByUid: ref.read(clubMembersProvider(widget.clubId)).value != null
+            ? indexClubMembersByUid(
+                ref.read(clubMembersProvider(widget.clubId)).value!,
+              )
+            : null,
+      ),
       canManageEvents: canManage,
       onCanceled: () {},
     );
@@ -104,6 +113,9 @@ class _ClubPlanningScreenState extends ConsumerState<ClubPlanningScreen> {
         ? ref.watch(clubPlanningEventsProvider(dayParams))
         : ref.watch(memberClubPlanningEventsProvider(dayParams));
     final teamsAsync = ref.watch(clubTeamsProvider(clubId));
+    final clubMembers = ref.watch(clubMembersProvider(clubId)).value;
+    final membersByUid =
+        clubMembers != null ? indexClubMembersByUid(clubMembers) : null;
 
     final teamsById = teamsAsync.value?.fold<Map<String, ClubTeam>>(
           {},
@@ -185,6 +197,7 @@ class _ClubPlanningScreenState extends ConsumerState<ClubPlanningScreen> {
                         PlanningEventDisplay.coachUidsToExclude(
                       event,
                       teamsById,
+                      membersByUid: membersByUid,
                     );
                     return PlanningEventTile(
                       event: event,

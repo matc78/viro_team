@@ -320,17 +320,44 @@ class _ManageTeamCardState extends ConsumerState<ManageTeamCard> {
             teamId: team.id,
             uid: id,
           );
+          final members = ref.read(clubMembersProvider(team.clubId)).value;
+          if (members != null) {
+            final member = clubMemberForTeamUid(
+              indexClubMembersByUid(members),
+              id,
+            );
+            if (member != null) {
+              await ref.read(eventServiceProvider).addAudienceToUpcomingTeamEvents(
+                    clubId: team.clubId,
+                    teamId: team.id,
+                    audienceId: rosterAudienceId(member),
+                  );
+            }
+          }
         }
       }),
     );
   }
 
-  Future<void> _removePlayer(String uid) => _run(() {
-        return ref.read(teamServiceProvider).removePlayerFromTeam(
-              clubId: widget.team.clubId,
-              teamId: widget.team.id,
+  Future<void> _removePlayer(String uid) => _run(() async {
+        final team = widget.team;
+        await ref.read(teamServiceProvider).removePlayerFromTeam(
+              clubId: team.clubId,
+              teamId: team.id,
               uid: uid,
             );
+        final members = ref.read(clubMembersProvider(team.clubId)).value;
+        if (members == null) return;
+        final member = clubMemberForTeamUid(indexClubMembersByUid(members), uid);
+        if (member == null) return;
+        final eventService = ref.read(eventServiceProvider);
+        for (final audienceId in eventAudienceKeys(member)) {
+          await eventService.removeAudienceFromUpcomingTeamEvents(
+            clubId: team.clubId,
+            teamId: team.id,
+            audienceId: audienceId,
+          );
+        }
       });
 
   Future<void> _removeCoach(String uid) => _run(() {

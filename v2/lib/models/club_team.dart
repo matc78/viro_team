@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:viro_team_v2/constants/firestore_fields.dart';
+import 'package:viro_team_v2/models/club_member.dart';
 
 class ClubTeam {
   const ClubTeam({
@@ -28,6 +29,32 @@ class ClubTeam {
 
   String get categoryLabel =>
       (category != null && category!.isNotEmpty) ? category! : 'Sans catégorie';
+
+  /// Identifiants possibles d'un membre sur le roster (memberId, UID Auth, etc.).
+  static Set<String> rosterIdVariants(ClubMember member) {
+    final ids = <String>{
+      member.memberId,
+      member.effectiveUid,
+    };
+    final accountUid = member.accountUid;
+    if (accountUid != null && accountUid.isNotEmpty) {
+      ids.add(accountUid);
+    }
+    return ids.where((id) => id.isNotEmpty).toSet();
+  }
+
+  bool isOnPlayerRoster(ClubMember member) {
+    final ids = rosterIdVariants(member);
+    return playerIds.any(ids.contains);
+  }
+
+  bool isOnCoachRoster(ClubMember member) {
+    final ids = rosterIdVariants(member);
+    return coachIds.any(ids.contains);
+  }
+
+  bool isPendingOnRoster(String pendingId) =>
+      pendingPlayerIds.contains(pendingId);
 
   factory ClubTeam.fromFirestore({
     required String clubId,
@@ -90,11 +117,13 @@ class PendingTeamMember {
     required this.id,
     required this.firstName,
     required this.lastName,
+    this.email,
   });
 
   final String id;
   final String firstName;
   final String lastName;
+  final String? email;
 
   String get fullName => '$firstName $lastName'.trim();
 }

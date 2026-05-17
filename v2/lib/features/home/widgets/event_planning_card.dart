@@ -15,6 +15,7 @@ class EventPlanningCard extends StatelessWidget {
     required this.clubName,
     required this.clubColor,
     required this.coachView,
+    this.dualRoleView = false,
     this.coachRsvpCounts,
     this.presentCount,
     this.rsvpStatus,
@@ -30,8 +31,11 @@ class EventPlanningCard extends StatelessWidget {
   final String clubName;
   final Color clubColor;
 
-  /// Coach : badges présents / absents / en attente.
+  /// Coach seul : badges agrégés uniquement.
   final bool coachView;
+
+  /// Coach aussi convoqué joueur : RSVP + badges agrégés.
+  final bool dualRoleView;
   final ({int yes, int no, int none})? coachRsvpCounts;
 
   /// Joueur : nombre de présents + RSVP personnel.
@@ -54,87 +58,136 @@ class EventPlanningCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context).textTheme;
-    final dateStr = formatEventDate(event.date);
+    final typeLabel = eventTypeLabel(event.type);
+    final title = event.title.trim();
+    final showTitle = title.isNotEmpty && title != typeLabel;
     final timeStr = formatEventTime(event.startTime);
+    final location = event.location?.trim();
+    final scheduleParts = [
+      if (timeStr.isNotEmpty) timeStr,
+      if (location != null && location.isNotEmpty) location,
+    ];
+
+    final showCoachSummary = coachView || dualRoleView;
+    final showPlayerRsvp = !coachView;
 
     return ViroCard(
       onTap: coachView
           ? onCoachTap
           : (showRsvpButtons ? null : onToggleRsvp),
       onLongPress: onLongPress,
+      accentColor: clubColor,
+      padding: const EdgeInsets.symmetric(
+        horizontal: ViroSpacing.md,
+        vertical: ViroSpacing.sm + 2,
+      ),
+      margin: const EdgeInsets.only(bottom: ViroSpacing.sm),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              ViroIcon(_typeIcon, size: 20, color: clubColor),
-              const SizedBox(width: ViroSpacing.sm),
+              ViroIcon(_typeIcon, size: 18, color: clubColor),
+              const SizedBox(width: ViroSpacing.xs),
               Expanded(
-                child: Text(
-                  event.title.isNotEmpty
-                      ? event.title
-                      : eventTypeLabel(event.type),
-                  style: theme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w600,
+                child: Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(
+                        text: typeLabel,
+                        style: theme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: clubColor,
+                          height: 1.2,
+                        ),
+                      ),
+                      if (showTitle)
+                        TextSpan(
+                          text: ' · $title',
+                          style: theme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w600,
+                            color: ViroColors.primary800,
+                            height: 1.2,
+                          ),
+                        ),
+                    ],
                   ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
+              const SizedBox(width: ViroSpacing.xs),
               ClubChip(label: clubName, color: clubColor),
             ],
           ),
-          const SizedBox(height: ViroSpacing.sm),
-          Text(
-            [dateStr, if (timeStr.isNotEmpty) timeStr, event.location]
-                .where((s) => s != null && s.isNotEmpty)
-                .join(' · '),
-            style: theme.bodySmall?.copyWith(color: ViroColors.gray600),
-          ),
-          const SizedBox(height: ViroSpacing.sm),
-          if (coachView && coachRsvpCounts != null)
-            Center(child: PlanningRsvpSummaryRow(counts: coachRsvpCounts!))
-          else ...[
+          if (scheduleParts.isNotEmpty) ...[
+            const SizedBox(height: 2),
+            Text(
+              scheduleParts.join(' · '),
+              style: theme.bodySmall?.copyWith(
+                color: ViroColors.gray600,
+                height: 1.2,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+          if (showPlayerRsvp && !showRsvpButtons) ...[
+            const SizedBox(height: ViroSpacing.xs),
+            _buildPlayerRsvpFooter(context),
+          ],
+          if (showRsvpButtons) ...[
+            const SizedBox(height: ViroSpacing.xs),
             Row(
               children: [
-                Expanded(child: _buildPlayerRsvpRow(context)),
-                if (presentCount != null) ...[
-                  const SizedBox(width: ViroSpacing.md),
-                  PlanningRsvpCountBadge(
-                    icon: ViroIcons.check,
-                    count: presentCount!,
+                Expanded(
+                  child: _StatusChip(
+                    label: 'Présent',
                     color: ViroColors.success,
+                    onTap: onPresent!,
                   ),
-                ],
+                ),
+                const SizedBox(width: ViroSpacing.sm),
+                Expanded(
+                  child: _StatusChip(
+                    label: 'Absent',
+                    color: ViroColors.error,
+                    onTap: onAbsent!,
+                  ),
+                ),
               ],
             ),
+          ],
+          if (showCoachSummary && coachRsvpCounts != null) ...[
+            const SizedBox(height: ViroSpacing.xs),
+            Center(child: PlanningRsvpSummaryRow(counts: coachRsvpCounts!)),
           ],
         ],
       ),
     );
   }
 
-  Widget _buildPlayerRsvpRow(BuildContext context) {
-    if (showRsvpButtons) {
-      return Row(
+  Widget _buildPlayerRsvpFooter(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: Stack(
+        alignment: Alignment.center,
         children: [
-          Expanded(
-            child: _StatusChip(
-              label: 'Présent',
-              color: ViroColors.success,
-              onTap: onPresent!,
+          _StatusBadge(status: rsvpStatus ?? RsvpStatus.none),
+          if (presentCount != null)
+            Align(
+              alignment: Alignment.centerRight,
+              child: PlanningRsvpCountBadge(
+                icon: ViroIcons.check,
+                count: presentCount!,
+                color: ViroColors.success,
+              ),
             ),
-          ),
-          const SizedBox(width: ViroSpacing.sm),
-          Expanded(
-            child: _StatusChip(
-              label: 'Absent',
-              color: ViroColors.error,
-              onTap: onAbsent!,
-            ),
-          ),
         ],
-      );
-    }
-    return _StatusBadge(status: rsvpStatus ?? RsvpStatus.none);
+      ),
+    );
   }
 }
 
@@ -151,24 +204,22 @@ class _StatusBadge extends StatelessWidget {
       RsvpStatus.none => ('Sans réponse', ViroColors.warning),
     };
 
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: ViroSpacing.sm,
-          vertical: ViroSpacing.xs,
-        ),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(6),
-        ),
-        child: Text(
-          label,
-          style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                color: color,
-                fontWeight: FontWeight.w600,
-              ),
-        ),
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: ViroSpacing.sm,
+        vertical: 3,
+      ),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: color,
+              fontWeight: FontWeight.w600,
+              height: 1.1,
+            ),
       ),
     );
   }
@@ -191,7 +242,7 @@ class _StatusChip extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(ViroSpacing.buttonRadius),
       child: Container(
-        height: 36,
+        height: 32,
         alignment: Alignment.center,
         decoration: BoxDecoration(
           border: Border.all(color: color.withValues(alpha: 0.5)),
@@ -199,7 +250,7 @@ class _StatusChip extends StatelessWidget {
         ),
         child: Text(
           label,
-          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
                 color: color,
                 fontWeight: FontWeight.w600,
               ),

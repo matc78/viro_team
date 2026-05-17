@@ -6,6 +6,7 @@ import 'package:viro_team_v2/models/club_invitation.dart';
 import 'package:viro_team_v2/models/club_member.dart';
 import 'package:viro_team_v2/models/club_membership_summary.dart';
 import 'package:viro_team_v2/models/viro_user.dart';
+import 'package:viro_team_v2/services/team_service.dart';
 import 'package:viro_team_v2/utils/firestore_instance.dart';
 
 class InvitationLookupResult {
@@ -19,10 +20,14 @@ class InvitationLookupResult {
 }
 
 class InvitationService {
-  InvitationService({FirebaseFirestore? firestore})
-      : _db = firestore ?? appFirestore;
+  InvitationService({
+    FirebaseFirestore? firestore,
+    TeamService? teamService,
+  })  : _db = firestore ?? appFirestore,
+        _teamService = teamService ?? TeamService(firestore: firestore);
 
   final FirebaseFirestore _db;
+  final TeamService _teamService;
 
   Future<InvitationLookupResult?> findByCode(String rawCode) async {
     final code = rawCode.trim().toUpperCase();
@@ -296,6 +301,44 @@ class InvitationService {
         'acceptedBy': user.uid,
       });
     });
+
+    if (linkedMemberId != null &&
+        linkedMemberId.isNotEmpty &&
+        linkedMemberId != user.uid) {
+      await _teamService.reconcileRosterIds(
+        clubId: invitation.clubId,
+        legacyMemberId: linkedMemberId,
+        authUid: user.uid,
+      );
+    }
+
+    await _deleteOrphanPendingMembers(
+      clubId: invitation.clubId,
+      email: user.emailNorm,
+    );
+  }
+
+  Future<void> _deleteOrphanPendingMembers({
+    required String clubId,
+    required String email,
+  }) async {
+    final normalized = email.trim().toLowerCase();
+    if (normalized.isEmpty) return;
+
+    final snap = await _db
+        .collection(ProjectConfig.clubsCollection)
+        .doc(clubId)
+        .collection(ProjectConfig.pendingMembersSubcollection)
+        .where(FirestoreFields.email, isEqualTo: normalized)
+        .get();
+
+    if (snap.docs.isEmpty) return;
+
+    final batch = _db.batch();
+    for (final doc in snap.docs) {
+      batch.delete(doc.reference);
+    }
+    await batch.commit();
   }
 
   /// Invitations en attente adressées à l'email de l'utilisateur (collection group).

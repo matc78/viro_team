@@ -9,6 +9,7 @@ import 'package:viro_team_v2/features/members/widgets/member_avatar.dart';
 import 'package:viro_team_v2/features/teams/providers/team_providers.dart';
 import 'package:viro_team_v2/models/club_member.dart';
 import 'package:viro_team_v2/models/club_team.dart';
+import 'package:viro_team_v2/providers/service_providers.dart';
 
 enum TeamRosterSlot { player, coach }
 
@@ -19,7 +20,11 @@ Future<void> showAddTeamMemberSheet({
   required ClubTeam team,
   required TeamRosterSlot slot,
   required Future<void> Function(String id) onAdd,
-}) {
+}) async {
+  await ref.read(teamServiceProvider).reconcileStaleRosterIds(clubId);
+
+  if (!context.mounted) return;
+
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
@@ -92,7 +97,7 @@ class _AddTeamMemberSheet extends ConsumerWidget {
                             (m.role == MemberRoles.coach ||
                                 m.role == MemberRoles.admin) &&
                             m.effectiveUid.isNotEmpty &&
-                            !team.coachIds.contains(m.effectiveUid),
+                            !team.isOnCoachRoster(m),
                       )
                       .toList(),
                 );
@@ -102,20 +107,32 @@ class _AddTeamMemberSheet extends ConsumerWidget {
                 loading: () => const Center(child: CircularProgressIndicator()),
                 error: (e, _) => Center(child: Text('Erreur : $e')),
                 data: (pending) {
-                  final players = members
+                  final eligible = members
+                      .where(_canAddAsPlayer)
+                      .toList();
+                  final players = eligible
+                      .where((m) => m.role == MemberRoles.player)
+                      .toList();
+                  final staffAsPlayers = eligible
                       .where(
                         (m) =>
-                            m.isActive &&
-                            m.role == MemberRoles.player &&
-                            m.effectiveUid.isNotEmpty &&
-                            !team.playerIds.contains(m.effectiveUid),
+                            m.role == MemberRoles.coach ||
+                            m.role == MemberRoles.admin,
                       )
                       .toList();
                   final pendingAvailable = pending
-                      .where((p) => !team.pendingPlayerIds.contains(p.id))
+                      .where(
+                        (p) => _isPendingAvailableToAdd(
+                          pending: p,
+                          team: team,
+                          members: members,
+                        ),
+                      )
                       .toList();
 
-                  if (players.isEmpty && pendingAvailable.isEmpty) {
+                  if (players.isEmpty &&
+                      staffAsPlayers.isEmpty &&
+                      pendingAvailable.isEmpty) {
                     return Center(
                       child: Padding(
                         padding: const EdgeInsets.all(ViroSpacing.xl),
@@ -139,6 +156,17 @@ class _AddTeamMemberSheet extends ConsumerWidget {
                       if (players.isNotEmpty) ...[
                         _sectionLabel(context, 'Joueurs du club'),
                         ...players.map(
+                          (m) => _MemberPickTile(
+                            member: m,
+                            onTap: () => _add(context, m.effectiveUid),
+                          ),
+                        ),
+                      ],
+                      if (staffAsPlayers.isNotEmpty) ...[
+                        if (players.isNotEmpty)
+                          const SizedBox(height: ViroSpacing.md),
+                        _sectionLabel(context, 'Coachs et admins'),
+                        ...staffAsPlayers.map(
                           (m) => _MemberPickTile(
                             member: m,
                             onTap: () => _add(context, m.effectiveUid),
@@ -228,6 +256,35 @@ class _AddTeamMemberSheet extends ConsumerWidget {
   Future<void> _add(BuildContext context, String id) async {
     Navigator.pop(context);
     await onAdd(id);
+  }
+
+  bool _canAddAsPlayer(ClubMember m) =>
+      m.isActive &&
+      m.effectiveUid.isNotEmpty &&
+      !team.isOnPlayerRoster(m) &&
+      (m.role == MemberRoles.player ||
+          m.role == MemberRoles.coach ||
+          m.role == MemberRoles.admin);
+
+  static bool _isPendingAvailableToAdd({
+    required PendingTeamMember pending,
+    required ClubTeam team,
+    required List<ClubMember> members,
+  }) {
+    if (team.isPendingOnRoster(pending.id)) return false;
+    if (team.playerIds.contains(pending.id)) return false;
+
+    final email = pending.email?.trim().toLowerCase();
+    if (email != null && email.isNotEmpty) {
+      final linkedOnRoster = members.any(
+        (m) =>
+            m.hasLinkedAccount &&
+            (m.email?.trim().toLowerCase() == email) &&
+            team.isOnPlayerRoster(m),
+      );
+      if (linkedOnRoster) return false;
+    }
+    return true;
   }
 }
 

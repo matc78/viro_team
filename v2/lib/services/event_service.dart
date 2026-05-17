@@ -670,4 +670,84 @@ class EventService {
     if (total == 0) return null;
     return present / total * 100;
   }
+
+  /// Ajoute un convoqué aux événements à venir d'une équipe (ex. coach aussi joueur).
+  Future<void> addAudienceToUpcomingTeamEvents({
+    required String clubId,
+    required String teamId,
+    required String audienceId,
+  }) async {
+    if (audienceId.isEmpty) return;
+
+    final snap = await _events(clubId)
+        .where(FirestoreFields.teamIds, arrayContains: teamId)
+        .where(
+          FirestoreFields.date,
+          isGreaterThanOrEqualTo: Timestamp.fromDate(_startOfToday()),
+        )
+        .get();
+
+    final batch = _db.batch();
+    var pending = 0;
+    for (final doc in snap.docs) {
+      final data = doc.data();
+      if (data[FirestoreFields.canceled] == true) continue;
+      final members =
+          (data[FirestoreFields.teamMemberIds] as List<dynamic>?)
+                  ?.whereType<String>()
+                  .toList() ??
+              [];
+      if (members.contains(audienceId)) continue;
+
+      batch.update(doc.reference, {
+        FirestoreFields.teamMemberIds: FieldValue.arrayUnion([audienceId]),
+      });
+      pending++;
+      if (pending >= 400) {
+        await batch.commit();
+        pending = 0;
+      }
+    }
+    if (pending > 0) await batch.commit();
+  }
+
+  /// Retire un convoqué des événements à venir (ex. coach retiré du roster joueurs).
+  Future<void> removeAudienceFromUpcomingTeamEvents({
+    required String clubId,
+    required String teamId,
+    required String audienceId,
+  }) async {
+    if (audienceId.isEmpty) return;
+
+    final snap = await _events(clubId)
+        .where(FirestoreFields.teamIds, arrayContains: teamId)
+        .where(
+          FirestoreFields.date,
+          isGreaterThanOrEqualTo: Timestamp.fromDate(_startOfToday()),
+        )
+        .get();
+
+    final batch = _db.batch();
+    var pending = 0;
+    for (final doc in snap.docs) {
+      final data = doc.data();
+      if (data[FirestoreFields.canceled] == true) continue;
+      final members =
+          (data[FirestoreFields.teamMemberIds] as List<dynamic>?)
+                  ?.whereType<String>()
+                  .toList() ??
+              [];
+      if (!members.contains(audienceId)) continue;
+
+      batch.update(doc.reference, {
+        FirestoreFields.teamMemberIds: FieldValue.arrayRemove([audienceId]),
+      });
+      pending++;
+      if (pending >= 400) {
+        await batch.commit();
+        pending = 0;
+      }
+    }
+    if (pending > 0) await batch.commit();
+  }
 }

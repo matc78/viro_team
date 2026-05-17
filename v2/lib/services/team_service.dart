@@ -123,6 +123,7 @@ class TeamService {
               id: doc.id,
               firstName: data[FirestoreFields.firstName] as String? ?? '',
               lastName: data[FirestoreFields.lastName] as String? ?? '',
+              email: data[FirestoreFields.email] as String?,
             );
           })
           .toList()
@@ -227,8 +228,112 @@ class TeamService {
             id: doc.id,
             firstName: data[FirestoreFields.firstName] as String? ?? '',
             lastName: data[FirestoreFields.lastName] as String? ?? '',
+            email: data[FirestoreFields.email] as String?,
           );
         })
         .toList();
+  }
+
+  /// Remplace [legacyMemberId] par [authUid] dans les rosters d'équipe (après liaison compte).
+  Future<void> reconcileRosterIds({
+    required String clubId,
+    required String legacyMemberId,
+    required String authUid,
+  }) async {
+    if (legacyMemberId.isEmpty || authUid.isEmpty || legacyMemberId == authUid) {
+      return;
+    }
+
+    final playerSnap = await _teams(clubId)
+        .where(FirestoreFields.playerIds, arrayContains: legacyMemberId)
+        .get();
+    final coachSnap = await _teams(clubId)
+        .where(FirestoreFields.coachIds, arrayContains: legacyMemberId)
+        .get();
+    final pendingSnap = await _teams(clubId)
+        .where(FirestoreFields.pendingPlayerIds, arrayContains: legacyMemberId)
+        .get();
+
+    final updates = <DocumentReference<Map<String, dynamic>>, Map<String, dynamic>>{};
+
+    void mergePatch(
+      DocumentReference<Map<String, dynamic>> ref,
+      Map<String, dynamic> patch,
+    ) {
+      updates[ref] = {...?updates[ref], ...patch};
+    }
+
+    void patchTeam(
+      DocumentSnapshot<Map<String, dynamic>> doc, {
+      required String field,
+      required bool promoteToPlayers,
+    }) {
+      final data = doc.data() ?? {};
+      final ids = (data[field] as List<dynamic>?)?.whereType<String>().toList() ??
+          [];
+      if (!ids.contains(legacyMemberId)) return;
+
+      final next =
+          ids.map((id) => id == legacyMemberId ? authUid : id).toSet().toList();
+      final patch = <String, dynamic>{field: next};
+      if (promoteToPlayers) {
+        final players = (data[FirestoreFields.playerIds] as List<dynamic>?)
+                ?.whereType<String>()
+                .toSet() ??
+            {};
+        players.add(authUid);
+        patch[FirestoreFields.playerIds] = players.toList();
+        final pending = (data[FirestoreFields.pendingPlayerIds] as List<dynamic>?)
+                ?.whereType<String>()
+                .toList() ??
+            [];
+        patch[FirestoreFields.pendingPlayerIds] =
+            pending.where((id) => id != legacyMemberId).toList();
+      }
+      mergePatch(doc.reference, patch);
+    }
+
+    for (final doc in playerSnap.docs) {
+      patchTeam(doc, field: FirestoreFields.playerIds, promoteToPlayers: false);
+    }
+    for (final doc in coachSnap.docs) {
+      patchTeam(doc, field: FirestoreFields.coachIds, promoteToPlayers: false);
+    }
+    for (final doc in pendingSnap.docs) {
+      patchTeam(
+        doc,
+        field: FirestoreFields.pendingPlayerIds,
+        promoteToPlayers: true,
+      );
+    }
+
+    if (updates.isEmpty) return;
+
+    final batch = _db.batch();
+    for (final entry in updates.entries) {
+      batch.update(entry.key, entry.value);
+    }
+    await batch.commit();
+  }
+
+  /// Corrige les rosters où un memberId pré-créé n'a pas été remplacé par l'UID Auth.
+  Future<void> reconcileStaleRosterIds(String clubId) async {
+    final membersSnap = await _db
+        .collection(ProjectConfig.clubsCollection)
+        .doc(clubId)
+        .collection(ProjectConfig.membersSubcollection)
+        .get();
+
+    for (final doc in membersSnap.docs) {
+      final accountUid = doc.data()[FirestoreFields.accountUid] as String?;
+      if (accountUid == null || accountUid.isEmpty || accountUid == doc.id) {
+        continue;
+      }
+      await reconcileRosterIds(
+        clubId: clubId,
+        legacyMemberId: doc.id,
+        authUid: accountUid,
+      );
+    }
   }
 }

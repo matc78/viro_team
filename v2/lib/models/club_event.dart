@@ -93,18 +93,27 @@ class ClubEvent {
   bool isInvitedAsPlayer(
     String authUid, {
     String? clubAudienceId,
-  }) =>
-      teamMemberIds.contains(
-        audienceKeyFor(authUid, clubAudienceId: clubAudienceId),
-      );
-
-  RsvpStatus rsvpStatusForUser(
-    String authUid, {
-    String? clubAudienceId,
+    Set<String>? memberAudienceKeys,
   }) {
     final keys = <String>{
       audienceKeyFor(authUid, clubAudienceId: clubAudienceId),
       authUid,
+      if (clubAudienceId != null && clubAudienceId.isNotEmpty) clubAudienceId,
+      ...?memberAudienceKeys,
+    };
+    return keys.any(teamMemberIds.contains);
+  }
+
+  RsvpStatus rsvpStatusForUser(
+    String authUid, {
+    String? clubAudienceId,
+    Set<String>? memberAudienceKeys,
+  }) {
+    final keys = <String>{
+      audienceKeyFor(authUid, clubAudienceId: clubAudienceId),
+      authUid,
+      if (clubAudienceId != null && clubAudienceId.isNotEmpty) clubAudienceId,
+      ...?memberAudienceKeys,
     };
     for (final id in teamMemberIds) {
       if (rsvp.containsKey(id)) keys.add(id);

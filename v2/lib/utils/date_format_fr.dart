@@ -1,10 +1,49 @@
 import 'package:intl/intl.dart';
 
 final _dateFormat = DateFormat('EEE dd/MM', 'fr_FR');
+final _weekdayFormat = DateFormat('EEEE', 'fr_FR');
+final _dayMonthFormat = DateFormat('d/MM', 'fr_FR');
 final _timeFormat = DateFormat('HH\'h\'mm', 'fr_FR');
 final _relativeFormat = DateFormat.yMMMd('fr_FR');
 
+String _capitalizeFr(String s) {
+  if (s.isEmpty) return s;
+  return '${s[0].toUpperCase()}${s.substring(1)}';
+}
+
+DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
+
 String formatEventDate(DateTime date) => _dateFormat.format(date);
+
+/// Jour de la semaine en toutes lettres (ex. « Lundi »).
+String formatWeekdayLong(DateTime date) =>
+    _capitalizeFr(_weekdayFormat.format(date));
+
+/// Jour et mois numériques (ex. « 20/05 »).
+String formatDayMonth(DateTime date) => _dayMonthFormat.format(date);
+
+/// Parties d'un en-tête de jour du planning global.
+({String? badge, String weekday, int day, String month}) planningDayHeaderParts(
+  DateTime date,
+) {
+  final dayOnly = _dateOnly(date);
+  final today = _dateOnly(DateTime.now());
+  final tomorrow = today.add(const Duration(days: 1));
+
+  String? badge;
+  if (dayOnly == today) {
+    badge = "Aujourd'hui";
+  } else if (dayOnly == tomorrow) {
+    badge = 'Demain';
+  }
+
+  return (
+    badge: badge,
+    weekday: formatWeekdayLong(dayOnly),
+    day: dayOnly.day,
+    month: _capitalizeFr(DateFormat('MMMM', 'fr_FR').format(dayOnly)),
+  );
+}
 
 String formatEventTime(String? startTime) {
   if (startTime == null || startTime.isEmpty) return '';
