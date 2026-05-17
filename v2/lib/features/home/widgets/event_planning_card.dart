@@ -15,9 +15,7 @@ class EventPlanningCard extends StatelessWidget {
     required this.clubName,
     required this.clubColor,
     required this.coachView,
-    this.dualRoleView = false,
-    this.coachRsvpCounts,
-    this.presentCount,
+    this.teamRsvpCounts,
     this.rsvpStatus,
     this.showRsvpButtons = false,
     this.onCoachTap,
@@ -31,15 +29,13 @@ class EventPlanningCard extends StatelessWidget {
   final String clubName;
   final Color clubColor;
 
-  /// Coach seul : badges agrégés uniquement.
+  /// Coach seul : compteurs agrégés uniquement (pas de RSVP perso).
   final bool coachView;
 
-  /// Coach aussi convoqué joueur : RSVP + badges agrégés.
-  final bool dualRoleView;
-  final ({int yes, int no, int none})? coachRsvpCounts;
+  /// Compteurs équipe (présents / absents / en attente).
+  final ({int yes, int no, int none})? teamRsvpCounts;
 
-  /// Joueur : nombre de présents + RSVP personnel.
-  final int? presentCount;
+  /// Joueur ou double casquette : RSVP personnel.
   final RsvpStatus? rsvpStatus;
   final bool showRsvpButtons;
   final VoidCallback? onCoachTap;
@@ -68,7 +64,6 @@ class EventPlanningCard extends StatelessWidget {
       if (location != null && location.isNotEmpty) location,
     ];
 
-    final showCoachSummary = coachView || dualRoleView;
     final showPlayerRsvp = !coachView;
 
     return ViroCard(
@@ -136,7 +131,7 @@ class EventPlanningCard extends StatelessWidget {
           ],
           if (showPlayerRsvp && !showRsvpButtons) ...[
             const SizedBox(height: ViroSpacing.xs),
-            _buildPlayerRsvpFooter(context),
+            _buildMemberRsvpFooter(context),
           ],
           if (showRsvpButtons) ...[
             const SizedBox(height: ViroSpacing.xs),
@@ -160,33 +155,69 @@ class EventPlanningCard extends StatelessWidget {
               ],
             ),
           ],
-          if (showCoachSummary && coachRsvpCounts != null) ...[
+          if (coachView && teamRsvpCounts != null) ...[
             const SizedBox(height: ViroSpacing.xs),
-            Center(child: PlanningRsvpSummaryRow(counts: coachRsvpCounts!)),
+            _buildCoachRsvpFooter(),
           ],
         ],
       ),
     );
   }
 
-  Widget _buildPlayerRsvpFooter(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          _StatusBadge(status: rsvpStatus ?? RsvpStatus.none),
-          if (presentCount != null)
-            Align(
-              alignment: Alignment.centerRight,
-              child: PlanningRsvpCountBadge(
-                icon: ViroIcons.check,
-                count: presentCount!,
-                color: ViroColors.success,
-              ),
-            ),
+  Widget _buildMemberRsvpFooter(BuildContext context) {
+    final badge = _StatusBadge(status: rsvpStatus ?? RsvpStatus.none);
+    final counts = teamRsvpCounts;
+    if (counts == null) {
+      return Align(alignment: Alignment.centerLeft, child: badge);
+    }
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        badge,
+        _TeamRsvpCountRow(counts: counts),
+      ],
+    );
+  }
+
+  Widget _buildCoachRsvpFooter() {
+    return Center(
+      child: PlanningRsvpSummaryRow(counts: teamRsvpCounts!),
+    );
+  }
+}
+
+class _TeamRsvpCountRow extends StatelessWidget {
+  const _TeamRsvpCountRow({required this.counts});
+
+  final ({int yes, int no, int none}) counts;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        PlanningRsvpCountBadge(
+          icon: ViroIcons.check,
+          count: counts.yes,
+          color: ViroColors.success,
+        ),
+        const SizedBox(width: ViroSpacing.sm),
+        PlanningRsvpCountBadge(
+          icon: ViroIcons.close,
+          count: counts.no,
+          color: ViroColors.error,
+        ),
+        if (counts.none > 0) ...[
+          const SizedBox(width: ViroSpacing.sm),
+          PlanningRsvpCountBadge(
+            icon: ViroIcons.clock,
+            count: counts.none,
+            color: ViroColors.warning,
+          ),
         ],
-      ),
+      ],
     );
   }
 }

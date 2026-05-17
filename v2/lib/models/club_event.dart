@@ -94,30 +94,23 @@ class ClubEvent {
     String authUid, {
     String? clubAudienceId,
     Set<String>? memberAudienceKeys,
-  }) {
-    final keys = <String>{
-      audienceKeyFor(authUid, clubAudienceId: clubAudienceId),
-      authUid,
-      if (clubAudienceId != null && clubAudienceId.isNotEmpty) clubAudienceId,
-      ...?memberAudienceKeys,
-    };
-    return keys.any(teamMemberIds.contains);
-  }
+  }) =>
+      _audienceKeysForUser(
+        authUid,
+        clubAudienceId: clubAudienceId,
+        memberAudienceKeys: memberAudienceKeys,
+      ).any(teamMemberIds.contains);
 
   RsvpStatus rsvpStatusForUser(
     String authUid, {
     String? clubAudienceId,
     Set<String>? memberAudienceKeys,
   }) {
-    final keys = <String>{
-      audienceKeyFor(authUid, clubAudienceId: clubAudienceId),
+    final keys = _audienceKeysForUser(
       authUid,
-      if (clubAudienceId != null && clubAudienceId.isNotEmpty) clubAudienceId,
-      ...?memberAudienceKeys,
-    };
-    for (final id in teamMemberIds) {
-      if (rsvp.containsKey(id)) keys.add(id);
-    }
+      clubAudienceId: clubAudienceId,
+      memberAudienceKeys: memberAudienceKeys,
+    );
     for (final key in keys) {
       final value = rsvp[key];
       if (value != null) {
@@ -132,6 +125,21 @@ class ClubEvent {
       }
     }
     return RsvpStatus.none;
+  }
+
+  /// Identifiants possibles de l'utilisateur sur l'événement (jamais d'autres joueurs).
+  Set<String> _audienceKeysForUser(
+    String authUid, {
+    String? clubAudienceId,
+    Set<String>? memberAudienceKeys,
+  }) {
+    final keys = <String>{
+      audienceKeyFor(authUid, clubAudienceId: clubAudienceId),
+      authUid,
+      if (clubAudienceId != null && clubAudienceId.isNotEmpty) clubAudienceId,
+      ...?memberAudienceKeys,
+    };
+    return keys.where((id) => id.isNotEmpty).toSet();
   }
 
   static RsvpStatus _rsvpFromLegacyAttendance(dynamic entry) {

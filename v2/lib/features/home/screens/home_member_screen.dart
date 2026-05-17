@@ -294,17 +294,7 @@ class _UpcomingEventsSliver extends ConsumerWidget {
           member: clubMember,
           membersByUid: membersByUid,
         );
-    final dualRoleView = uid != null &&
-        PlanningEventDisplay.isDualRoleCoachPlayer(
-          event,
-          uid,
-          teams,
-          clubAudienceId: audienceId,
-          member: clubMember,
-          membersByUid: membersByUid,
-        );
     final coachView = isCoach && !invited;
-    final showSummary = coachView || dualRoleView;
     final status = uid != null
         ? event.rsvpStatusForUser(
             uid,
@@ -320,7 +310,7 @@ class _UpcomingEventsSliver extends ConsumerWidget {
       clubName: names[event.clubId] ?? 'Club',
       clubColor: colors[event.clubId] ?? ViroColors.primary600,
       coachView: coachView,
-      dualRoleView: dualRoleView,
+      teamRsvpCounts: counts,
       onCoachTap: coachView
           ? () => onShowDetail(
                 event: event,
@@ -333,8 +323,6 @@ class _UpcomingEventsSliver extends ConsumerWidget {
         teams: teams,
         canManageEvents: canManageEvents,
       ),
-      coachRsvpCounts: showSummary ? counts : null,
-      presentCount: coachView ? null : counts.yes,
       rsvpStatus: coachView ? null : status,
       showRsvpButtons: invited && !coachView && status == RsvpStatus.none,
       onToggleRsvp: coachView
