@@ -10,6 +10,7 @@ import 'package:viro_team_v2/constants/firestore_fields.dart';
 import 'package:viro_team_v2/features/auth/providers/auth_providers.dart';
 import 'package:viro_team_v2/features/announcements/providers/announcement_providers.dart';
 import 'package:viro_team_v2/features/club/providers/club_detail_providers.dart';
+import 'package:viro_team_v2/features/fees/providers/fee_providers.dart';
 import 'package:viro_team_v2/features/club/widgets/announcement_preview.dart';
 import 'package:viro_team_v2/features/club/widgets/club_stats_row.dart';
 import 'package:viro_team_v2/features/club/widgets/quick_actions_grid.dart';
@@ -138,6 +139,11 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen> {
                       );
                     }
 
+                    final hasActiveSeason = ref
+                            .watch(activeSeasonProvider(clubId))
+                            .value !=
+                        null;
+
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
@@ -154,6 +160,11 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen> {
                           onAnnouncements: () => context.push(
                             AppRoutes.clubAnnouncementsPath(clubId),
                           ),
+                          onMyFee: hasActiveSeason
+                              ? () => context.push(
+                                    AppRoutes.clubMyFeePath(clubId),
+                                  )
+                              : null,
                         ),
                         if (MemberRoleHierarchy.isCoachOrAbove(m.role)) ...[
                           const _SectionTitle(title: 'Gestion du club'),
@@ -169,7 +180,11 @@ class _ClubDetailScreenState extends ConsumerState<ClubDetailScreen> {
                               AppRoutes.clubMembersPath(clubId),
                             ),
                             onManageTournaments: showComingSoon,
-                            onFees: showComingSoon,
+                            onFees: m.role == MemberRoles.admin
+                                ? () => context.push(
+                                      AppRoutes.clubFeesPath(clubId),
+                                    )
+                                : showComingSoon,
                           ),
                         ],
                         const SizedBox(height: ViroSpacing.xl),

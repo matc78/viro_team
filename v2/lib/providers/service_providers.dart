@@ -3,6 +3,7 @@ import 'package:viro_team_v2/services/announcement_service.dart';
 import 'package:viro_team_v2/services/auth_service.dart';
 import 'package:viro_team_v2/services/club_service.dart';
 import 'package:viro_team_v2/services/event_service.dart';
+import 'package:viro_team_v2/services/fee_service.dart';
 import 'package:viro_team_v2/services/invitation_service.dart';
 import 'package:viro_team_v2/services/join_request_service.dart';
 import 'package:viro_team_v2/services/member_service.dart';
@@ -34,3 +35,5 @@ final teamServiceProvider = Provider<TeamService>((ref) => TeamService());
 
 final announcementServiceProvider =
     Provider<AnnouncementService>((ref) => AnnouncementService());
+
+final feeServiceProvider = Provider<FeeService>((ref) => FeeService());

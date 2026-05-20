@@ -38,6 +38,7 @@ abstract final class ViroIcons {
   static IconData get user => PhosphorIconsRegular.user;
   static IconData get logout => PhosphorIconsRegular.signOut;
   static IconData get bell => PhosphorIconsRegular.bell;
+  static IconData get payments => PhosphorIconsRegular.currencyEur;
 
   // Rôles (badges)
   static IconData get rolePlayer => PhosphorIconsFill.soccerBall;

@@ -244,6 +244,26 @@ service cloud.firestore {
 
       }
 
+
+
+      match /fee_seasons/{seasonId} {
+
+        allow read: if isClubMember(clubId);
+
+        allow write: if isClubAdmin(clubId);
+
+
+
+        match /member_fees/{memberId} {
+
+          allow read: if isClubAdmin(clubId) || ownsMemberDoc(clubId, memberId);
+
+          allow write: if isClubAdmin(clubId);
+
+        }
+
+      }
+
     }
 
 

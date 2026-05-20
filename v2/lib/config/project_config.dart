@@ -34,6 +34,8 @@ abstract final class ProjectConfig {
   static const String announcementsSubcollection = 'announcements';
   static const String teamsSubcollection = 'teams';
   static const String pendingMembersSubcollection = 'pending_members';
+  static const String feeSeasonsSubcollection = 'fee_seasons';
+  static const String memberFeesSubcollection = 'member_fees';
 
   // —— Chemins code ——
   static const String legacyLibPath = '../lib';

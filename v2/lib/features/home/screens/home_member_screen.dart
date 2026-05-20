@@ -22,6 +22,7 @@ import 'package:viro_team_v2/models/club_team.dart';
 import 'package:viro_team_v2/features/home/widgets/event_planning_card.dart';
 import 'package:viro_team_v2/features/home/widgets/planning_day_section_header.dart';
 import 'package:viro_team_v2/features/announcements/widgets/home_announcement_banner.dart';
+import 'package:viro_team_v2/features/fees/widgets/fee_reminder_banner.dart';
 import 'package:viro_team_v2/features/home/widgets/home_quiet_content.dart';
 import 'package:viro_team_v2/models/club_event.dart';
 import 'package:viro_team_v2/providers/service_providers.dart';
@@ -171,6 +172,9 @@ class _HomeMemberScreenState extends ConsumerState<HomeMemberScreen> {
                         slivers: [
                           const SliverToBoxAdapter(
                             child: HomeAnnouncementBanner(),
+                          ),
+                          const SliverToBoxAdapter(
+                            child: FeeReminderBanner(),
                           ),
                           if (!isFullyQuiet)
                             SliverToBoxAdapter(

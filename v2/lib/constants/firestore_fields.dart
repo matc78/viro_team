@@ -104,6 +104,24 @@ abstract final class FirestoreFields {
   static const String durationDays = 'durationDays';
   static const String dismissedAnnouncementIds = 'dismissedAnnouncementIds';
 
+  // fee_seasons / member_fees
+  static const String seasonLabel = 'seasonLabel';
+  static const String isActive = 'isActive';
+  static const String currency = 'currency';
+  static const String paymentDeadlineAt = 'paymentDeadlineAt';
+  static const String paymentInstructions = 'paymentInstructions';
+  static const String paymentMethods = 'paymentMethods';
+  static const String iban = 'iban';
+  static const String tiers = 'tiers';
+  static const String tierId = 'tierId';
+  static const String amountCents = 'amountCents';
+  static const String memberDisplayName = 'memberDisplayName';
+  static const String feeStatus = 'status';
+  static const String notesAdmin = 'notesAdmin';
+  static const String paidAt = 'paidAt';
+  static const String markedBy = 'markedBy';
+  static const String createdBy = 'createdBy';
+
   // join_requests
   static const String clubName = 'clubName';
   static const String clubSport = 'clubSport';
@@ -145,6 +163,29 @@ abstract final class InvitationStatus {
   static const String accepted = 'accepted';
   static const String declined = 'declined';
   static const String expired = 'expired';
+}
+
+/// Statuts cotisation membre (member_fees).
+abstract final class MemberFeeStatuses {
+  static const String aPayer = 'a_payer';
+  static const String paye = 'paye';
+  static const String exonere = 'exonere';
+}
+
+/// Moyens de paiement cotisation.
+abstract final class FeePaymentMethods {
+  static const String virement = 'virement';
+  static const String cheque = 'cheque';
+  static const String especes = 'especes';
+
+  static const List<String> all = [virement, cheque, especes];
+
+  static String label(String key) => switch (key) {
+        virement => 'Virement',
+        cheque => 'Chèque',
+        especes => 'Espèces',
+        _ => key,
+      };
 }
 
 /// Statuts demande d'adhésion.

@@ -111,11 +111,13 @@ class MemberQuickActionsGrid extends StatelessWidget {
     this.onPlanning,
     this.onMyTeams,
     this.onAnnouncements,
+    this.onMyFee,
   });
 
   final VoidCallback? onPlanning;
   final VoidCallback? onMyTeams;
   final VoidCallback? onAnnouncements;
+  final VoidCallback? onMyFee;
 
   @override
   Widget build(BuildContext context) {
@@ -137,6 +139,12 @@ class MemberQuickActionsGrid extends StatelessWidget {
             label: 'Annonces',
             icon: ViroIcons.bell,
             onTap: onAnnouncements,
+          ),
+        if (onMyFee != null)
+          QuickAction(
+            label: 'Ma cotisation',
+            icon: ViroIcons.payments,
+            onTap: onMyFee,
           ),
       ],
     );
@@ -189,7 +197,7 @@ class ClubManagementActionsGrid extends StatelessWidget {
       if (role == MemberRoles.admin)
         QuickAction(
           label: 'Cotisations',
-          icon: ViroIcons.calendar,
+          icon: ViroIcons.payments,
           onTap: onFees,
         ),
     ];
