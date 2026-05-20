@@ -1,10 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:viro_team_v2/features/auth/providers/auth_providers.dart';
+import 'package:viro_team_v2/features/home/providers/member_events_provider.dart';
 import 'package:viro_team_v2/models/club.dart';
 import 'package:viro_team_v2/models/club_event.dart';
 import 'package:viro_team_v2/models/club_member.dart';
 import 'package:viro_team_v2/providers/service_providers.dart';
-import 'package:viro_team_v2/services/event_service.dart';
 
 class ClubEventsState {
   const ClubEventsState({
@@ -32,55 +32,19 @@ final clubMemberProvider =
       );
 });
 
+/// Events du club — dérivé du planning global ([memberEventsProvider]).
 final clubEventsProvider =
-    StreamProvider.family<ClubEventsState, String>((ref, clubId) {
-  final auth = ref.watch(authStateProvider).value;
-  if (auth == null) return Stream.value(ClubEventsState.empty);
-
-  final authUid = auth.uid;
-  final eventService = ref.read(eventServiceProvider);
-
-  return eventService.watchClubMember(clubId: clubId, uid: authUid).asyncExpand(
-    (member) {
-      final audienceId = member?.memberId ?? authUid;
-      return eventService
-          .watchUpcomingEventsForClubMember(
-            clubId: clubId,
-            audienceId: audienceId,
-            authUid: authUid,
-          )
-          .map((events) {
-        final pending = <ClubEvent>[];
-        final upcoming = <ClubEvent>[];
-
-        for (final event in events) {
-          if (!EventService.isWithinUpcomingPlanningWindow(event.date)) {
-            continue;
-          }
-
-          upcoming.add(event);
-
-          final invitedAsPlayer = event.isInvitedAsPlayer(
-            authUid,
-            clubAudienceId: audienceId,
-          );
-          final needsRsvp = invitedAsPlayer &&
-              event.rsvpStatusForUser(
-                authUid,
-                clubAudienceId: audienceId,
-              ) ==
-                  RsvpStatus.none;
-
-          if (needsRsvp) pending.add(event);
-        }
-
-        return ClubEventsState(
-          pending: EventService.sortedByDate(pending),
-          upcoming: EventService.sortedByDate(upcoming),
-        );
-      });
-    },
-  );
+    Provider.family<AsyncValue<ClubEventsState>, String>((ref, clubId) {
+  return ref.watch(memberEventsProvider).when(
+        data: (state) => AsyncValue.data(
+          ClubEventsState(
+            pending: state.pending.where((e) => e.clubId == clubId).toList(),
+            upcoming: state.upcoming.where((e) => e.clubId == clubId).toList(),
+          ),
+        ),
+        loading: () => const AsyncValue.loading(),
+        error: (e, st) => AsyncValue.error(e, st),
+      );
 });
 
 final clubAttendanceRateProvider =

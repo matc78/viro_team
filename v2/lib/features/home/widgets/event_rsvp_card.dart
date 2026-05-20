@@ -5,6 +5,7 @@ import 'package:viro_team_v2/config/viro_spacing.dart';
 import 'package:viro_team_v2/models/club_event.dart';
 import 'package:viro_team_v2/utils/date_format_fr.dart';
 import 'package:viro_team_v2/widgets/common/club_chip.dart';
+import 'package:viro_team_v2/widgets/common/rsvp_choice_button.dart';
 import 'package:viro_team_v2/widgets/common/viro_card.dart';
 
 class EventRsvpCard extends StatelessWidget {
@@ -59,18 +60,16 @@ class EventRsvpCard extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: _RsvpButton(
+                child: RsvpChoiceButton(
                   label: 'Présent',
-                  selected: false,
                   color: ViroColors.success,
                   onTap: onPresent,
                 ),
               ),
               const SizedBox(width: ViroSpacing.sm),
               Expanded(
-                child: _RsvpButton(
+                child: RsvpChoiceButton(
                   label: 'Absent',
-                  selected: false,
                   color: ViroColors.error,
                   onTap: onAbsent,
                 ),
@@ -83,46 +82,3 @@ class EventRsvpCard extends StatelessWidget {
   }
 }
 
-class _RsvpButton extends StatelessWidget {
-  const _RsvpButton({
-    required this.label,
-    required this.selected,
-    required this.color,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool selected;
-  final Color color;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: selected ? color.withValues(alpha: 0.15) : Colors.transparent,
-      borderRadius: BorderRadius.circular(ViroSpacing.buttonRadius),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(ViroSpacing.buttonRadius),
-        child: Container(
-          height: ViroSpacing.buttonHeightMedium,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(ViroSpacing.buttonRadius),
-            border: Border.all(
-              color: selected ? color : color.withValues(alpha: 0.5),
-              width: selected ? 2 : 1,
-            ),
-          ),
-          child: Text(
-            label,
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: color,
-                  fontWeight: FontWeight.w600,
-                ),
-          ),
-        ),
-      ),
-    );
-  }
-}

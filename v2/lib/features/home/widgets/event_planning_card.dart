@@ -6,6 +6,7 @@ import 'package:viro_team_v2/features/planning/widgets/planning_rsvp_badge.dart'
 import 'package:viro_team_v2/models/club_event.dart';
 import 'package:viro_team_v2/utils/date_format_fr.dart';
 import 'package:viro_team_v2/widgets/common/club_chip.dart';
+import 'package:viro_team_v2/widgets/common/rsvp_choice_button.dart';
 import 'package:viro_team_v2/widgets/common/viro_card.dart';
 
 class EventPlanningCard extends StatelessWidget {
@@ -138,7 +139,7 @@ class EventPlanningCard extends StatelessWidget {
             Row(
               children: [
                 Expanded(
-                  child: _StatusChip(
+                  child: RsvpChoiceButton(
                     label: 'Présent',
                     color: ViroColors.success,
                     onTap: onPresent!,
@@ -146,7 +147,7 @@ class EventPlanningCard extends StatelessWidget {
                 ),
                 const SizedBox(width: ViroSpacing.sm),
                 Expanded(
-                  child: _StatusChip(
+                  child: RsvpChoiceButton(
                     label: 'Absent',
                     color: ViroColors.error,
                     onTap: onAbsent!,
@@ -256,37 +257,3 @@ class _StatusBadge extends StatelessWidget {
   }
 }
 
-class _StatusChip extends StatelessWidget {
-  const _StatusChip({
-    required this.label,
-    required this.color,
-    required this.onTap,
-  });
-
-  final String label;
-  final Color color;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(ViroSpacing.buttonRadius),
-      child: Container(
-        height: 32,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          border: Border.all(color: color.withValues(alpha: 0.5)),
-          borderRadius: BorderRadius.circular(ViroSpacing.buttonRadius),
-        ),
-        child: Text(
-          label,
-          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: color,
-                fontWeight: FontWeight.w600,
-              ),
-        ),
-      ),
-    );
-  }
-}

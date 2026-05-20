@@ -41,7 +41,7 @@ final memberEventsProvider = StreamProvider<MemberEventsState>((ref) {
 
     return eventService
         .watchUpcomingEventsForUser(clubIds: clubIds, authUid: authUid)
-        .map((events) => _categorizeMemberEvents(
+        .map((events) => categorizeMemberEvents(
               events,
               authUid: authUid,
               audienceByClub: audienceByClub,
@@ -49,7 +49,7 @@ final memberEventsProvider = StreamProvider<MemberEventsState>((ref) {
   });
 });
 
-MemberEventsState _categorizeMemberEvents(
+MemberEventsState categorizeMemberEvents(
   List<ClubEvent> events, {
   required String authUid,
   required Map<String, String> audienceByClub,
