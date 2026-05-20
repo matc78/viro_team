@@ -46,11 +46,11 @@ class EventPlanningCard extends StatelessWidget {
   final VoidCallback? onAbsent;
 
   IconData get _typeIcon => switch (event.type) {
-        EventTypes.training => ViroIcons.whistle,
-        EventTypes.match => ViroIcons.ball,
-        EventTypes.tournament => ViroIcons.trophy,
-        _ => ViroIcons.calendar,
-      };
+    EventTypes.training => ViroIcons.whistle,
+    EventTypes.match => ViroIcons.ball,
+    EventTypes.tournament => ViroIcons.trophy,
+    _ => ViroIcons.calendar,
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -68,9 +68,7 @@ class EventPlanningCard extends StatelessWidget {
     final showPlayerRsvp = !coachView;
 
     return ViroCard(
-      onTap: coachView
-          ? onCoachTap
-          : (showRsvpButtons ? null : onToggleRsvp),
+      onTap: coachView ? onCoachTap : (showRsvpButtons ? null : onToggleRsvp),
       onLongPress: onLongPress,
       accentColor: clubColor,
       padding: const EdgeInsets.symmetric(
@@ -183,9 +181,7 @@ class EventPlanningCard extends StatelessWidget {
   }
 
   Widget _buildCoachRsvpFooter() {
-    return Center(
-      child: PlanningRsvpSummaryRow(counts: teamRsvpCounts!),
-    );
+    return Center(child: PlanningRsvpSummaryRow(counts: teamRsvpCounts!));
   }
 }
 
@@ -248,12 +244,11 @@ class _StatusBadge extends StatelessWidget {
       child: Text(
         label,
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: color,
-              fontWeight: FontWeight.w600,
-              height: 1.1,
-            ),
+          color: color,
+          fontWeight: FontWeight.w600,
+          height: 1.1,
+        ),
       ),
     );
   }
 }
-
